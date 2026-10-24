@@ -27,6 +27,68 @@ describe('Balrog world model', () => {
     }
   });
 
+  it('exports the standing sculpt with UVs and an embedded hand-painted fantasy texture', () => {
+    const buffer = readFileSync(new URL('../public/assets/boss/balrog.glb', import.meta.url));
+    expect(buffer.toString('ascii', 0, 4)).toBe('glTF');
+    const jsonLength = buffer.readUInt32LE(12);
+    const asset = JSON.parse(buffer.toString('utf8', 20, 20 + jsonLength));
+    const primitive = asset.meshes[0].primitives[0];
+    const positions = asset.accessors[primitive.attributes.POSITION];
+    const size = positions.max.map((max: number, index: number) => max - positions.min[index]);
+    // Calibrated to the provided source, not just an arbitrary 'six units tall' assertion:
+    // the incorrect X/Z swap produced a 12.3-wide, 6.8-deep figure on its back.
+    expect(size[0]).toBeCloseTo(10.91, 1);
+    expect(size[1]).toBeCloseTo(6, 1);
+    expect(size[2]).toBeCloseTo(5.33, 1);
+    expect(primitive.attributes.TEXCOORD_0).toBeDefined();
+    expect(Object.keys(primitive.attributes).filter((name: string) => name.startsWith('COLOR_'))).toEqual([]);
+    const material = asset.materials[asset.meshes[0].primitives[0].material];
+    const textureIndex = material.pbrMetallicRoughness.baseColorTexture.index;
+    const texture = asset.textures[textureIndex];
+    const image = asset.images[texture.source];
+    expect(image.mimeType).toBe('image/jpeg');
+    expect(image.bufferView).toBeTypeOf('number');
+    const binaryStart = 20 + jsonLength + 8;
+    const imageView = asset.bufferViews[image.bufferView];
+    const jpegStart = binaryStart + (imageView.byteOffset ?? 0);
+    expect(buffer.readUInt16BE(jpegStart)).toBe(0xffd8);
+    const normalIndex = material.normalTexture.index;
+    expect(asset.textures[normalIndex]).toBeDefined();
+    const normalImage = asset.images[asset.textures[normalIndex].source];
+    expect(normalImage.mimeType).toBe('image/png');
+    const normalView = asset.bufferViews[normalImage.bufferView];
+    const normalStart = binaryStart + (normalView.byteOffset ?? 0);
+    expect(buffer.readUInt8(normalStart)).toBe(0x89);
+    expect(buffer.toString('ascii', normalStart + 1, normalStart + 8)).toBe('PNG\r\n\x1a\n');
+  });
+
+  it.each([[16, 9], [1366, 768], [390, 844], [844, 390], [1, 1]])(
+    'keeps every projected wing/plinth corner clear of the frame and dock at %i:%i', (width, height) => {
+      const camera = new THREE.PerspectiveCamera(60, width / height, 0.1, 200);
+      camera.position.set(0, 0.6, 7);
+      camera.lookAt(0, 0.1, -4);
+      const group = new THREE.Group();
+      const bounds = new THREE.Box3(new THREE.Vector3(-5.6, -0.8, -4.3), new THREE.Vector3(5.6, 6.3, 4.3));
+      fitBossStage(group, bounds, camera);
+      expect(group.scale.x).toBeGreaterThan(0);
+      for (let i = 0; i < 8; i++) {
+        const corner = new THREE.Vector3(
+          i & 1 ? bounds.max.x : bounds.min.x,
+          i & 2 ? bounds.max.y : bounds.min.y,
+          i & 4 ? bounds.max.z : bounds.min.z,
+        ).applyMatrix4(group.matrixWorld).project(camera);
+        expect(corner.x).toBeGreaterThanOrEqual(-0.88);
+        expect(corner.x).toBeLessThanOrEqual(0.88);
+        expect(corner.y).toBeGreaterThanOrEqual(-0.68);
+        expect(corner.y).toBeLessThanOrEqual(0.83);
+      }
+      const scale = group.scale.x;
+      const position = group.position.clone();
+      fitBossStage(group, bounds, camera);
+      expect(group.scale.x).toBeCloseTo(scale, 6);
+      expect(group.position.distanceTo(position)).toBeLessThan(1e-6);
+    },
+  );
 
   it('does not rotate a standing sculpt onto its back during idle motion', () => {
     const model = new THREE.Mesh(new THREE.BoxGeometry(2, 6, 1), new THREE.MeshStandardMaterial());

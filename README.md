@@ -29,18 +29,19 @@ Hold one hand, or both, up to your webcam and a wisp of light appears in a twili
 - **It is yours to shape.** Rebind any gesture to any spell, and tune the feel, from inside the game.
 - **It is private.** Your camera is used to read your hand and nothing else. The picture is never shown, saved or sent anywhere. Read the [privacy note](docs/PRIVACY.md).
 
-## The six spells
+## The seven spells
 
 | Spell | Gesture | How to cast it |
 | --- | --- | --- |
-| **Spell 1** | ✊ Closed fist | Squeeze your hand shut and hold for a heartbeat. |
-| **Spell 2** | ✌️ Victory sign | Index and middle fingers up in a V, the others folded. |
-| **Spell 3** | 🤘 Horns | Index and little finger up, the middle two folded. |
-| **Spell 4** | 👋 Swish | Open hand, one quick sideways sweep. |
-| **Spell 5** | ☝️ Circle | Point with one finger and trace a full circle. |
-| **Spell 6** | 🙌 Rise | Open hand, scoop upward like lifting something off the floor. |
+| **Arcane Bow** | 🏹 Bow Draw · 2 hands | Point with one hand; pinch with the other, pull back, then release. |
+| **Stormstrike** | 🌩️ Skyfall | Point above an enemy, then bring your finger down to mark the strike. |
+| **Rise** | 🙌 Rise | Scoop an open hand upward. |
+| **Gale** | 🌬️ Gale | Sweep an open hand to your left. |
+| **Aegis** | 🖐️ Aegis | Hold an open palm still to raise a ward. |
+| **Frostbind** | ✌️ Victory sign | Hold a clear V sign. |
+| **Mend** | ☝️ Circle | Point and trace a circle. |
 
-Hold a shape and its spell slot fills with light; when the bar is full, the spell is released. Every spell can be rebound in the **Spellbook** panel to any of more than thirty gestures, including two-hand signs and motions, and the full guide, with tips for each sign, lives in [docs/GESTURES.md](docs/GESTURES.md).
+Each spell has its own animated visual effect and hand-drawn SVG emblem. Bow draw-and-release recognition is implemented; enemy damage, ally AI, freezing, healing, and shielding gameplay are still to come. Every spell can be rebound in the **Spellbook** panel to any of more than thirty gestures; see [docs/GESTURES.md](docs/GESTURES.md) for the gesture guide.
 
 ## Start casting
 
@@ -62,7 +63,7 @@ For the best results:
 3. Use one hand or both, palms toward the camera.
 4. Open the **Spellbook** and press <kbd>D</kbd> if you want to watch how ARcane sees your hand.
 
-No camera handy? Keys <kbd>1</kbd> to <kbd>6</kbd> cast the six spells directly.
+No camera handy? Keys <kbd>1</kbd> to <kbd>7</kbd> cast the spells directly.
 
 > `npm install` also fetches the hand-tracking model so ARcane works offline. If that step cannot reach the network, the game quietly falls back to a CDN at runtime.
 
@@ -76,7 +77,7 @@ No camera handy? Keys <kbd>1</kbd> to <kbd>6</kbd> cast the six spells directly.
 
 1. **See.** [MediaPipe Hand Landmarker](https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker) finds 21 points on your hand, entirely in your browser. The video itself is never drawn.
 2. **Steady.** A [One Euro filter](https://gery.casiez.net/1euro/) smooths each point: rock-steady when you hold still, instantly responsive when you move fast.
-3. **Understand.** Finger angles and reach decide which fingers are up. Hysteresis stops borderline fingers flickering. Palm and fingertip paths, measured in palm lengths so distance from the camera does not matter, reveal swishes, rises and circles.
+3. **Understand.** Finger angles and reach decide which fingers are up. Hysteresis stops borderline fingers flickering. Palm and fingertip paths reveal swishes, rises and circles; Bow Draw measures the pinch-pull relative to both hands.
 4. **Cast.** The recognised gesture is looked up in your Spellbook, and the world paints the spell.
 
 The longer tour is in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
@@ -87,7 +88,7 @@ Gestures and spells are plain data, so changing them takes minutes, not days.
 
 ```ts
 // src/config/spells.ts
-{ id: 'spell-1', name: 'Spell 1', color: '#ff6f3c', effect: 'burst', defaultGesture: 'fist' }
+{ id: 'spell-1', name: 'Arcane Bow', color: '#ff6f3c', effect: 'arrow', defaultGesture: 'bowdraw' }
 ```
 
 Rename a spell, recolour it, give it another effect, or point it at a different gesture, and the dev server updates instantly. [docs/CUSTOMIZING.md](docs/CUSTOMIZING.md) shows how to add brand-new gestures and spells.
@@ -99,7 +100,7 @@ Rename a spell, recolour it, give it another effect, or point it at a different 
 | [TypeScript](https://www.typescriptlang.org/) | Strict mode end to end |
 | [Vite](https://vitejs.dev/) | Instant dev server, lean production build |
 | [MediaPipe Tasks Vision](https://ai.google.dev/edge/mediapipe/solutions/vision/hand_landmarker) | On-device hand tracking |
-| [Three.js](https://threejs.org/) | The virtual world and its spell particles |
+| [Three.js](https://threejs.org/) | The twilight world and animated spell effects |
 | [Vitest](https://vitest.dev/) | Unit and pipeline tests on synthetic hands |
 | ESLint, Prettier, GitHub Actions | Quality gates on every change |
 

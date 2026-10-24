@@ -32,7 +32,9 @@ export class Hud {
   update(out: EngineOutput, charges: ReadonlyArray<{ spellId: string; progress: number }>): void {
     const text = !out.present
       ? 'Raise a hand in front of the camera'
-      : out.hold
+      : out.bow
+        ? out.bow.phase === 'arming' ? 'Pinch, then pull back…' : out.bow.phase === 'ready' ? 'Release to fire' : 'Pull farther…'
+        : out.hold
         ? 'Hold it…'
         : out.hands.length > 1
           ? 'Both hands found'
@@ -67,7 +69,7 @@ export class Hud {
       const bar = el('span', { class: 'bar' });
       const root = el(
         'div',
-        { class: 'slot', style: { '--spell': spell.color }, title: g?.hint ?? '' },
+        { class: 'slot', style: { '--spell': spell.color }, title: g?.hint ?? '', 'aria-label': `${spell.name}: ${g?.name ?? 'unbound'}` },
         icon,
         el('span', { class: 'name' }, spell.name),
         gesture,

@@ -29,8 +29,8 @@ const SPELL_GUIDE: Record<SpellEffect, { role: string; description: string }> = 
     description: 'Restore 30 vitality, up to 100. Mend recovers for seven seconds between casts.',
   },
   summon: {
-    role: 'SUMMON',
-    description: 'Spectral sentries rise at your aim point and deal an immediate 28-point spirit strike. They do not remain as allies.',
+    role: 'SUMMON · 10 SECONDS',
+    description: 'Two swift woodland gnomes sprint into range and fire rune bolts at visible enemies, then fade.',
   },
   shield: {
     role: 'WARD',

@@ -6,7 +6,7 @@ import type { EngineOutput } from './gestures/GestureEngine.ts';
 import { HandsEngine } from './gestures/HandsEngine.ts';
 import { SpellBook } from './spells/SpellBook.ts';
 import { loadJSON, saveJSON } from './storage.ts';
-import { HandTracker } from './tracking/HandTracker.ts';
+import { HandTracker, type TrackerStats } from './tracking/HandTracker.ts';
 import type { HandSide } from './tracking/types.ts';
 import { DebugOverlay } from './ui/DebugOverlay.ts';
 import { qs } from './ui/dom.ts';
@@ -24,6 +24,7 @@ let tuning: Tuning = {
   // Beta is not player-adjustable; ignore the legacy stored value from before filtering worked.
   smoothing: { ...DEFAULT_TUNING.smoothing, ...saved?.smoothing, beta: DEFAULT_TUNING.smoothing.beta },
   fingers: { ...DEFAULT_TUNING.fingers, ...saved?.fingers },
+  cameraFps: saved?.cameraFps === 30 ? 30 : 60,
 };
 
 const world = new World(qs('#world'));
@@ -33,7 +34,7 @@ const book = new SpellBook(SPELLS, GESTURES);
 // Only gestures bound to a spell are live; the rest are just choices in the Spellbook dropdown.
 const engine = new HandsEngine(book.activeGestures(), tuning);
 book.onChange(() => engine.setGestures(book.activeGestures()));
-const tracker = new HandTracker();
+const tracker = new HandTracker(tuning.cameraFps);
 
 const hudRoot = qs('#hud');
 const hud = new Hud(hudRoot, book);
@@ -46,21 +47,26 @@ new SettingsPanel(hudRoot, {
   isDebugVisible: () => debug.isVisible,
   onDebug: (v) => debug.setVisible(v),
   onTuning: (t) => {
+    const previousCameraFps = tuning.cameraFps;
     tuning = structuredClone(t);
     engine.setTuning(tuning);
+    if (tuning.cameraFps !== previousCameraFps) {
+      void tracker.setFrameRate(tuning.cameraFps).catch((error: unknown) => {
+        console.warn('[arcane] camera could not apply the selected frame-rate cap', error);
+      });
+    }
     saveJSON(TUNING_KEY, tuning);
   },
 });
 
 /** One cast, from any source: a recognised gesture or a keyboard shortcut. */
-function cast(spellId: string, from?: HandSide | 'both'): void {
+function cast(spellId: string, from?: HandSide | 'both', detail?: string): void {
   const spell = SPELLS.find((s) => s.id === spellId);
   if (!spell) return;
-  world.cast(spell, from);
-  hud.flash(spell.id);
+  if (world.cast(spell, from, detail)) hud.flash(spell.id);
 }
 
-function handle(out: EngineOutput, fps: number): void {
+function handle(out: EngineOutput, stats: TrackerStats): void {
   const cursors: Record<HandSide, { x: number; y: number } | null> = { left: null, right: null };
   const perHand: Partial<Record<HandSide, { progress: number; color: string }>> = {};
   const charges: Array<{ spellId: string; progress: number }> = [];
@@ -71,6 +77,13 @@ function handle(out: EngineOutput, fps: number): void {
     if (hand.hold && spell) {
       perHand[hand.side] = { progress: hand.hold.progress, color: spell.color };
       charges.push({ spellId: spell.id, progress: hand.hold.progress });
+    }
+  }
+  if (out.bow) {
+    const spell = book.spellFor(out.bow.gestureId);
+    if (spell) {
+      perHand[out.bow.drawSide] = { progress: out.bow.progress, color: spell.color };
+      charges.push({ spellId: spell.id, progress: out.bow.progress });
     }
   }
   world.setCursors(cursors);
@@ -86,11 +99,11 @@ function handle(out: EngineOutput, fps: number): void {
     world.setCharges(perHand);
   }
   hud.update(out, charges);
-  debug.draw(out, fps);
+  debug.draw(out, stats);
 
   for (const fired of out.fired) {
     const spell = book.spellFor(fired.gestureId);
-    if (spell) cast(spell.id, fired.side);
+    if (spell) cast(spell.id, fired.side, fired.detail);
   }
 }
 
@@ -98,7 +111,7 @@ function handle(out: EngineOutput, fps: number): void {
 let lastFrameError = 0;
 tracker.onFrame = (hands, stats) => {
   try {
-    handle(engine.process(hands, performance.now()), stats.fps);
+    handle(engine.process(hands, stats.timestamp), stats);
   } catch (err) {
     const now = performance.now();
     if (now - lastFrameError > 2000) console.error('[arcane] frame error', err);
@@ -106,30 +119,6 @@ tracker.onFrame = (hands, stats) => {
   }
 };
 
-
-/* ───────────────────────────── start-up flow ───────────────────────────── */
-
-const intro = qs('#intro');
-const begin = qs<HTMLButtonElement>('#begin');
-const message = qs('#intro-message');
-document.body.classList.add('is-intro');
-
-begin.addEventListener('click', async () => {
-  begin.disabled = true;
-  message.textContent = 'Waking the camera…';
-  message.dataset.state = 'busy';
-  try {
-    await tracker.start();
-    intro.hidden = true;
-    document.body.classList.remove('is-intro');
-  } catch (err) {
-    message.textContent = describeError(err);
-    message.dataset.state = 'error';
-    begin.textContent = 'Try again';
-    begin.disabled = false;
-    console.error(err);
-  }
-});
 
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) engine.reset();

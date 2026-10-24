@@ -177,11 +177,13 @@ export class World {
     const color = new THREE.Color(spell.color);
     const origin = this.castOrigin(from).clone();
     const { point: target, enemy } = this.selectSpellTarget(origin);
-    const animation = createSpellAnimation(spell.effect, origin, target, color, detail, {
-      groundY: terrainHeight(target.x, target.z),
+    const effectTarget = spell.effect === 'summon' ? origin : target;
+    const animation = createSpellAnimation(spell.effect, origin, effectTarget, color, detail, {
+      groundY: terrainHeight(effectTarget.x, effectTarget.z),
       cameraQuaternion: this.camera.quaternion,
     });
-    if (enemy) animation.setImpactCallback(this.encounter.hasEnemy(enemy)
+    if (spell.effect === 'summon') this.encounter.summon(origin, target, enemy);
+    if (enemy && spell.effect !== 'summon') animation.setImpactCallback(this.encounter.hasEnemy(enemy)
       ? this.encounter.impactCallback(enemy, spell.effect, target, color)
       : () => { enemy.impact(spell.effect, target, color); });
     this.scene.add(animation.group);

@@ -79,6 +79,11 @@ export class SpellBook {
     this.applyDefaults();
     const saved = loadJSON<Record<string, string>>(STORAGE_KEY, this.store);
     if (!saved || typeof saved !== 'object') return;
+    // Keep old browser saves working while Arcane Bow moves from a held point to Bow Draw.
+    const bow = this.spells.find((spell) => spell.name === 'Arcane Bow' && spell.defaultGesture === 'bowdraw');
+    if (bow && saved[bow.id] === 'lance' && this.gestures.some((gesture) => gesture.id === 'bowdraw')) {
+      saved[bow.id] = 'bowdraw';
+    }
     const used = new Set<string>();
     const next = new Map<string, string>();
     for (const spell of this.spells) {

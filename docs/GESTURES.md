@@ -1,6 +1,6 @@
 # Gesture guide
 
-ARcane recognises more than thirty gestures with one or both hands. Six are bound to spells by default, and you can rebind them any time in the **Spellbook** panel.
+ARcane recognises more than thirty gestures with one or both hands. Seven are bound to spells by default, and you can rebind them any time in the **Spellbook** panel.
 
 There are two kinds of gesture:
 
@@ -17,7 +17,7 @@ On top of that there are **two-hand gestures** that need both hands in view: mat
 
 ## The gesture library
 
-Only six gestures are assigned out of the box. The Spellbook dropdown offers the whole library, grouped by kind; anything not assigned to a spell is switched off, so it can never trigger by accident. If two assigned gestures overlap (for example Gale and Swish), the stricter one wins.
+Only seven gestures are assigned out of the box. The Spellbook dropdown offers the whole library, grouped by kind; anything not assigned to a spell is switched off, so it can never trigger by accident. If two assigned gestures overlap (for example Gale and Swish), the stricter one wins.
 
 **Hand signs** (hold for about a third of a second): Closed fist, Victory sign, Horns, Trident (three fingers up), Lance (point), Aegis (open palm, held still for 0.7 s).
 
@@ -29,7 +29,9 @@ Only six gestures are assigned out of the box. The Spellbook dropdown offers the
 
 **Two-hand signs** (hold): Blood Pact (both fists), Eclipse (both open palms, still), Twin Fangs (two victory signs), Crossfire (two pointing fingers), Wyrm’s Maw (two horns), Leviathan (two tridents).
 
-**Two-hand motions**: Rift (pull open hands apart), Bind (draw them together), Skywake (lift both), Cataclysm (slam both down).
+**Two-hand motions**: Bow Draw (point with one hand, pinch and pull back with the other, then release), Rift (pull open hands apart), Bind (draw them together), Skywake (lift both), Cataclysm (slam both down).
+
+For **Bow Draw**, keep the pointing hand on the target. Pinch thumb and index finger on the other hand, pull that hand away from the pointer, then release after the charge bar fills. Either hand can aim. A short pull cancels; losing either hand cancels rather than firing.
 
 ## How to perform every gesture
 
@@ -68,7 +70,7 @@ Start with an open palm, pause for a beat so it is recognised, then make one str
 | Wrath | Make a tight fist and swing it sideways in one clean stroke. |
 | Wyrm Slash | Point with one index finger and cut sideways across the screen. |
 | Skybolt | Point with one index finger and thrust straight upward. |
-| Impale | Point with one index finger and drive it straight downward. |
+| Skyfall | Point above an enemy, then bring one index finger down to call lightning onto that spot. |
 
 Pointing strikes follow your **index fingertip**, so a clear wrist flick can work without a large palm sweep. Keep the other three fingers flexed and make the fingertip path reasonably straight; rounded paths are reserved for sigils. If Lance and a pointing strike are both assigned, hold still for Lance and move for the strike. A hold that already cast still applies the normal pause between casts.
 

@@ -20,7 +20,7 @@ flowchart LR
 ## Stage by stage
 
 ### 1. Tracking (`src/tracking/`)
-`HandTracker` opens the camera and feeds frames to MediaPipe's Hand Landmarker (GPU first, CPU as fallback). It converts the 21 landmarks into one consistent **tracking space**: x mirrored so the world behaves like a mirror, y downward, x and z scaled by the video aspect ratio so all axes share a unit. The video element is invisible and never drawn; only landmark numbers leave the class.
+`HandTracker` opens the camera and feeds frames directly to MediaPipe's Hand Landmarker (GPU first, CPU as fallback). The original direct-inference path is the default. A worker implementation remains experimental and is enabled only with `?tracking=worker`; it keeps at most one camera frame in flight. Neither path turns valid detections into missing hands solely because inference exceeds a fixed age cutoff. The selectable camera cap is 30 or 60 FPS, while debug stats distinguish requested/actual camera FPS, completed inference FPS, inference duration and result age. The captured frame timestamp is carried unchanged into gesture processing. It converts the 21 landmarks into one consistent **tracking space**: x mirrored so the world behaves like a mirror, y downward, x and z scaled by the video aspect ratio so all axes share a unit. The video element is invisible and never drawn; only landmark numbers leave the class.
 
 ### 2. Smoothing (`LandmarkSmoother`, `OneEuroFilter`)
 Raw landmarks jitter by a few pixels. A **One Euro filter** runs on every coordinate: its cutoff frequency rises with speed, so a still hand is smoothed heavily and a fast hand is barely delayed. Two parameters control it: `minCutoff` (steadiness at rest) and `beta` (responsiveness in motion).
@@ -44,13 +44,15 @@ Ties it together and adds the human factors:
 - **Stillness for overlapping holds**: a matching held sign cannot charge through its assigned movement gesture. Pointing holds also watch fingertip movement, so Lance does not consume a developing Skybolt stroke. A stationary hold still casts normally; movement during its cooldown remains blocked.
 - **Latching**: a held pose casts once, and re-arms only when you change to another shape.
 - **Cooldown** after every cast, and buffers cleared so the return stroke of a swish does not cast again.
-- **Dropout bridging**: a lost hand is tolerated for 180 ms before state resets.
+- **Dropout bridging**: a lost hand is tolerated for 180 ms before state resets. State also expires when a delayed camera result arrives after a longer stall, even if no null frames were delivered in between.
 - **Cursor**: the palm position mapped to 0..1 screen coordinates, with adjustable reach.
 
-`GestureEngine` takes a `HandFrame | null` plus a timestamp and returns an `EngineOutput`. It has no dependency on the DOM, camera or Three.js, which is why the whole thing is unit-tested with synthetic hands.
+`GestureEngine` takes a `HandFrame | null` plus the timestamp of the captured video frame and returns an `EngineOutput`. It has no dependency on the DOM, camera or Three.js, which is why the whole thing is unit-tested with synthetic hands and replayed at different capture rates. Swipe, circle and two-hand motion thresholds are expressed in elapsed time and palm-relative travel rather than assuming a fixed number of samples.
 
 ### 6b. Two hands (`HandBinder.ts`, `HandsEngine.ts`, `dual.ts`)
-MediaPipe returns up to two hands in an arbitrary order. `HandBinder` pins them to stable left and right slots by following each wrist from frame to frame; the first pairing follows the on-screen layout, and the model’s Left/Right label is only a hint for a lone hand. `HandsEngine` runs one `GestureEngine` per slot, so each hand is smoothed and classified independently and can cast on its own. On top of that it watches both palms together for two-hand signs and motions (`dual.ts`), ordering the palms by screen position so those motions never depend on which slot a hand landed in. A two-hand sign claims its shape from the single-hand gestures while both hands show it.
+MediaPipe returns up to two hands in an arbitrary order. `HandBinder` pins them to stable left and right slots by following each wrist from frame to frame; near-identical overlapping palm detections are collapsed, and a newly appearing second track is confirmed on consecutive frames before becoming live. The first pairing follows the on-screen layout, and the model’s Left/Right label is only a hint for a lone hand. `HandsEngine` runs one `GestureEngine` per slot, so each hand is smoothed and classified independently and can cast on its own; a slot bridged internally through a brief dropout is not exposed as a currently live hand. On top of that it watches both palms together for two-hand signs and motions (`dual.ts`), ordering the palms by screen position so those motions never depend on which slot a hand landed in. A two-hand sign claims its shape from the single-hand gestures while both hands show it.
+
+Slot memory expires per hand, not per result array. An established hand that returns within the dropout grace period keeps its slot immediately; only genuinely new tracks need confirmation. A palm-size-relative continuity radius prevents short, fast solo-hand strokes from switching engines when handedness flickers. Numeric-invalid landmark arrays are rejected before smoothing.
 
 The engine only listens for gestures that are bound to a spell (`SpellBook.activeGestures()`), so unassigned gestures cannot fire or consume the cooldown.
 
@@ -58,7 +60,7 @@ The engine only listens for gestures that are bound to a spell (`SpellBook.activ
 The engine reports **gesture ids** such as `"fist"`. The `SpellBook` maps gestures to spells (one gesture, one spell, always) and persists the player's choices. Gestures and spells are declared as data in `src/config/gestures.ts` and `spells.ts`.
 
 ### 8. World and UI (`src/world/`, `src/ui/`)
-`World` renders a Three.js scene, turns the cursor into a wisp in 3D space, and paints a particle effect plus a floating label for each spell. It renders at the display's frame rate, independent of the camera's, and eases the wisp toward the latest cursor so motion stays fluid even at 30 camera frames per second. The HUD, Spellbook panel and debug overlay are small DOM modules.
+`World` renders a Three.js scene, turns the cursor into a wisp in 3D space, and paints a particle effect plus a floating label for each spell. It also loads `public/assets/boss/balrog.glb` as optional scenery: `scripts/export-boss.py` preserves the source's Z-up standing pose (the glTF exporter converts that to Y-up) and writes the authored vertex palette as the first color attribute. `Boss.ts` fits projected stage corners inside the camera view with room for the spell dock, adds an ember plinth/cinders, and applies a restrained standing breath and shader-driven wing-tip flex. Cast spells briefly illuminate it. Asset failure is non-blocking for camera tracking. The world renders at the display's frame rate, independent of the camera's, and eases the wisp toward the latest cursor so motion stays fluid even at 30 camera frames per second. The HUD, Spellbook panel and debug overlay are small DOM modules.
 
 ## Design decisions
 

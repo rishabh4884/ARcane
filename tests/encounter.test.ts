@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { Creature, type CreatureKind } from '../src/world/Creature.ts';
 import { CreatureState, CREATURE_SPECS, PlayerState } from '../src/world/EncounterState.ts';
 import { FrameBudget } from '../src/world/FrameBudget.ts';
+import { GNOME_ATTACK_RANGE, GNOME_LIFETIME, GNOME_RUN_SPEED, GnomeSummons } from '../src/world/GnomeSummons.ts';
 import { sweptShape, vectors } from '../src/world/storybook.ts';
 
 const kinds:CreatureKind[]=['goblin','root','hollow','wraith'];
@@ -57,6 +58,12 @@ describe('player vitality and wards',()=>{
     player.update(5.1);expect(player.shield).toBe(0);expect(player.cast('shield')).toBe(false);
     player.update(1);expect(player.cast('shield')).toBe(true);
   });
+  it('keeps summoned scouts brief, ranged, mobile, and off cooldown until they fade',()=>{
+    expect(GNOME_LIFETIME).toBe(10);expect(GNOME_ATTACK_RANGE).toBe(35);expect(GNOME_RUN_SPEED).toBe(6);
+    const player=new PlayerState();expect(player.cast('summon')).toBe(true);expect(player.cooldowns.summon).toBe(12);
+    player.update(10);expect(player.cast('summon')).toBe(false);player.update(2.1);expect(player.cast('summon')).toBe(true);
+    const goblin=new CreatureState('goblin');expect(goblin.hit('summon')).toBe(true);expect(goblin.health).toBe(57);
+  });
   it('heals by 30, caps at 100 and cannot be spammed',()=>{
     const player=new PlayerState();player.health=55;expect(player.cast('healing')).toBe(true);expect(player.health).toBe(85);
     expect(player.cast('healing')).toBe(false);player.update(7);player.cast('healing');expect(player.health).toBe(100);
@@ -64,6 +71,24 @@ describe('player vitality and wards',()=>{
   it('death stops casts and restart clears old health, wards and cooldowns',()=>{
     const player=new PlayerState();player.cast('frost');player.damage(150);expect(player.alive).toBe(false);expect(player.cast('healing')).toBe(false);
     player.reset();expect(player.health).toBe(100);expect(player.cooldowns.frost).toBe(0);expect(player.damage(10)).toBe('ignored');
+  });
+});
+
+describe('summoned gnome lifecycle',()=>{
+  it('repositions quickly and lands ranged shots on living, visible targets',()=>{
+    let health=100;
+    const summons=new GnomeSummons([],()=>null,()=>{health-=8;}),point=new THREE.Vector3(0,0,-8);
+    summons.summon(point,point,4);
+    const target={id:4,position:point,height:2,alive:true};
+    for(let i=0;i<120;i++)summons.update(.05,true,new THREE.Vector3(0,1.85,17),[target]);
+    expect(health).toBeLessThan(100);summons.dispose();
+  });
+  it('replaces the previous pair and cleans every sprite at ten seconds',()=>{
+    const summons=new GnomeSummons([],()=>null,()=>{}),point=new THREE.Vector3(0,0,-8);
+    summons.summon(point,point);expect(summons.group.children).toHaveLength(2);
+    summons.summon(point,point);expect(summons.group.children).toHaveLength(2);
+    for(let i=0;i<201;i++)summons.update(.05,false,point,[]);
+    expect(summons.group.children).toHaveLength(0);summons.dispose();
   });
 });
 

@@ -9,8 +9,8 @@ export const CREATURE_SPECS:Record<CreatureKind,CreatureSpec>={
   hollow:{health:120,speed:0.6,range:3.25,windup:2.8,recovery:4.5,damage:28,radius:0.65,height:5.3},
   wraith:{health:75,speed:0.5,range:12,windup:2.8,recovery:5.2,damage:15,radius:0.5,height:3.0},
 };
-const DAMAGE:Partial<Record<SpellEffect,number>>={arrow:32,lightning:48,frost:12,wind:22,summon:28};
-export const COOLDOWNS:Record<SpellEffect,number>={arrow:0.4,lightning:1.5,frost:2.2,wind:1,healing:7,summon:4,shield:6};
+const DAMAGE:Partial<Record<SpellEffect,number>>={arrow:32,lightning:48,frost:12,wind:22,summon:8};
+export const COOLDOWNS:Record<SpellEffect,number>={arrow:0.4,lightning:1.5,frost:2.2,wind:1,healing:7,summon:12,shield:6};
 
 /** Deterministic simulation, independent of rendering, camera permissions, and frame rate. */
 export class CreatureState {

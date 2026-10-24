@@ -2,6 +2,7 @@ import { GESTURE_GROUPS, isDualGesture, type GestureDef, type GestureGroup } fro
 import type { Tuning } from '../config/tuning.ts';
 import type { SpellBook } from '../spells/SpellBook.ts';
 import { el } from './dom.ts';
+import { createSpellIcon } from './spell-icons.ts';
 
 export interface SettingsOptions {
   book: SpellBook;
@@ -61,7 +62,7 @@ export class SettingsPanel {
       return el(
         'div',
         { class: 'spell-row', style: { '--spell': spell.color } },
-        el('label', { class: 'row' }, el('span', { class: 'dot' }), el('span', { class: 'label' }, spell.name), select),
+        el('label', { class: 'row' }, createSpellIcon(spell.id), el('span', { class: 'label' }, spell.name), select),
         el('p', { class: 'hint' }, current?.hint ?? ''),
       );
     });
@@ -81,12 +82,27 @@ export class SettingsPanel {
     const debug = el('input', { type: 'checkbox', id: 'arcane-debug-toggle' });
     debug.checked = this.o.isDebugVisible();
     debug.addEventListener('change', () => this.o.onDebug(debug.checked));
+    const frameRate = el(
+      'select',
+      {
+        'aria-label': 'Camera capture rate',
+        onchange: (event: Event) => {
+          const value = Number((event.target as HTMLSelectElement).value);
+          this.tuning.cameraFps = value === 30 ? 30 : 60;
+          this.o.onTuning(this.tuning);
+        },
+      },
+      el('option', { value: '30', selected: this.tuning.cameraFps === 30 }, '30 fps · lower load'),
+      el('option', { value: '60', selected: this.tuning.cameraFps === 60 }, '60 fps · smoother'),
+    );
 
     this.panel.replaceChildren(
       el('header', {}, el('h2', {}, 'Spellbook'), el('button', { class: 'close', type: 'button', 'aria-label': 'Close spellbook', onclick: () => this.toggle(false) }, '×')),
       el('p', { class: 'note' }, 'Choose which gesture casts each spell. Pick one that is already used and the two swap. Gestures not assigned to a spell are switched off. Two-hand gestures need both hands in view. If two assigned gestures overlap, the stricter one wins.'),
       ...rows,
       el('h3', {}, 'Feel'),
+      el('label', { class: 'row' }, el('span', { class: 'label' }, 'Camera rate'), frameRate),
+      el('p', { class: 'note' }, 'This is the requested cap; camera hardware may deliver less. Press D to see actual camera/inference rates, result age, and raw vs. live hand counts.'),
       slider('Smoothness', 0, 100, 1, cutoffToSmoothness(this.tuning.smoothing.minCutoff), '', (v) => (this.tuning.smoothing.minCutoff = smoothnessToCutoff(v))),
       slider('Hold time', 150, 800, 10, this.tuning.poseHoldMs, ' ms', (v) => (this.tuning.poseHoldMs = v)),
       slider('Pause between casts', 200, 1500, 50, this.tuning.cooldownMs, ' ms', (v) => (this.tuning.cooldownMs = v)),

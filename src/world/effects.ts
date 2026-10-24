@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { ImpactBurst, SpellGlint } from './effect-composition.ts';
 import type { SpellEffect } from '../config/spells.ts';
 
 export interface SpellAnimation {
@@ -24,23 +25,35 @@ export function createSpellAnimation(
   context?: { groundY: number; cameraQuaternion: THREE.Quaternion },
 ): SpellAnimation {
   switch (kind) {
-    case 'arrow': return arrow(origin, target, color, detail);
-    case 'lightning': return lightning(target, color);
-    case 'frost': return frost(target, color);
-    case 'wind': return gale(origin, target, color, detail);
+    case 'arrow': return accent(arrow(origin,target,color,detail),target,color,56,.88,4.2,5.5);
+    case 'lightning': return accent(lightning(target,color),target,color,88,.92,7.0,8.0);
+    case 'frost': return accent(frost(target,color),target,color,66,1.05,3.2,5.5);
+    case 'wind': return accent(gale(origin,target,color,detail),target,color,58,.95,4.2,6.5);
     case 'healing': {
-      const effect = mend(origin, color, detail);
-      if (context) effect.group.quaternion.copy(context.cameraQuaternion);
-      return effect;
+      const effect=mend(origin,color,detail);
+      if(context)effect.group.quaternion.copy(context.cameraQuaternion);
+      return accent(effect,origin,color,46,1.2,3.2,5);
     }
-    case 'summon': return rise(target, color, context?.groundY);
+    case 'summon': return accent(rise(target,color,context?.groundY),target,color,64,1.15,4.0,7);
     case 'shield': {
-      const effect = aegis(origin, color);
-      if (context) effect.group.quaternion.copy(context.cameraQuaternion);
-      return effect;
+      const effect=aegis(origin,color);
+      if(context)effect.group.quaternion.copy(context.cameraQuaternion);
+      return accent(effect,origin,color,46,1.1,3.0,6);
     }
-  }
 }
+}
+function accent(effect:SpellAnimation,point:THREE.Vector3,color:THREE.Color,count:number,duration:number,intensity:number,radius:number):SpellAnimation {
+  const burst=new ImpactBurst(point,color,count,duration),glint=new SpellGlint(color,intensity,radius);
+  effect.group.updateMatrixWorld(true);
+  const local=effect.group.worldToLocal(point.clone());burst.group.position.copy(local);burst.group.renderOrder=3;glint.position.copy(local);
+  effect.group.add(burst.group,glint);
+  const update=effect.update.bind(effect),dispose=effect.dispose.bind(effect);
+  let age=0;
+  effect.update=(dt)=>{age+=Math.max(0,dt);const active=update(dt);burst.update(dt);glint.pulse(Math.min(1,age/duration),Math.max(0,1-age/duration));return active||age<duration;};
+  effect.dispose=()=>{burst.dispose();glint.dispose();dispose();};
+  return effect;
+}
+
 
 function animate(
   group: THREE.Group,
@@ -83,6 +96,7 @@ function glow(color: THREE.Color, opacity = 0.9): THREE.MeshBasicMaterial {
     blending: THREE.AdditiveBlending,
     depthWrite: false,
     side: THREE.DoubleSide,
+    toneMapped: false,
   });
 }
 
@@ -297,61 +311,35 @@ function mend(origin: THREE.Vector3, color: THREE.Color, detail?: string): Spell
 
 function rise(target: THREE.Vector3, color: THREE.Color, groundY = 0): SpellAnimation {
   const group = new THREE.Group();
-  group.position.copy(target).setY(groundY + 0.5);
-  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.68, 0.024, 5, 48), glow(color, 0.7));
+  group.position.copy(target).setY(groundY + 0.04);
+  const ring = new THREE.Mesh(new THREE.TorusGeometry(0.68, 0.035, 6, 56), glow(color, 0.82));
   ring.rotation.x = Math.PI / 2;
-  ring.position.set(0, -0.48, 0.6);
+  ring.position.y = 0.015;
   group.add(ring);
   const cracks = addLine(group, [
-    new THREE.Vector3(-0.9, -0.46, 0.6), new THREE.Vector3(-0.35, -0.43, 0.36),
-    new THREE.Vector3(0, -0.46, 0.62), new THREE.Vector3(0.42, -0.44, 0.37),
-    new THREE.Vector3(0.94, -0.46, 0.62),
-  ], lineMaterial(color, 0.7));
-  const bots = [-1, 1].map((side) => makeBot(color, side));
-  bots.forEach((bot) => group.add(bot));
-  return animate(group, 2.25, (t) => {
-    ring.scale.setScalar(0.15 + easeOut(Math.min(1, t * 2.1)) * 1.5);
-    (ring.material as THREE.MeshBasicMaterial).opacity = clamp01(1 - Math.max(0, t - 0.68) * 2.2);
-    (cracks.material as THREE.LineBasicMaterial).opacity = clamp01(1 - Math.max(0, t - 0.48) * 1.5);
-    bots.forEach((bot, index) => {
-      const local = clamp01((t - index * 0.12) / 0.42);
-      bot.position.set((index ? 1 : -1) * (1.28 - easeOut(local) * 0.34), -1.4 + easeOut(local) * 1.48, 1.7 - easeOut(clamp01((t - 0.46) / 0.52)) * 0.95);
-      bot.rotation.y = Math.sin(t * 8 + index) * 0.08;
-      bot.rotation.x = -easeOut(clamp01((t - 0.58) / 0.2)) * 0.16;
-      bot.scale.setScalar(1.18 + Math.sin(t * 10 + index) * 0.04);
-      const alpha = clamp01(1 - Math.max(0, t - 0.78) * 2.8);
-      bot.traverse((object) => {
-        if (object instanceof THREE.Mesh || object instanceof THREE.Line) {
-          const materials = Array.isArray(object.material) ? object.material : [object.material];
-          for (const material of materials) if ('opacity' in material) material.opacity = alpha;
-        }
-      });
+    new THREE.Vector3(-0.95, 0.035, 0), new THREE.Vector3(-0.38, 0.04, -0.26),
+    new THREE.Vector3(0, 0.035, 0.08), new THREE.Vector3(0.4, 0.04, -0.24),
+    new THREE.Vector3(0.96, 0.035, 0),
+  ], lineMaterial(color, 0.84));
+  const motes = Array.from({ length: 7 }, (_, index) => {
+    const mote = new THREE.Mesh(new THREE.IcosahedronGeometry(0.045 + (index % 3) * 0.012, 0), glow(color, 0.9));
+    const angle = index / 7 * Math.PI * 2;
+    mote.position.set(Math.cos(angle) * (0.72 + index % 2 * 0.14), 0.08, Math.sin(angle) * (0.72 + index % 2 * 0.14));
+    group.add(mote);
+    return mote;
+  });
+  return animate(group, 1.45, (t) => {
+    const spread = easeOut(Math.min(1, t * 1.65));
+    ring.scale.setScalar(0.12 + spread * 1.4);
+    (ring.material as THREE.MeshBasicMaterial).opacity = clamp01(1 - t * 0.82);
+    (cracks.material as THREE.LineBasicMaterial).opacity = clamp01(1 - Math.max(0, t - 0.38) * 1.45);
+    motes.forEach((mote, index) => {
+      const angle = index / motes.length * Math.PI * 2 + t * 2.6;
+      mote.position.set(Math.cos(angle) * (0.42 + spread * 0.9), 0.08 + Math.sin(t * 8 + index) * 0.34 + t * 0.75, Math.sin(angle) * (0.42 + spread * 0.9));
+      mote.scale.setScalar(1 - t * 0.65);
+      (mote.material as THREE.MeshBasicMaterial).opacity = clamp01(1 - t * 1.15);
     });
-  }, 0.6);
-}
-
-function makeBot(color: THREE.Color, side: number): THREE.Group {
-  const bot = new THREE.Group();
-  const bodyMat = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.5, depthWrite: false, side: THREE.DoubleSide });
-  const coreMat = glow(color.clone().lerp(new THREE.Color('#ffffff'), 0.45), 0.95);
-  const body = new THREE.Mesh(new THREE.OctahedronGeometry(0.36, 0), bodyMat);
-  body.position.y = 0.22;
-  const bodyOutline = new THREE.LineSegments(new THREE.EdgesGeometry(body.geometry), lineMaterial(color, 0.95));
-  bodyOutline.position.copy(body.position);
-  const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.2, 0), coreMat);
-  head.position.y = 0.67;
-  const headOutline = new THREE.LineSegments(new THREE.EdgesGeometry(head.geometry), lineMaterial(color.clone().lerp(new THREE.Color('#ffffff'), 0.6), 0.95));
-  headOutline.position.copy(head.position);
-  const shoulders = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.16, 0.2), bodyMat);
-  shoulders.position.y = 0.43;
-  const shoulderOutline = new THREE.LineSegments(new THREE.EdgesGeometry(shoulders.geometry), lineMaterial(color, 0.8));
-  shoulderOutline.position.copy(shoulders.position);
-  const eye = new THREE.Mesh(new THREE.SphereGeometry(0.045, 6, 5), glow(new THREE.Color('#fff6ce'), 1));
-  eye.position.set(side * -0.07, 0.69, 0.18);
-  const otherEye = eye.clone();
-  otherEye.position.x = side * 0.07;
-  bot.add(body, bodyOutline, head, headOutline, shoulders, shoulderOutline, eye, otherEye);
-  return bot;
+  });
 }
 
 function aegis(origin: THREE.Vector3, color: THREE.Color): SpellAnimation {

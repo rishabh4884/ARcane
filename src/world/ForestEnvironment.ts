@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { Illustration, billboardMaterial } from './Illustration.ts';
+import { VolumetricFog } from './VolumetricFog.ts';
 import { GrassField } from './GrassField.ts';
 import { ArtResources } from './storybook.ts';
 import { forestLayout, intersectObstacle, intersectTerrain, pathX, seededRandom, terrainHeight, type Obstacle } from './spatial.ts';
@@ -19,18 +20,20 @@ export class ForestEnvironment {
   private readonly cutouts: Cutout[] = [];
   private readonly sky: THREE.Mesh;
   private readonly grass:GrassField;
+  private readonly fog:VolumetricFog;
   private disposed = false;
 
   constructor(private readonly scene: THREE.Scene) {
     this.group.name = 'The Hushwood — an illustrated world';
-    scene.background = new THREE.Color('#9dbbb4');
-    scene.fog = new THREE.FogExp2('#93b6b0', 0.018);
+    scene.background = new THREE.Color('#10171a');
+    scene.fog = new THREE.FogExp2('#222b29', 0.023);
     scene.add(this.group);
-    const ambient = new THREE.HemisphereLight('#d9dfc4', '#406456', 2.4);
-    const sun = new THREE.DirectionalLight('#f6d3a0', 1.3); sun.position.set(-20,32,-35);
+    const ambient = new THREE.HemisphereLight('#a9b9b2', '#25312e', 1.85);
+    const sun = new THREE.DirectionalLight('#e9c99b', 1.0); sun.position.set(-20,32,-35);
     this.group.add(ambient,sun);
     this.sky = this.makeSky();
     this.makeCarpet(); this.makeTrees(); this.makeRocks(); this.makeLandmarks(); this.makeAtmosphere();
+    this.fog=new VolumetricFog();this.group.add(this.fog.group);
     this.grass=new GrassField(this.obstacles);this.group.add(this.grass.group);
   }
 
@@ -66,9 +69,10 @@ export class ForestEnvironment {
       side:THREE.BackSide,depthWrite:false,
       vertexShader:'varying vec3 direction;void main(){direction=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',
       fragmentShader:`varying vec3 direction;void main(){vec3 d=normalize(direction);
-        float opening=pow(max(0.0,dot(d,normalize(vec3(-0.25,0.20,-0.95)))),5.0);
-        vec3 c=mix(vec3(0.39,0.61,0.61),vec3(0.13,0.32,0.40),smoothstep(-0.1,0.9,d.y));
-        c=mix(c,vec3(0.94,0.88,0.66),opening*0.72);
+        float opening=pow(max(0.0,dot(d,normalize(vec3(-0.25,0.035,-0.96)))),9.0);
+        vec3 c=mix(vec3(.105,.145,.15),vec3(.025,.041,.05),smoothstep(-.08,.85,d.y));
+        c=mix(c,vec3(.15,.15,.12),opening*.07);
+        c*=mix(.72,1.0,smoothstep(-.12,.42,d.y));
         gl_FragColor=vec4(c,1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
@@ -161,17 +165,19 @@ export class ForestEnvironment {
 
   private makeAtmosphere():void {
     const positions:number[]=[],seed:number[]=[];
-    for(let i=0;i<420;i++){const x=(this.random()-.5)*130,z=(this.random()-.5)*130;positions.push(x,terrainHeight(x,z)+0.7+this.random()*8,z);seed.push(this.random()*100);}
-    const geometry=this.art.geometry(new THREE.BufferGeometry());geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));geometry.setAttribute('seed',new THREE.Float32BufferAttribute(seed,1));
+    for(let i=0;i<420;i++){const x=(this.random()-.5)*130,z=(this.random()-.5)*130;positions.push(x,terrainHeight(x,z)+.7+this.random()*8,z);seed.push(this.random()*100);}
+    const geometry=this.art.geometry(new THREE.BufferGeometry());
+    geometry.setAttribute('position',new THREE.Float32BufferAttribute(positions,3));
+    geometry.setAttribute('seed',new THREE.Float32BufferAttribute(seed,1));
     const material=this.art.material(new THREE.ShaderMaterial({transparent:true,depthWrite:false,blending:THREE.AdditiveBlending,uniforms:{time:this.time,motion:this.motion},
-      vertexShader:`uniform float time;uniform float motion;attribute float seed;varying float alpha;void main(){vec3 p=position;p.x+=sin(time*.24+seed)*.7*motion;p.y+=sin(time*.5+seed)*.3*motion;vec4 mv=modelViewMatrix*vec4(p,1.);alpha=(.35+.65*pow(sin(time*.6+seed)*.5+.5,2.))*(1.-smoothstep(12.,60.,-mv.z));gl_PointSize=clamp(70./max(1.,-mv.z),1.,6.);gl_Position=projectionMatrix*mv;}`,
-      fragmentShader:'varying float alpha;void main(){float d=length(gl_PointCoord-.5)*2.;if(d>1.)discard;gl_FragColor=vec4(.98,.84,.48,pow(1.-d,2.)*alpha*.75);}',
+      vertexShader:`uniform float time;uniform float motion;attribute float seed;varying float alpha;varying float fogDepth;void main(){vec3 p=position;p.x+=sin(time*.24+seed)*.7*motion;p.y+=sin(time*.5+seed)*.3*motion;vec4 mv=modelViewMatrix*vec4(p,1.);fogDepth=-mv.z;alpha=(.35+.65*pow(sin(time*.6+seed)*.5+.5,2.))*(1.-smoothstep(12.,60.,-mv.z));gl_PointSize=clamp(70./max(1.,-mv.z),1.,6.);gl_Position=projectionMatrix*mv;}`,
+      fragmentShader:'varying float alpha;varying float fogDepth;void main(){float d=length(gl_PointCoord-.5)*2.;if(d>1.)discard;float fade=1.-smoothstep(36.,88.,fogDepth);gl_FragColor=vec4(.98,.84,.48,pow(1.-d,2.)*alpha*fade*.62);}'
     }));
     const points=new THREE.Points(geometry,material);points.frustumCulled=false;this.group.add(points);
     const mistMap=this.illustration.texture('mist',256,128,ctx=>{
       const g=ctx.createRadialGradient(128,64,0,128,64,128);g.addColorStop(0,'rgba(203,227,212,0.28)');g.addColorStop(1,'rgba(203,227,212,0)');ctx.fillStyle=g;ctx.scale(1,0.5);ctx.fillRect(0,0,256,256);
     });
-    const mistMat=this.art.material(new THREE.MeshBasicMaterial({map:mistMap,color:'#d3e3cf',transparent:true,opacity:0.23,depthWrite:false,side:THREE.DoubleSide}));
+    const mistMat=this.art.material(new THREE.MeshBasicMaterial({map:mistMap,color:'#728483',transparent:true,opacity:0.12,depthWrite:false,side:THREE.DoubleSide}));
     const mistGeo=this.art.geometry(new THREE.PlaneGeometry(24,5));
     for(let i=0;i<12;i++){const x=(this.random()-.5)*110,z=-13-this.random()*73;const mist=new THREE.Mesh(mistGeo,mistMat);mist.position.set(x,terrainHeight(x,z)+1.5,z);this.group.add(mist);}
   }
@@ -180,6 +186,6 @@ export class ForestEnvironment {
     let nearest=intersectTerrain(ray,range);
     for(const obstacle of this.obstacles){const d=intersectObstacle(ray,obstacle,nearest??range);if(d!==null&&(nearest===null||d<nearest))nearest=d;}return nearest;
   }
-  update(dt:number,camera:THREE.Camera,reducedMotion:boolean):void {this.motion.value=reducedMotion?0:1;if(!reducedMotion)this.time.value+=dt;this.sky.position.copy(camera.position);this.grass.update(dt,camera,reducedMotion);}
-  dispose():void {if(this.disposed)return;this.disposed=true;this.grass.dispose();this.scene.remove(this.group);this.art.dispose();this.illustration.dispose();}
+  update(dt:number,camera:THREE.Camera,reducedMotion:boolean):void {this.motion.value=reducedMotion?0:1;if(!reducedMotion)this.time.value+=dt;this.sky.position.copy(camera.position);this.grass.update(dt,camera,reducedMotion);this.fog.update(dt,camera,reducedMotion);}
+  dispose():void {if(this.disposed)return;this.disposed=true;this.fog.dispose();this.grass.dispose();this.scene.remove(this.group);this.art.dispose();this.illustration.dispose();}
 }

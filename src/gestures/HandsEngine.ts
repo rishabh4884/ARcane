@@ -2,6 +2,7 @@ import type { GestureDef } from '../config/gestures.ts';
 import type { Tuning } from '../config/tuning.ts';
 import { HandBinder } from '../tracking/HandBinder.ts';
 import type { HandFrame } from '../tracking/types.ts';
+import { BowRecognizer } from './BowRecognizer.ts';
 import {
   DUAL_MOTION_DEFAULTS,
   detectDualMotion,
@@ -29,6 +30,7 @@ const IDLE: EngineOutput = {
   fingerStates: { index: false, middle: false, ring: false, pinky: false },
   cursor: null,
   hold: null,
+  bow: null,
   fired: [],
   landmarks: null,
   aspect: 1,
@@ -45,6 +47,7 @@ export class HandsEngine {
   private readonly left: GestureEngine;
   private readonly right: GestureEngine;
   private readonly binder = new HandBinder();
+  private readonly bow = new BowRecognizer();
   private dual: DualSample[] = [];
   private dualPose: PoseName = 'unknown';
   private dualPoseSince = 0;
@@ -57,6 +60,7 @@ export class HandsEngine {
     this.tuning = tuning;
     this.left = new GestureEngine(gestures, tuning);
     this.right = new GestureEngine(gestures, tuning);
+    this.bow.setEnabled(gestures.some((g) => g.kind === 'bow'));
   }
 
   /** Only gestures bound to a spell should be live; see GestureEngine.setGestures. */
@@ -64,6 +68,7 @@ export class HandsEngine {
     this.gestures = gestures;
     this.left.setGestures(gestures);
     this.right.setGestures(gestures);
+    this.bow.setEnabled(gestures.some((g) => g.kind === 'bow'));
   }
 
   setTuning(tuning: Tuning): void {
@@ -76,6 +81,7 @@ export class HandsEngine {
     this.left.reset();
     this.right.reset();
     this.binder.reset();
+    this.bow.reset();
     this.dual = [];
     this.dualPose = 'unknown';
     this.dualStillSince = 0;
@@ -91,8 +97,24 @@ export class HandsEngine {
     const R = this.right.process(bound.right, now, { suppressPoses: suppress });
     const leftOn = !!bound.left && L.present;
     const rightOn = !!bound.right && R.present;
+    const bowResult = this.bow.process(
+      leftOn ? L.hands[0] : null,
+      rightOn ? R.hands[0] : null,
+      now,
+      this.left.canFire(now) && this.right.canFire(now),
+    );
+    const bowEngaged = bowResult.engaged;
+    if (bowEngaged) {
+      // Bow intent owns both hands. Discard concurrent casts and clear motion trails so releasing
+      // the pinch cannot also complete a swipe or sigil.
+      this.left.absorbCast(now);
+      this.right.absorbCast(now);
+      this.dual = [];
+      this.dualPose = 'unknown';
+      this.dualLatched = null;
+    }
 
-    if (leftOn && rightOn && L.landmarks && R.landmarks) {
+    if (leftOn && rightOn && L.landmarks && R.landmarks && !bowEngaged) {
       this.lastDualAt = now;
       // Match the single-hand motion path: filtered visuals must not let a single sweep
       // overtake a two-hand stroke merely because the latter lags behind.
@@ -129,15 +151,18 @@ export class HandsEngine {
       }
     }
 
-    const fired: GestureFiring[] = [
-      ...L.fired.map((f) => ({ ...f, side: 'left' as const })),
-      ...R.fired.map((f) => ({ ...f, side: 'right' as const })),
-    ];
+    const fired: GestureFiring[] = bowEngaged
+      ? []
+      : [
+          ...L.fired.map((f) => ({ ...f, side: 'left' as const })),
+          ...R.fired.map((f) => ({ ...f, side: 'right' as const })),
+        ];
+    if (bowResult.fired) fired.push(bowResult.fired);
 
     let dualHold: EngineOutput['hold'] = null;
-    const dualReady = this.left.canFire(now) && this.right.canFire(now);
+    const dualReady = !bowEngaged && this.left.canFire(now) && this.right.canFire(now);
 
-    if (leftOn && rightOn) {
+    if (leftOn && rightOn && !bowEngaged) {
       for (const g of this.gestures) {
         if (g.kind === 'dual-pose') {
           if (this.dualPose !== g.pose || this.dualLatched === g.pose) continue;
@@ -164,7 +189,7 @@ export class HandsEngine {
     }
 
     const hands: TrackedHand[] = [];
-    if (L.present) {
+    if (leftOn) {
       hands.push({
         side: 'left',
         present: true,
@@ -172,11 +197,12 @@ export class HandsEngine {
         fingers: L.fingers,
         fingerStates: L.fingerStates,
         cursor: L.cursor,
+        aspect: L.aspect,
         landmarks: L.landmarks,
-        hold: L.hands[0]?.hold ?? null,
+        hold: bowEngaged ? null : L.hands[0]?.hold ?? null,
       });
     }
-    if (R.present) {
+    if (rightOn) {
       hands.push({
         side: 'right',
         present: true,
@@ -184,13 +210,14 @@ export class HandsEngine {
         fingers: R.fingers,
         fingerStates: R.fingerStates,
         cursor: R.cursor,
+        aspect: R.aspect,
         landmarks: R.landmarks,
-        hold: R.hands[0]?.hold ?? null,
+        hold: bowEngaged ? null : R.hands[0]?.hold ?? null,
       });
     }
 
-    const hold = dualHold ?? pickHold(L.hold, R.hold);
-    const primary = hold?.side === 'left' ? L : hold?.side === 'right' ? R : R.present ? R : L;
+    const hold = bowEngaged ? null : dualHold ?? pickHold(leftOn ? L.hold : null, rightOn ? R.hold : null);
+    const primary = hold?.side === 'left' ? L : hold?.side === 'right' ? R : rightOn ? R : L;
     const cursor =
       hold?.side === 'both' && L.cursor && R.cursor
         ? { x: (L.cursor.x + R.cursor.x) / 2, y: (L.cursor.y + R.cursor.y) / 2 }
@@ -205,6 +232,7 @@ export class HandsEngine {
       fingerStates: primary.fingerStates,
       cursor,
       hold,
+      bow: bowResult.charge,
       fired,
       landmarks: primary.landmarks,
       aspect: primary.aspect || L.aspect || R.aspect,

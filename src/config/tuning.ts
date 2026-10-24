@@ -1,4 +1,4 @@
-export interface Tuning { smoothing: { minCutoff: number; beta: number; dCutoff: number }; fingers: { on: number; off: number }; poseHoldMs: number; cooldownMs: number; lostGraceMs: number; cursorGain: number }
+export interface Tuning { smoothing: { minCutoff: number; beta: number; dCutoff: number }; fingers: { on: number; off: number }; poseHoldMs: number; cooldownMs: number; lostGraceMs: number; cursorGain: number; cameraFps: 30 | 60 }
 export const DEFAULT_TUNING: Tuning = {
   smoothing: {
     minCutoff: 1.2,
@@ -10,4 +10,5 @@ export const DEFAULT_TUNING: Tuning = {
   cooldownMs: 600,
   lostGraceMs: 180,
   cursorGain: 1.35,
+  cameraFps: 60,
 };

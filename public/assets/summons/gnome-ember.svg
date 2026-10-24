@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="768" viewBox="0 0 512 768">
+  <defs>
+    <linearGradient id="hat" x2=".9" y2="1"><stop stop-color="#ddaa70"/><stop offset=".38" stop-color="#a5553e"/><stop offset="1" stop-color="#573a37"/></linearGradient>
+    <linearGradient id="coat" x2=".2" y2="1"><stop stop-color="#718a7a"/><stop offset=".5" stop-color="#47685b"/><stop offset="1" stop-color="#2d4944"/></linearGradient>
+    <linearGradient id="skin" x2=".2" y2="1"><stop stop-color="#efc08e"/><stop offset="1" stop-color="#b9765a"/></linearGradient>
+    <linearGradient id="beard" x2=".15" y2="1"><stop stop-color="#d29a67"/><stop offset=".48" stop-color="#a96849"/><stop offset="1" stop-color="#593d37"/></linearGradient>
+    <linearGradient id="wood" x2=".8" y2="1"><stop stop-color="#d7af72"/><stop offset="1" stop-color="#68503b"/></linearGradient>
+    <radialGradient id="buckle"><stop stop-color="#fff0b3"/><stop offset="1" stop-color="#bb7937"/></radialGradient>
+    <filter id="soft" x="-.25" y="-.2" width="1.5" height="1.5"><feGaussianBlur stdDeviation="9"/></filter>
+  </defs>
+  <ellipse cx="254" cy="716" rx="132" ry="22" fill="#183531" opacity=".2" filter="url(#soft)"/>
+  <!-- sturdy boots and patched leggings -->
+  <path d="M178 594q35 9 66-1l-8 77q-3 24-25 28l-70-6q-18-2-9-20l40-46zm101-3q34 8 63-1l8 75q3 23 24 29l58 19q18 7 4 22H322q-24-3-28-27l-15-60z" fill="#354442" stroke="#253a38" stroke-width="11" stroke-linejoin="round"/>
+  <path d="M136 678q47 8 99 2l9 20q1 13-18 15h-98q-18-3-8-20zm211-5q37 10 63 31l28 8q18 7 5 20H324q-18-4-9-21z" fill="#634536" stroke="#293a36" stroke-width="10" stroke-linejoin="round"/>
+  <path d="m186 626 42 7m-41 17 39 7m83-32-30 8m44 11-31 8" fill="none" stroke="#b27553" stroke-width="7" stroke-linecap="round"/>
+  <!-- forest-teal coat, double stitched -->
+  <path d="M174 347q-57 15-74 82l-25 128q29 29 85 19l22-75 15 99q64 34 134-1l21-98 31 78q50-3 71-35l-53-133q-21-55-82-65z" fill="url(#coat)" stroke="#293b37" stroke-width="13" stroke-linejoin="round"/>
+  <path d="m154 413-43 136 30 12 64-126m153-11 57 130-34 21-69-119" fill="none" stroke="#9bac8a" stroke-width="12" opacity=".76"/>
+  <path d="M171 477q84 29 173-1l8 33q-96 36-185 2z" fill="#34443d" stroke="#293b37" stroke-width="8"/>
+  <path d="M233 490h49v48h-49z" fill="url(#buckle)" stroke="#493e32" stroke-width="7"/><path d="M242 499h31v30h-31z" fill="#70513c"/><path d="M257 503v22m-10-11h20" stroke="#f4d58d" stroke-width="4"/>
+  <path d="M205 379q23 32 51 34 30-2 53-34" fill="none" stroke="#c8b080" stroke-width="13" stroke-linecap="round"/>
+  <path d="M224 393 215 468m40-60v82m28-99 14 76" stroke="#34483e" stroke-width="5" opacity=".7"/>
+  <!-- arms with warm leather guards -->
+  <path d="M163 365q-37 12-58 55l-32 71q-9 22 11 34l18 8q18 6 29-15l43-72 43-25zm174-7q42-4 61 36l37 72q12 23-8 39l-18 11q-22 9-34-16l-38-68-46-29z" fill="url(#skin)" stroke="#293b37" stroke-width="12" stroke-linejoin="round"/>
+  <path d="m87 480 39 19-14 31q-22 8-40-12zm319-4-40 22 18 31q23 4 38-18z" fill="#8e5a45" stroke="#293b37" stroke-width="8"/>
+  <!-- warm face, small round spectacles -->
+  <path d="M165 232q3-100 91-108 90 9 93 108l-14 103q-10 57-78 70-65-10-78-68z" fill="url(#skin)" stroke="#293b37" stroke-width="12"/>
+  <path d="M164 278q-50-32-77 11 20 38 79 32m183-43q51-32 77 12-20 37-78 31" fill="#df9c73" stroke="#293b37" stroke-width="10"/>
+  <path d="M191 274a27 27 0 1 0 54 0 27 27 0 1 0-54 0zm76 0a27 27 0 1 0 54 0 27 27 0 1 0-54 0z" fill="none" stroke="#795a3b" stroke-width="7"/><path d="M245 274h23" stroke="#795a3b" stroke-width="6"/>
+  <ellipse cx="220" cy="277" rx="7" ry="11" fill="#293b36"/><ellipse cx="293" cy="277" rx="7" ry="11" fill="#293b36"/><circle cx="222" cy="273" r="3" fill="#fff0d2"/><circle cx="295" cy="273" r="3" fill="#fff0d2"/>
+  <path d="M246 287q-13 31 9 35 17 0 18-12" fill="none" stroke="#9d5c4b" stroke-width="7" stroke-linecap="round"/>
+  <path d="M194 326q61-19 123 0l-13 60q-16 37-48 45-36-9-49-44z" fill="url(#beard)" stroke="#293b37" stroke-width="10" stroke-linejoin="round"/>
+  <path d="M218 339q-12 27 5 48m24-53q-7 37 8 58m24-57q-2 34 15 47m-81-3q10 27 22 37m65-30q-7 21-23 32" fill="none" stroke="#e4b581" stroke-width="6" stroke-linecap="round" opacity=".74"/>
+  <path d="M236 395q20 22 41 0l-8 33q-15 17-27 0z" fill="#b77d55"/>
+  <!-- curled russet cap with a tiny bell -->
+  <path d="M157 244q-24-120 31-173Q239 24 370 55q-67 24-98 87 40-26 94-19-74 31-91 117-59-31-118 4z" fill="url(#hat)" stroke="#293b37" stroke-width="13" stroke-linejoin="round"/>
+  <path d="M193 187q57-48 132-79m-87 66q42-54 78-68" fill="none" stroke="#e0ae75" stroke-width="8" stroke-linecap="round" opacity=".7"/>
+  <path d="M155 234q100-42 207-4l-5 31q-105-29-207 6z" fill="#d4b078" stroke="#293b37" stroke-width="9"/><circle cx="333" cy="242" r="13" fill="url(#buckle)" stroke="#493e32" stroke-width="6"/>
+  <!-- handmade compact crossbow with glowing amber rune -->
+  <g transform="rotate(-8 360 453)" stroke="#283a36" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M290 446h151l-13 24H304z" fill="url(#wood)" stroke-width="10"/>
+    <path d="M360 448q-2-52 35-69 8 35 48 36-23 21-38 48" fill="none" stroke="#d1a06a" stroke-width="11"/>
+    <path d="m306 456-48-25m50 29-50 28" fill="none" stroke="#e3c78b" stroke-width="7"/>
+    <path d="m326 450 18-18 18 18-18 18z" fill="#d7bb72" stroke-width="5"/><path d="M346 453h104" stroke="#fff0bd" stroke-width="4"/>
+    <circle cx="346" cy="453" r="5" fill="#fff1b5" stroke="none"/>
+  </g>
+  <path d="M180 509q-23 36-7 61l18-8 9 22q25-24 14-59z" fill="#8e5a45" stroke="#293b37" stroke-width="7"/><path d="m187 524 15 23-15 20-12-23z" fill="#dfbd7d"/>
+</svg>

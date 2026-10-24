@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="768" viewBox="0 0 512 768">
+  <defs>
+    <linearGradient id="hat" x2=".9" y2="1"><stop stop-color="#a4b778"/><stop offset=".38" stop-color="#58734b"/><stop offset="1" stop-color="#293f39"/></linearGradient>
+    <linearGradient id="coat" x2=".2" y2="1"><stop stop-color="#bd8a55"/><stop offset=".5" stop-color="#8c5c3d"/><stop offset="1" stop-color="#513f37"/></linearGradient>
+    <linearGradient id="skin" x2=".2" y2="1"><stop stop-color="#f3c993"/><stop offset="1" stop-color="#bd805f"/></linearGradient>
+    <linearGradient id="beard" x2=".15" y2="1"><stop stop-color="#fff1cc"/><stop offset=".48" stop-color="#d8c39a"/><stop offset="1" stop-color="#85775f"/></linearGradient>
+    <linearGradient id="wood" x2=".8" y2="1"><stop stop-color="#d5a56a"/><stop offset="1" stop-color="#684a34"/></linearGradient>
+    <radialGradient id="buckle"><stop stop-color="#fff0aa"/><stop offset="1" stop-color="#b77b32"/></radialGradient>
+    <filter id="soft" x="-.25" y="-.2" width="1.5" height="1.5"><feGaussianBlur stdDeviation="9"/></filter>
+  </defs>
+  <ellipse cx="254" cy="716" rx="132" ry="22" fill="#183531" opacity=".2" filter="url(#soft)"/>
+  <!-- boots and little leaf-stitched trousers -->
+  <path d="M179 593q33 10 65 0l-5 77q-3 24-25 28l-72-4q-17-2-10-20l39-48zM278 591q34 8 64-2l8 76q3 22 25 29l57 19q17 7 4 22H321q-23-3-27-26l-18-61z" fill="#34463e" stroke="#243731" stroke-width="11" stroke-linejoin="round"/>
+  <path d="M137 679q46 7 99 1l8 20q2 13-18 15h-98q-18-3-8-20zM348 673q36 10 62 31l28 8q18 7 5 20H324q-18-4-9-21z" fill="#634b39" stroke="#293a35" stroke-width="10" stroke-linejoin="round"/>
+  <path d="m181 623 47 7m-43 18 40 6m82-33-30 8m44 11-32 8" fill="none" stroke="#8c9a6a" stroke-width="7" stroke-linecap="round"/>
+  <!-- short, sturdy coat -->
+  <path d="M174 347q-56 14-72 80l-27 128q30 30 85 21l22-75 15 98q63 35 133 0l21-99 31 79q50-3 72-35l-54-133q-20-55-81-65z" fill="url(#coat)" stroke="#283b35" stroke-width="13" stroke-linejoin="round"/>
+  <path d="m155 411-43 137 30 12 64-126m153-12 57 131-34 21-69-119" fill="none" stroke="#d2a36b" stroke-width="12" opacity=".72"/>
+  <path d="M173 475q82 30 171 0l8 33q-96 36-185 2z" fill="#34463b" stroke="#293a34" stroke-width="8"/>
+  <path d="M233 490h49v48h-49z" rx="8" fill="url(#buckle)" stroke="#4d4030" stroke-width="7"/>
+  <path d="M242 499h31v30h-31z" fill="#6f5739"/><path d="M258 503v22m-10-11h20" stroke="#f3d184" stroke-width="4"/>
+  <path d="M205 379q22 32 51 34 30-2 53-34" fill="none" stroke="#dfc88f" stroke-width="13" stroke-linecap="round"/>
+  <path d="M224 393 215 468m40-60v82m28-99 14 76" stroke="#604a36" stroke-width="5" opacity=".7"/>
+  <!-- arms and leather cuffs -->
+  <path d="M164 365q-37 12-58 55l-32 71q-9 22 11 34l18 8q18 6 29-15l43-72 43-25zM337 358q42-4 61 36l37 72q12 23-8 39l-18 11q-22 9-34-16l-38-68-46-29z" fill="url(#skin)" stroke="#293b35" stroke-width="12" stroke-linejoin="round"/>
+  <path d="m87 480 39 19-14 31q-22 8-40-12zm319-4-40 22 18 31q23 4 38-18z" fill="#526147" stroke="#293b35" stroke-width="8"/>
+  <!-- head and bright, curious face -->
+  <path d="M165 232q3-100 92-108 89 9 92 108l-14 103q-10 57-78 70-65-10-79-68z" fill="url(#skin)" stroke="#293b35" stroke-width="12"/>
+  <path d="M164 278q-50-32-77 11 20 38 79 32m183-43q51-32 77 12-20 37-78 31" fill="#e3a979" stroke="#293b35" stroke-width="10"/>
+  <path d="M192 260q24-23 52 0m29 0q24-23 51 0" fill="none" stroke="#644537" stroke-width="10" stroke-linecap="round"/>
+  <ellipse cx="220" cy="278" rx="8" ry="12" fill="#273c35"/><ellipse cx="294" cy="278" rx="8" ry="12" fill="#273c35"/><circle cx="223" cy="274" r="3" fill="#fff0d2"/><circle cx="297" cy="274" r="3" fill="#fff0d2"/>
+  <path d="M245 287q-14 34 9 36 18 0 19-13" fill="none" stroke="#a2644d" stroke-width="7" stroke-linecap="round"/>
+  <path d="M193 326q62-20 125 0l-14 60q-16 38-49 45-36-9-49-44z" fill="url(#beard)" stroke="#293b35" stroke-width="10" stroke-linejoin="round"/>
+  <path d="M217 339q-11 27 5 48m25-53q-7 37 8 58m24-57q-2 34 15 47m-81-3q10 27 22 37m65-30q-7 21-23 32" fill="none" stroke="#a59779" stroke-width="6" stroke-linecap="round"/>
+  <path d="M236 395q20 22 41 0l-8 33q-15 17-27 0z" fill="#c5ad83"/>
+  <!-- jaunty, leaf-shaped cap -->
+  <path d="M157 244q-24-120 31-173Q239 24 370 55q-67 24-98 87 40-26 94-19-75 31-92 117-58-31-117 4z" fill="url(#hat)" stroke="#263a34" stroke-width="13" stroke-linejoin="round"/>
+  <path d="M193 187q57-48 132-79m-87 66q42-54 78-68" fill="none" stroke="#b2bd80" stroke-width="8" stroke-linecap="round" opacity=".72"/>
+  <path d="M155 234q100-42 207-4l-5 31q-105-29-207 6z" fill="#c2a16b" stroke="#293b34" stroke-width="9"/>
+  <circle cx="333" cy="242" r="13" fill="url(#buckle)" stroke="#493e2f" stroke-width="6"/>
+  <!-- compact rune crossbow held ready across the front -->
+  <g transform="rotate(-8 360 453)" stroke="#273a34" stroke-linejoin="round" stroke-linecap="round">
+    <path d="M290 446h151l-13 24H304z" fill="url(#wood)" stroke-width="10"/>
+    <path d="M360 448q-2-52 35-69 8 35 48 36-23 21-38 48" fill="none" stroke="#c9a26b" stroke-width="11"/>
+    <path d="m306 456-48-25m50 29-50 28" fill="none" stroke="#e4c78c" stroke-width="7"/>
+    <path d="m326 450 18-18 18 18-18 18z" fill="#d7bb72" stroke-width="5"/>
+    <path d="M346 453h104" stroke="#f0dfad" stroke-width="4"/>
+  </g>
+  <!-- belt charm -->
+  <path d="M180 509q-23 36-7 61l18-8 9 22q25-24 14-59z" fill="#526147" stroke="#293a35" stroke-width="7"/>
+  <path d="m187 524 15 23-15 20-12-23z" fill="#d7bd79"/>
+</svg>

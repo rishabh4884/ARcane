@@ -78,10 +78,15 @@ export interface DualMotionGesture extends GestureBase {
   motion: DualMotion;
 }
 
-export type GestureDef = PoseGesture | SwipeGesture | CircleGesture | DualPoseGesture | DualMotionGesture;
+/** Point with one hand while pinching and drawing with the other. */
+export interface BowGesture extends GestureBase {
+  kind: 'bow';
+}
 
-export const isDualGesture = (g: GestureDef): g is DualPoseGesture | DualMotionGesture =>
-  g.kind === 'dual-pose' || g.kind === 'dual-motion';
+export type GestureDef = PoseGesture | SwipeGesture | CircleGesture | DualPoseGesture | DualMotionGesture | BowGesture;
+
+export const isDualGesture = (g: GestureDef): g is DualPoseGesture | DualMotionGesture | BowGesture =>
+  g.kind === 'dual-pose' || g.kind === 'dual-motion' || g.kind === 'bow';
 
 export const GESTURES: readonly GestureDef[] = [
   /* ── Hand signs ── */
@@ -127,7 +132,7 @@ export const GESTURES: readonly GestureDef[] = [
     kind: 'pose',
     pose: 'point',
     name: 'Lance',
-    hint: 'Point as if aiming a spear of light, and hold.',
+    hint: 'Point one finger toward a target and hold.',
     glyph: '👉',
   },
   {
@@ -139,6 +144,14 @@ export const GESTURES: readonly GestureDef[] = [
     name: 'Aegis',
     hint: 'Present an open palm as a ward and hold it still.',
     glyph: '🖐️',
+  },
+  {
+    id: 'bowdraw',
+    group: 'twin-motion',
+    kind: 'bow',
+    name: 'Bow Draw',
+    hint: 'Point with one hand. Pinch thumb and index on the other, pull away, then release to fire.',
+    glyph: '🏹',
   },
 
   /* ── Open-hand sweeps (stricter first) ── */
@@ -259,9 +272,9 @@ export const GESTURES: readonly GestureDef[] = [
     kind: 'swipe',
     direction: 'down',
     hand: 'point',
-    name: 'Impale',
-    hint: 'Point one finger and stab it downward into the ground.',
-    glyph: '📍',
+    name: 'Skyfall',
+    hint: 'Point one finger above an enemy, then bring it down to call lightning onto that spot.',
+    glyph: '🌩️',
   },
 
   /* ── Sigils (specific directions first) ── */

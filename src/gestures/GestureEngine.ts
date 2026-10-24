@@ -1,5 +1,6 @@
 import type { GestureDef } from '../config/gestures.ts';
 import type { Tuning } from '../config/tuning.ts';
+import type { BowCharge } from './BowRecognizer.ts';
 import { LandmarkSmoother } from '../tracking/LandmarkSmoother.ts';
 import { LM, type HandFrame, type HandSide, type Vec3 } from '../tracking/types.ts';
 import { clamp01, fingerExtensions, handScale, palmCenter, type FingerName } from './features.ts';
@@ -32,6 +33,7 @@ export interface TrackedHand {
   fingerStates: FingerStates;
   cursor: { x: number; y: number } | null;
   landmarks: Vec3[] | null;
+  aspect: number;
   /** The shape this hand is currently charging, if any. */
   hold: { gestureId: string; progress: number } | null;
 }
@@ -51,6 +53,7 @@ export interface EngineOutput {
   cursor: { x: number; y: number } | null;
   /** The pose gesture currently being charged, if any. */
   hold: { gestureId: string; progress: number; side?: HandSide | 'both' } | null;
+  bow: BowCharge | null;
   /** Gestures completed on this frame (usually zero or one). */
   fired: GestureFiring[];
   /** Smoothed landmarks, for the debug view. */
@@ -78,6 +81,7 @@ const IDLE: EngineOutput = {
   fingerStates: NO_STATES,
   cursor: null,
   hold: null,
+  bow: null,
   fired: [],
   landmarks: null,
   aspect: 1,
@@ -150,6 +154,9 @@ export class GestureEngine {
       // A brief dropout (motion blur) is bridged: keep state, report no new casts.
       return { ...this.last, fired: [] };
     }
+    // A stalled camera/inference loop delivers no null frames. Expire state on recovery
+    // as well, or an old half-held sign can instantly cast using unobserved elapsed time.
+    if (now - this.lastSeenAt > this.tuning.lostGraceMs) this.reset();
     this.lastSeenAt = now;
 
     const lm = this.smoother.smooth(frame.landmarks, now);
@@ -270,6 +277,7 @@ export class GestureEngine {
       fingerStates,
       cursor,
       hold: hold ? { ...hold, side } : null,
+      bow: null,
       fired: fired.map((f) => ({ ...f, side })),
       landmarks: lm,
       aspect: frame.aspect,
@@ -282,6 +290,7 @@ export class GestureEngine {
           fingerStates,
           cursor,
           landmarks: lm,
+          aspect: frame.aspect,
           hold: hold ? { gestureId: hold.gestureId, progress: hold.progress } : null,
         },
       ],

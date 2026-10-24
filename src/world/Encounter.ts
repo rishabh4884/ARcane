@@ -4,6 +4,7 @@ import type { SpellEffect } from '../config/spells.ts';
 import { Creature, CREATURE_NAMES, type CreatureKind } from './Creature.ts';
 import { CreatureState, CREATURE_SPECS, PlayerState } from './EncounterState.ts';
 import { EnemyCombat } from './EnemyCombat.ts';
+import { GnomeSummons } from './GnomeSummons.ts';
 import { ArtResources } from './storybook.ts';
 import { EnemyIndicators } from '../ui/EnemyIndicators.ts';
 import { EYE_HEIGHT, moveOnGround, terrainHeight, type Obstacle } from './spatial.ts';
@@ -38,6 +39,7 @@ export class Encounter {
   private readonly orbGeometry:THREE.SphereGeometry;
   private readonly orbMaterial:THREE.MeshStandardMaterial;
   private readonly indicators=new EnemyIndicators();
+  private readonly summons:GnomeSummons;
   private disposed=false;
 
   constructor(private readonly scene:THREE.Scene,private readonly camera:THREE.PerspectiveCamera,private readonly obstacles:readonly Obstacle[],private readonly intersectEnvironment:(ray:THREE.Ray,range:number)=>number|null,private readonly returnToGlade:()=>void){
@@ -53,7 +55,8 @@ export class Encounter {
       const spawn=this.findSpawn(x,z,CREATURE_SPECS[kind].radius);
       this.actors.push({id:this.actors.length,group,puppet,state:new CreatureState(kind),reaction,warning,spawn,generation:0,phase:this.actors.length*2.4,look:0});group.position.copy(spawn);
     }
-    this.buildHud();this.refreshHud();
+    this.summons=new GnomeSummons(this.obstacles,this.intersectEnvironment,(id,point)=>this.summonHit(id,point));
+    this.group.add(this.summons.group);this.buildHud();this.refreshHud();
   }
   private findSpawn(x:number,z:number,radius:number):THREE.Vector3 {
     const p=new THREE.Vector3(x,0,z);moveOnGround(p,0,0,this.obstacles);p.y=terrainHeight(p.x,p.z);
@@ -71,7 +74,7 @@ export class Encounter {
     this.root.append(vitals,this.message,this.begin,this.target,this.announce);document.querySelector('#hud')?.append(this.root);
   }
   start():void {
-    if(this.disposed)return;
+    if(this.disposed)return;this.summons.clear();
     this.returnToGlade();this.player.reset();this.clearProjectiles();this.indicators.reset();this.mode='active';this.time=0;this.generation++;
     for(const actor of this.actors){actor.state=new CreatureState(actor.puppet.kind);actor.reaction.reset();actor.group.position.copy(actor.spawn);actor.group.rotation.y=0;actor.look=0;actor.generation=this.generation;actor.puppet.group.visible=true;actor.puppet.group.scale.setScalar(1);actor.warning.visible=false;}
     this.notify('The wood stirs. Aim with your hands; interrupt their wind-up or raise a ward.');this.refreshHud();
@@ -94,7 +97,7 @@ export class Encounter {
     const result=this.player.damage(amount);
     if(result==='ignored')return;
     this.root.dataset.impact=result;this.notify(result==='blocked'?'Your ward held.':'Hit — keep moving. Mend restores 30 vitality.');
-    if(!this.player.alive){this.mode='lost';this.clearProjectiles();this.notify('Encounter ended. Your next attempt starts at the glade.');}
+    if(!this.player.alive){this.mode='lost';this.clearProjectiles();this.summons.clear();this.notify('Encounter ended. Your next attempt starts at the glade.');}
     this.refreshHud();
   }
   cast(effect:SpellEffect):boolean {
@@ -102,7 +105,18 @@ export class Encounter {
     if(!this.player.cast(effect)){this.notify(`${effect==='healing'?'Mend':effect==='shield'?'Aegis':'Spell'} is recovering · ${this.player.cooldowns[effect].toFixed(1)}s`);return false;}
     if(effect==='healing')this.notify('Mend · 30 vitality restored.');
     if(effect==='shield')this.notify('Aegis · 45-point ward for 5 seconds.');
+    if(effect==='summon')this.notify('Two woodland rangers answer your call.');
     this.refreshHud();return true;
+  }
+  summon(spawn:THREE.Vector3,focus:THREE.Vector3,enemy:EnemyCombat|null):void {
+    const target=this.actors.find(actor=>actor.reaction===enemy);
+    const groundSpawn=spawn.clone();groundSpawn.y=terrainHeight(groundSpawn.x,groundSpawn.z);
+    this.summons.summon(groundSpawn,focus,target?.id??null);
+  }
+  private summonHit(id:number,point:THREE.Vector3):void {
+    const actor=this.actors.find(candidate=>candidate.id===id);
+    if(!actor||!actor.state.alive||!this.player.alive)return;
+    this.impactCallback(actor.reaction,'summon',point,new THREE.Color('#ffd166'))();
   }
   /** Capture generation so an old projectile can never damage a newly restarted encounter. */
   impactCallback(enemy:EnemyCombat,effect:SpellEffect,point:THREE.Vector3,color:THREE.Color):()=>void {
@@ -119,7 +133,7 @@ export class Encounter {
         moveOnGround(actor.group.position,dx/d*2.5,dz/d*2.5,this.obstacles);actor.group.position.y-=EYE_HEIGHT;
       }
       this.notify(actor.state.alive?`${CREATURE_NAMES[actor.puppet.kind]} · ${actor.state.health} vitality`:`${CREATURE_NAMES[actor.puppet.kind]} fades.`);
-      if(this.actors.every(a=>!a.state.alive)){this.mode='won';this.clearProjectiles();this.notify('All eight spirits released. The glade is yours.');}
+      if(this.actors.every(a=>!a.state.alive)){this.mode='won';this.clearProjectiles();this.summons.clear();this.notify('All eight spirits released. The glade is yours.');}
       this.refreshHud();
     };
   }
@@ -167,6 +181,8 @@ export class Encounter {
       actor.warning.visible=active&&actor.state.pose==='windup';
       if(actor.warning.visible){const size=actor.puppet.kind==='wraith'?1.1:spec.range;actor.warning.scale.setScalar(size*(0.7+actor.state.progress*0.3));actor.warning.material.opacity=0.18+actor.state.progress*0.42;}
     }
+    this.summons.update(dt,this.player.alive,this.camera.position,
+      this.actors.map(actor=>({id:actor.id,position:actor.group.position,height:CREATURE_SPECS[actor.puppet.kind].height,alive:actor.state.alive})),reducedMotion);
     for(let i=this.projectiles.length-1;i>=0;i--){
       const projectile=this.projectiles[i];projectile.age+=dt;
       const from=projectile.mesh.position.clone(),step=projectile.velocity.length()*dt;
@@ -193,6 +209,6 @@ export class Encounter {
   private clearProjectiles():void{for(const p of this.projectiles)p.mesh.removeFromParent();this.projectiles.length=0;}
   dispose():void {
     if(this.disposed)return;this.disposed=true;this.events.abort();this.clearProjectiles();
-    for(const actor of this.actors){actor.reaction.dispose();actor.puppet.dispose();}this.indicators.dispose();this.art.dispose();this.root.remove();this.scene.remove(this.group);
+    this.summons.dispose();for(const actor of this.actors){actor.reaction.dispose();actor.puppet.dispose();}this.indicators.dispose();this.art.dispose();this.root.remove();this.scene.remove(this.group);
   }
 }

@@ -1,5 +1,6 @@
 import { FINGERS } from '../gestures/features.ts';
 import type { EngineOutput, TrackedHand } from '../gestures/GestureEngine.ts';
+import type { TrackerStats } from '../tracking/HandTracker.ts';
 import { HAND_CONNECTIONS } from '../tracking/types.ts';
 import { el } from './dom.ts';
 
@@ -37,7 +38,7 @@ export class DebugOverlay {
     this.wrap.hidden = !v;
   }
 
-  draw(out: EngineOutput, fps: number): void {
+  draw(out: EngineOutput, stats: TrackerStats): void {
     if (!this.visible) return;
     const g = this.ctx;
     g.clearRect(0, 0, W, H);
@@ -49,7 +50,10 @@ export class DebugOverlay {
     g.font = '11px ui-monospace, Menlo, monospace';
     g.fillStyle = '#ece6ff';
     const pose = (side: 'left' | 'right') => out.hands.find((h) => h.side === side)?.pose ?? '–';
-    g.fillText(`${fps.toFixed(0)} fps · L ${pose('left')} · R ${pose('right')}`, 8, 14);
+    const cameraFps = stats.cameraFps > 0 ? stats.cameraFps.toFixed(0) : '—';
+    g.fillText(`cam ${cameraFps}/${stats.requestedFps} · det ${stats.fps.toFixed(0)} · ${stats.inferenceMs.toFixed(0)}ms`, 8, 14);
+    g.fillText(`raw ${stats.detectedHands} · live ${out.hands.length} · age ${stats.resultAgeMs.toFixed(0)}ms`, 8, 28);
+    g.fillText(`${stats.delegate} · L ${pose('left')} · R ${pose('right')}`, 8, 42);
 
     for (const hand of out.hands) {
       const x0 = hand.side === 'left' ? 6 : 126;

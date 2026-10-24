@@ -8,20 +8,20 @@ describe('GestureEngine (end to end on synthetic hands)', () => {
     ['victory', 'victory'],
     ['horns', 'horns'],
   ])('casts %s exactly once while the pose is held', (pose, id) => {
-    const d = makeDriver();
+    const d = makeDriver(liveGestures([['spell-1', id]]));
     d.hold(0.7, 0.5, POSES.open, 300);
     expect(d.hold(0.7, 0.5, POSES[pose], 1500)).toEqual([id]);
   });
 
   it('does not cast a pose that is only passed through', () => {
-    const d = makeDriver();
+    const d = makeDriver(liveGestures([['spell-1', 'fist']]));
     d.hold(0.7, 0.5, POSES.open, 300);
     expect(d.hold(0.7, 0.5, POSES.fist, 150)).toEqual([]);
     expect(d.hold(0.7, 0.5, POSES.open, 300)).toEqual([]);
   });
 
   it('can cast the same pose again after leaving it', () => {
-    const d = makeDriver();
+    const d = makeDriver(liveGestures([['spell-1', 'fist']]));
     d.hold(0.7, 0.5, POSES.fist, 800);
     d.hold(0.7, 0.5, POSES.open, 900);
     expect(d.hold(0.7, 0.5, POSES.fist, 800)).toEqual(['fist']);
@@ -34,7 +34,7 @@ describe('GestureEngine (end to end on synthetic hands)', () => {
   });
 
   it('casts a swish when the open hand sweeps sideways', () => {
-    const d = makeDriver();
+    const d = makeDriver(liveGestures([['spell-4', 'swish']]));
     d.hold(0.4, 0.5, POSES.open, 400);
     const fired: string[] = [];
     for (let i = 0; i < 14; i++) d.step(0.4 + i * 0.045, 0.5, POSES.open).fired.forEach((f) => fired.push(f.gestureId));
@@ -74,11 +74,11 @@ describe('GestureEngine (end to end on synthetic hands)', () => {
 
   it('does not cast anything while the hand just rests or drifts', () => {
     const d = makeDriver();
-    expect(d.hold(0.7, 0.5, POSES.open, 2000, 0.004)).toEqual([]);
+    expect(d.hold(0.7, 0.5, POSES.trident, 2000, 0.004)).toEqual([]);
   });
 
   it('bridges a brief dropout and resets after a long one', () => {
-    const d = makeDriver();
+    const d = makeDriver(liveGestures([['spell-1', 'fist']]));
     d.hold(0.7, 0.5, POSES.fist, 200);
     d.lose(100);
     expect(d.hold(0.7, 0.5, POSES.fist, 300)).toEqual(['fist']);
@@ -95,10 +95,10 @@ describe('GestureEngine (end to end on synthetic hands)', () => {
   });
 
   it('ignores gestures that are not bound to a spell', () => {
-    // Every gesture in the library is switched on here, but only the default six are bound.
+    // Every gesture in the library is switched on here, but only the default seven are bound.
     const d = makeDriver(liveGestures());
     expect(d.hold(0.7, 0.5, POSES.trident, 1500)).toEqual([]);
-    expect(d.hold(0.7, 0.5, POSES.open, 1500)).toEqual([]);
+    expect(d.hold(0.7, 0.5, POSES.horns, 1500)).toEqual([]);
     expect(GESTURES.length).toBeGreaterThan(liveGestures().length);
   });
 

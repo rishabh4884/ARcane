@@ -7,19 +7,19 @@ Everything a player or designer is likely to change lives in `src/config/`. With
 Edit `src/config/spells.ts`:
 
 ```ts
-{ id: 'spell-4', name: 'Spell 4', color: '#b69cff', effect: 'beam', defaultGesture: 'swish' }
+{ id: 'spell-4', name: 'Spell 4', color: '#b69cff', effect: 'wind', defaultGesture: 'swish' }
 ```
 
 - `name`: shown in the HUD and as the floating label when cast.
 - `color`: any CSS colour.
-- `effect`: `'burst' | 'ring' | 'nova' | 'beam' | 'spiral' | 'rain'`.
+- `effect`: one of `'arrow'`, `'lightning'`, `'frost'`, `'wind'`, `'healing'`, `'summon'` or `'shield'`.
 - `defaultGesture`: any gesture `id` from `gestures.ts`. Each gesture must be used by exactly one spell by default.
 
 Players' own bindings are saved in their browser and win over the defaults. If you change defaults while testing, press **Restore defaults** in the Spellbook (or clear the `arcane.spellbook.v1` key in local storage).
 
 ## Add a gesture that already has a recogniser
 
-Add an entry to `GESTURES` in `src/config/gestures.ts`. Every entry needs a `group` (its dropdown section: `sign`, `sweep`, `strike`, `sigil`, `twin-sign` or `twin-motion`). An entry is one of five kinds. Only gestures bound to a spell are live, so new ones appear in the dropdown without affecting anything else.
+Add an entry to `GESTURES` in `src/config/gestures.ts`. Every entry needs a `group` (its dropdown section: `sign`, `sweep`, `strike`, `sigil`, `twin-sign` or `twin-motion`). Entries can be one of six kinds, including the dedicated `bow` recognizer. Only gestures bound to a spell are live, so new ones appear in the dropdown without affecting anything else.
 
 **Order matters.** If two live gestures would fire on the same frame, the earlier one wins. Put the stricter variant above the looser one (Phoenix Ascent above Rise, Sunwise above Circle).
 
@@ -61,7 +61,7 @@ Because gestures and spells are paired one to one, add a spell (below) for any g
 
 ## Add a spell
 
-Append to `SPELLS` in `src/config/spells.ts` with an unused gesture as `defaultGesture`. The dock, Spellbook panel and key shortcuts (<kbd>1</kbd> to <kbd>9</kbd>) pick it up automatically. The dock is laid out for six columns; adjust `grid-template-columns` in `src/style.css` if you add more.
+Append to `SPELLS` in `src/config/spells.ts` with an unused gesture as `defaultGesture`. The dock, Spellbook panel and key shortcuts (<kbd>1</kbd> to <kbd>9</kbd>) pick it up automatically. The dock currently fits seven columns; adjust `grid-template-columns` in `src/style.css` if you add more.
 
 ## Write a real spell effect
 
@@ -85,3 +85,29 @@ For example, a two-finger pinch or a wave. The pattern:
 ## Self-hosting
 
 `npm run build` produces a static site in `dist/`; host it anywhere that serves files over **https** (browsers only share the camera on secure pages, with `localhost` as the exception). The build uses relative paths, so it also works from a sub-folder.
+
+## Mystic enemy model and animation
+
+The game loads `public/assets/boss/balrog-mystic.glb`. The editable, texture-packed rig is
+`balrog_mystic_game.blend`. The original `lowpoly+balrog.blend` and painted `balrog.glb`
+remain unchanged.
+
+Rebuild with Blender 4.2 LTS from the repository root:
+
+```sh
+blender --background --factory-startup --python balrog_mystic.py -- --game
+```
+
+This uses `scripts/export-mystic.py`: it skins the existing sculpt, preserves its texture
+maps and exports eight named bone clips (`Idle`, `Hit_Left`, `Hit_Right`, `Shock`, `Gust`,
+`Stagger`, `Freeze`, `Break_Free`). The initial weights and restrained poses are calibrated
+to this particular sculpt; refine them in Blender for more expressive movement.
+
+`CharacterAnimator` handles blending and frozen holds independently of the model's bone
+names. Replacement models can provide compatible clips or a `CharacterClips` name map.
+`EnemyCombat` owns surface frost and impact flashes; `Boss` connects the current character
+to those events. A model with no clips uses the existing procedural fallback.
+
+Running `balrog_mystic.py` without `--game` is a separate **Blender viewport concept** pass.
+Its toon nodes, compositor glow and drivers are not exported as game materials. Duplicate
+wings and guessed face geometry are disabled by default, preserving the original sculpt.

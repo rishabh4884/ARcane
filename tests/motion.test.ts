@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { detectSwipe, SWIPE_DEFAULTS, type Sample } from '../src/gestures/motion.ts';
+import { detectCircle, CIRCLE_DEFAULTS, detectSwipe, SWIPE_DEFAULTS, type Sample } from '../src/gestures/motion.ts';
 
 const sample = (t: number, x: number, y = 0, pose: Sample['pose'] = 'open'): Sample => ({ t, x, y, pose });
 
@@ -58,5 +58,39 @@ describe('detectSwipe', () => {
   ] as const)('recognises a %s stroke', (direction, dx, dy) => {
     const stroke = [sample(0, 0), sample(50, dx, dy), sample(100, 2 * dx, 2 * dy)];
     expect(detectSwipe(stroke, { ...SWIPE_DEFAULTS, direction })).toEqual({ direction });
+  });
+});
+
+describe('detectCircle across capture rates', () => {
+  const makeCircle = (fps: number, direction: 1 | -1 = 1): Sample[] => {
+    const samples: Sample[] = [];
+    // Deliberate pointing pause before the drawing starts.
+    for (let i = 0; i < Math.round(fps * 0.45); i++) samples.push(sample(1000 + i * 1000 / fps, 0, 0, 'point'));
+    const start = samples.at(-1)!.t;
+    const duration = 850;
+    for (let i = 0; i <= Math.ceil(duration * fps / 1000); i++) {
+      const p = Math.min(i * 1000 / fps / duration, 1);
+      const angle = direction * p * Math.PI * 2;
+      samples.push(sample(start + p * duration, Math.cos(angle) * 0.9, Math.sin(angle) * 0.9, 'point'));
+    }
+    return samples;
+  };
+
+  it.each([24, 30, 60])('recognizes the same completed circle at %i FPS', (fps) => {
+    expect(detectCircle(makeCircle(fps), CIRCLE_DEFAULTS)).toEqual({ clockwise: true });
+    expect(detectCircle(makeCircle(fps, -1), CIRCLE_DEFAULTS)).toEqual({ clockwise: false });
+  });
+
+  it.each([24, 30, 60])('does not turn a partial arc into a circle at %i FPS', (fps) => {
+    const samples = Array.from({ length: fps }, (_, i) => {
+      const angle = (i / (fps - 1)) * Math.PI * 1.5;
+      return sample(1000 + i * 1000 / fps, Math.cos(angle), Math.sin(angle), 'point');
+    });
+    expect(detectCircle(samples, CIRCLE_DEFAULTS)).toBeNull();
+  });
+
+  it('ignores the idle pointing hold when finding the latest closed loop', () => {
+    const drawing = makeCircle(30);
+    expect(detectCircle(drawing, CIRCLE_DEFAULTS)).toEqual({ clockwise: true });
   });
 });
