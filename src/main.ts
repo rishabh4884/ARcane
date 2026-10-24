@@ -10,8 +10,8 @@ import { HandTracker } from './tracking/HandTracker.ts';
 import type { HandSide } from './tracking/types.ts';
 import { DebugOverlay } from './ui/DebugOverlay.ts';
 import { qs } from './ui/dom.ts';
-import { describeError } from './ui/errors.ts';
 import { Hud } from './ui/Hud.ts';
+import { Onboarding } from './ui/Onboarding.ts';
 import { SettingsPanel } from './ui/SettingsPanel.ts';
 import { World } from './world/World.ts';
 
@@ -38,6 +38,7 @@ const tracker = new HandTracker();
 const hudRoot = qs('#hud');
 const hud = new Hud(hudRoot, book);
 const debug = new DebugOverlay(hudRoot);
+new Onboarding(hudRoot, book, () => tracker.start());
 new SettingsPanel(hudRoot, {
   book,
   tuning,

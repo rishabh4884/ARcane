@@ -2,11 +2,11 @@ import type { GestureDef } from '../config/gestures.ts';
 import type { EngineOutput } from '../gestures/GestureEngine.ts';
 import type { SpellBook } from '../spells/SpellBook.ts';
 import { el } from './dom.ts';
+import { createSpellIcon } from './spell-icons.ts';
 
 interface Slot {
   root: HTMLElement;
   gesture: HTMLElement;
-  glyph: HTMLElement;
   bar: HTMLElement;
 }
 
@@ -20,6 +20,9 @@ export class Hud {
 
   constructor(root: HTMLElement, book: SpellBook) {
     this.book = book;
+    this.lastStatus = 'Raise a hand in front of the camera';
+    this.status.textContent = this.lastStatus;
+    this.status.dataset.state = 'idle';
     root.append(this.status, this.dock);
     this.build();
     book.onChange(() => this.build());
@@ -59,19 +62,19 @@ export class Hud {
     this.slots.clear();
     for (const spell of this.book.spells) {
       const g: GestureDef | undefined = this.book.gestureFor(spell.id);
-      const glyph = el('span', { class: 'glyph', 'aria-hidden': 'true' }, g?.glyph ?? '?');
-      const gesture = el('span', { class: 'gesture' }, g?.name ?? '');
+      const icon = createSpellIcon(spell.id);
+      const gesture = el('span', { class: 'gesture' }, g ? `${g.glyph} ${g.name}` : '');
       const bar = el('span', { class: 'bar' });
       const root = el(
         'div',
         { class: 'slot', style: { '--spell': spell.color }, title: g?.hint ?? '' },
-        glyph,
+        icon,
         el('span', { class: 'name' }, spell.name),
         gesture,
         bar,
       );
       this.dock.append(root);
-      this.slots.set(spell.id, { root, gesture, glyph, bar });
+      this.slots.set(spell.id, { root, gesture, bar });
     }
   }
 }
