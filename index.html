@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ARcane: cast spells with your bare hands</title>
+    <meta
+      name="description"
+      content="ARcane turns the shapes and sweeps of your hands into spells in another world. Just a webcam and a browser. Nothing to install, nothing recorded."
+    />
+    <meta name="theme-color" content="#0e0b1f" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content="ARcane: cast spells with your bare hands" />
+    <meta
+      property="og:description"
+      content="Make a fist, draw a circle, sweep your hand. Magic answers in another world. Runs in your browser."
+    />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+  </head>
+  <body>
+    <div id="world" aria-hidden="true"></div>
+    <div id="hud"></div>
+
+    <main id="intro" class="intro">
+      <section class="card" aria-labelledby="title">
+        <h1 id="title">ARcane</h1>
+        <p class="lead">Cast spells with your bare hands.</p>
+        <p>
+          Hold a hand up to your webcam. Shape a sign, trace a circle, sweep an arc, and magic
+          answers in another world.
+        </p>
+        <ul class="tips">
+          <li>Sit about an arm’s length from the screen.</li>
+          <li>Put a light in front of you rather than behind you.</li>
+          <li>Use one hand or both, palms toward the camera.</li>
+        </ul>
+        <div class="actions">
+          <button id="begin" type="button">Begin casting</button>
+          <p id="intro-message" class="message" role="status">
+            Your browser will ask to use the camera.
+          </p>
+        </div>
+        <p class="privacy">
+          The camera only reads your hand. Its picture is never shown, saved or sent anywhere.
+        </p>
+      </section>
+    </main>
+
+    <noscript>ARcane needs JavaScript and a webcam to cast spells.</noscript>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

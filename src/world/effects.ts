@@ -1,0 +1,1 @@
+import * as THREE from 'three'; import type { ParticleSystem } from './particles.ts'; export function emitEffect(_effect:string,particles:ParticleSystem,origin:THREE.Vector3,color:THREE.Color):void { for(let i=0;i<28;i++)particles.emit({x:origin.x,y:origin.y,z:origin.z,vx:(Math.random()-.5)*4,vy:(Math.random()-.5)*4,vz:(Math.random()-.5)*2,color,size:.18,ttl:1}); }

@@ -1,0 +1,4 @@
+import type { PoseName } from './poses.ts';
+export type DualMotion = 'apart'|'together'|'lift'|'drop'; export interface DualSample { t:number; lx:number; ly:number; rx:number; ry:number; lPose:PoseName; rPose:PoseName; scale:number }
+export const DUAL_MOTION_DEFAULTS = { motion:'apart' as DualMotion, minTravel:.9, minSpeed:2 };
+export function detectDualMotion(s:readonly DualSample[], o:typeof DUAL_MOTION_DEFAULTS):{motion:DualMotion}|null { if(s.length<3)return null; const a=s[0],b=s.at(-1)!;if(a.lPose!=='open'||a.rPose!=='open'||b.lPose!=='open'||b.rPose!=='open')return null;const lx=(b.lx-a.lx)/b.scale,rx=(b.rx-a.rx)/b.scale,ly=(b.ly-a.ly)/b.scale,ry=(b.ry-a.ry)/b.scale; const ok=o.motion==='apart'?lx<-o.minTravel&&rx>o.minTravel:o.motion==='together'?lx>o.minTravel&&rx<-o.minTravel:o.motion==='lift'?ly<-o.minTravel&&ry<-o.minTravel:ly>o.minTravel&&ry>o.minTravel;return ok?{motion:o.motion}:null; }

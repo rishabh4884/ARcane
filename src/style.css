@@ -1,0 +1,387 @@
+/* ARcane: twilight chrome. Quiet by default; the spell colours do the talking. */
+:root {
+  --night: #0e0b1f;
+  --dusk: #1a1535;
+  --vellum: #ece6ff;
+  --mist: #a59dcc;
+  --line: rgba(182, 156, 255, 0.26);
+  --serif: 'Iowan Old Style', 'Palatino Linotype', 'Book Antiqua', Palatino, Georgia, serif;
+  --sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --radius: 14px;
+  color-scheme: dark;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  background: var(--night);
+  color: var(--vellum);
+  font: 400 1rem/1.55 var(--sans);
+  overflow: hidden;
+}
+
+#world {
+  position: fixed;
+  inset: 0;
+}
+#world canvas {
+  display: block;
+}
+
+button,
+select,
+input {
+  font: inherit;
+  color: inherit;
+}
+:focus-visible {
+  outline: 2px solid #6ee7ff;
+  outline-offset: 3px;
+}
+
+/* ── intro ─────────────────────────────────────────────────────────── */
+.intro {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+  padding: clamp(1rem, 4vw, 3.5rem);
+  background: linear-gradient(to right, rgba(14, 11, 31, 0.82), rgba(14, 11, 31, 0) 70%);
+}
+.intro[hidden] {
+  display: none;
+}
+.card {
+  max-width: 31rem;
+  padding: clamp(1.25rem, 3vw, 2rem);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(14, 11, 31, 0.68);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+h1 {
+  margin: 0 0 0.25rem;
+  font: italic 600 clamp(3.6rem, 10vw, 6.4rem) / 0.95 var(--serif);
+  letter-spacing: -0.02em;
+}
+.lead {
+  margin: 0 0 1rem;
+  font: 1.35rem/1.3 var(--serif);
+  color: #d9ccff;
+}
+.card p {
+  margin: 0 0 1rem;
+  max-width: 34em;
+}
+.tips {
+  margin: 0 0 1.4rem;
+  padding-left: 1.1rem;
+  color: var(--mist);
+}
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem 1.1rem;
+}
+#begin {
+  padding: 0.8rem 1.5rem;
+  border: 0;
+  border-radius: var(--radius);
+  background: #ece6ff;
+  color: var(--night);
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.15s, background 0.15s;
+}
+#begin:hover:not(:disabled) {
+  background: #fff;
+  transform: translateY(-1px);
+}
+#begin:disabled {
+  opacity: 0.55;
+  cursor: progress;
+}
+.card .message {
+  margin: 0;
+  flex: 1 1 14rem;
+  color: var(--mist);
+  font-size: 0.92rem;
+}
+.message[data-state='error'] {
+  color: #ff9fb0;
+}
+.card .privacy {
+  margin: 1.25rem 0 0;
+  padding-top: 1rem;
+  border-top: 1px solid var(--line);
+  font-size: 0.85rem;
+  color: var(--mist);
+}
+
+/* ── in-game HUD ───────────────────────────────────────────────────── */
+#hud {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+#hud > * {
+  pointer-events: auto;
+}
+.is-intro .dock,
+.is-intro .status,
+.is-intro .tool {
+  opacity: 0;
+  pointer-events: none;
+}
+.dock,
+.status,
+.tool {
+  transition: opacity 0.4s;
+}
+
+.status {
+  position: absolute;
+  top: 1rem;
+  left: 1rem;
+  margin: 0;
+  padding: 0.35rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(14, 11, 31, 0.6);
+  font-size: 0.88rem;
+  color: var(--mist);
+  pointer-events: none;
+}
+.status[data-state='ok'] {
+  color: var(--vellum);
+}
+
+.tool {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  padding: 0.4rem 0.95rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(14, 11, 31, 0.6);
+  cursor: pointer;
+}
+.tool:hover {
+  border-color: #b69cff;
+}
+
+.dock {
+  position: absolute;
+  left: 50%;
+  bottom: clamp(0.75rem, 2.5vw, 1.75rem);
+  transform: translateX(-50%);
+  width: min(52rem, calc(100% - 1.5rem));
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 0.5rem;
+}
+.slot {
+  --spell: #b69cff;
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 0.05rem;
+  padding: 0.6rem 0.3rem 0.7rem;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--spell) 45%, transparent);
+  border-radius: var(--radius);
+  background: rgba(14, 11, 31, 0.66);
+  backdrop-filter: blur(8px);
+  text-align: center;
+  line-height: 1.2;
+}
+.slot .glyph {
+  font-size: 1.5rem;
+  line-height: 1.3;
+}
+.slot .name {
+  font: italic 600 1rem var(--serif);
+  color: var(--spell);
+}
+.slot .gesture {
+  font-size: 0.75rem;
+  color: var(--mist);
+}
+.slot .bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: var(--spell);
+  transform: scaleX(0);
+  transform-origin: left;
+}
+.slot.cast {
+  animation: cast 0.7s ease-out;
+}
+@keyframes cast {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--spell) 80%, transparent);
+    background: color-mix(in srgb, var(--spell) 28%, rgba(14, 11, 31, 0.66));
+    transform: translateY(-6px);
+  }
+  100% {
+    box-shadow: 0 0 0 18px transparent;
+    transform: none;
+  }
+}
+
+.debug {
+  position: absolute;
+  top: 3.4rem;
+  left: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+  pointer-events: none;
+}
+.debug[hidden] {
+  display: none;
+}
+.debug canvas {
+  display: block;
+  width: 240px;
+  height: 180px;
+}
+
+/* ── Spellbook panel ───────────────────────────────────────────────── */
+.panel {
+  position: absolute;
+  top: 3.6rem;
+  right: 1rem;
+  width: min(22rem, calc(100% - 2rem));
+  max-height: calc(100% - 5rem);
+  overflow: auto;
+  padding: 1rem 1.1rem 1.2rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: rgba(20, 16, 44, 0.92);
+  backdrop-filter: blur(14px);
+}
+.panel[hidden] {
+  display: none;
+}
+.panel header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.panel h2 {
+  margin: 0;
+  font: italic 600 1.5rem var(--serif);
+}
+.panel h3 {
+  margin: 1.2rem 0 0.4rem;
+  font: italic 600 1.1rem var(--serif);
+  color: #d9ccff;
+}
+.panel .note {
+  margin: 0.2rem 0 0.8rem;
+  font-size: 0.88rem;
+  color: var(--mist);
+}
+.close {
+  border: 0;
+  background: none;
+  font-size: 1.6rem;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--mist);
+}
+.row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  padding: 0.3rem 0;
+}
+.row .dot {
+  width: 0.7rem;
+  height: 0.7rem;
+  flex: none;
+  border-radius: 50%;
+  background: var(--spell);
+}
+.row .label {
+  flex: 1;
+  font-size: 0.95rem;
+}
+.spell-row .hint {
+  margin: -0.15rem 0 0.35rem 1.3rem;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--mist);
+}
+.row select {
+  max-width: 12.5rem;
+  padding: 0.3rem 0.4rem;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--night);
+}
+.row.slider {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.1rem 0.6rem;
+}
+.row.slider input {
+  grid-column: 1 / -1;
+  width: 100%;
+  accent-color: #b69cff;
+}
+.row.slider output {
+  color: var(--mist);
+  font-size: 0.85rem;
+  grid-row: 1;
+  grid-column: 2;
+}
+.row.check {
+  margin-top: 0.5rem;
+  font-size: 0.92rem;
+}
+.reset {
+  margin-top: 1rem;
+  padding: 0.5rem 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: none;
+  cursor: pointer;
+}
+.reset:hover {
+  border-color: #b69cff;
+}
+
+@media (max-width: 640px) {
+  .slot .gesture {
+    display: none;
+  }
+  .slot .name {
+    font-size: 0.85rem;
+  }
+  .dock {
+    gap: 0.3rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

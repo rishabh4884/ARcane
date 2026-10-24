@@ -1,0 +1,297 @@
+import type { GestureDef } from '../config/gestures.ts';
+import type { Tuning } from '../config/tuning.ts';
+import { LandmarkSmoother } from '../tracking/LandmarkSmoother.ts';
+import { LM, type HandFrame, type HandSide, type Vec3 } from '../tracking/types.ts';
+import { clamp01, fingerExtensions, handScale, palmCenter, type FingerName } from './features.ts';
+import {
+  CIRCLE_DEFAULTS,
+  SWIPE_DEFAULTS,
+  detectCircle,
+  detectSwipe,
+  type Sample,
+} from './motion.ts';
+import {
+  FingerStateTracker,
+  classifyPose,
+  type FingerStates,
+  type PoseName,
+} from './poses.ts';
+
+export interface GestureFiring {
+  gestureId: string;
+  /** Human-readable extra, e.g. "left" for a swipe. */
+  detail?: string;
+  side?: HandSide | 'both';
+}
+
+export interface TrackedHand {
+  side: HandSide;
+  present: boolean;
+  pose: PoseName;
+  fingers: Record<FingerName, number>;
+  fingerStates: FingerStates;
+  cursor: { x: number; y: number } | null;
+  landmarks: Vec3[] | null;
+  /** The shape this hand is currently charging, if any. */
+  hold: { gestureId: string; progress: number } | null;
+}
+
+/** Optional per-frame instructions from a coordinator that sees both hands. */
+export interface ProcessContext {
+  /** Hand shapes whose single-hand gestures must not charge or fire this frame. */
+  suppressPoses?: ReadonlySet<PoseName>;
+}
+
+export interface EngineOutput {
+  present: boolean;
+  pose: PoseName;
+  fingers: Record<FingerName, number>;
+  fingerStates: FingerStates;
+  /** Palm position on screen, 0..1 (mirrored, already gained). */
+  cursor: { x: number; y: number } | null;
+  /** The pose gesture currently being charged, if any. */
+  hold: { gestureId: string; progress: number; side?: HandSide | 'both' } | null;
+  /** Gestures completed on this frame (usually zero or one). */
+  fired: GestureFiring[];
+  /** Smoothed landmarks, for the debug view. */
+  landmarks: Vec3[] | null;
+  aspect: number;
+  /** Every hand the engine is tracking this frame (one from GestureEngine, up to two from HandsEngine). */
+  hands: TrackedHand[];
+}
+
+const WINDOW_MS = 1700;
+/**
+ * An open palm that is sweeping is not "holding" a ward. Open-palm holds (Aegis, Eclipse) only
+ * charge while the palm stays within this many palm-lengths over this many ms, otherwise every
+ * open-hand sweep would charge them on the way.
+ */
+export const STILL_WINDOW_MS = 220;
+export const STILL_TRAVEL = 0.45;
+const NO_FINGERS = { index: 0, middle: 0, ring: 0, pinky: 0 };
+const NO_STATES = { index: false, middle: false, ring: false, pinky: false };
+
+const IDLE: EngineOutput = {
+  present: false,
+  pose: 'unknown',
+  fingers: NO_FINGERS,
+  fingerStates: NO_STATES,
+  cursor: null,
+  hold: null,
+  fired: [],
+  landmarks: null,
+  aspect: 1,
+  hands: [],
+};
+
+/**
+ * Raw hand landmarks in, finished gestures out.
+ *
+ *   landmarks → One Euro smoothing → finger extension → hysteresis → pose
+ *                                  ↘ palm / fingertip trajectories → swipe, circle detectors
+ *
+ * The engine knows nothing about spells. It reports gesture ids; the SpellBook decides what
+ * those mean.
+ */
+export class GestureEngine {
+  private tuning: Tuning;
+  private gestures: readonly GestureDef[];
+  private readonly smoother: LandmarkSmoother;
+  private readonly fingers: FingerStateTracker;
+
+  private palm: Sample[] = [];
+  private tip: Sample[] = [];
+  private scale = 0;
+  private pose: PoseName = 'unknown';
+  private poseSince = 0;
+  /** Last moment the palm was moving, for still-only holds (see STILL_WINDOW_MS). */
+  private stillSince = 0;
+  /** Pose that already cast and has not been left yet (prevents machine-gun repeats). */
+  private latched: PoseName | null = null;
+  private lastFireAt = -Infinity;
+  private lastSeenAt = -Infinity;
+  private last: EngineOutput = IDLE;
+
+  constructor(gestures: readonly GestureDef[], tuning: Tuning) {
+    this.gestures = gestures;
+    this.tuning = tuning;
+    this.smoother = new LandmarkSmoother(tuning.smoothing);
+    this.fingers = new FingerStateTracker(tuning.fingers.on, tuning.fingers.off);
+  }
+
+  /**
+   * Which gestures are live. Only gestures bound to a spell should be passed: an unbound gesture
+   * that still fires would silently burn the cooldown and wipe the motion buffers.
+   */
+  setGestures(gestures: readonly GestureDef[]): void {
+    this.gestures = gestures;
+  }
+
+  setTuning(tuning: Tuning): void {
+    this.tuning = tuning;
+    this.smoother.setParams(tuning.smoothing);
+    this.fingers.setThresholds(tuning.fingers.on, tuning.fingers.off);
+  }
+
+  /** Feed one camera result (or `null` when no hand was seen). `now` is performance.now(). */
+  process(frame: HandFrame | null, now: number, ctx?: ProcessContext): EngineOutput {
+    if (!frame) {
+      if (now - this.lastSeenAt > this.tuning.lostGraceMs) {
+        this.reset();
+        this.last = IDLE;
+        return IDLE;
+      }
+      // A brief dropout (motion blur) is bridged: keep state, report no new casts.
+      return { ...this.last, fired: [] };
+    }
+    this.lastSeenAt = now;
+
+    const lm = this.smoother.smooth(frame.landmarks, now);
+    const scale = handScale(lm);
+    this.scale = this.scale === 0 ? scale : this.scale + (scale - this.scale) * 0.08;
+
+    const ext = fingerExtensions(lm);
+    const fingerStates = this.fingers.update(ext);
+    const pose = classifyPose(fingerStates);
+    if (pose !== this.pose) {
+      this.pose = pose;
+      this.poseSince = now;
+    }
+    if (pose !== 'unknown' && pose !== this.latched) this.latched = null;
+
+    const palm = palmCenter(lm);
+    const tip = lm[LM.INDEX_TIP];
+    this.push(this.palm, { t: now, x: palm.x / this.scale, y: palm.y / this.scale, pose }, now);
+    this.push(this.tip, { t: now, x: tip.x / this.scale, y: tip.y / this.scale, pose }, now);
+    if (this.palmMoved(now)) this.stillSince = now;
+
+    const fired: GestureFiring[] = [];
+    let hold: EngineOutput['hold'] = null;
+    const ready = now - this.lastFireAt >= this.tuning.cooldownMs;
+
+    for (const g of this.gestures) {
+      if (fired.length) break;
+      if (g.kind === 'pose') {
+        if (g.pose !== pose || this.latched === pose) continue;
+        if (ctx?.suppressPoses?.has(pose)) continue;
+        const since = pose === 'open' ? Math.max(this.poseSince, this.stillSince) : this.poseSince;
+        const progress = clamp01((now - since) / (g.holdMs ?? this.tuning.poseHoldMs));
+        hold = { gestureId: g.id, progress };
+        if (progress >= 1 && ready) {
+          fired.push({ gestureId: g.id });
+          this.latched = pose;
+        }
+      } else if (ready && g.kind === 'swipe') {
+        const hit = detectSwipe(this.palm, {
+          ...SWIPE_DEFAULTS,
+          direction: g.direction,
+          minTravel: g.minTravel ?? SWIPE_DEFAULTS.minTravel,
+          minSpeed: g.minSpeed ?? SWIPE_DEFAULTS.minSpeed,
+          hand: g.hand ?? SWIPE_DEFAULTS.hand,
+        });
+        if (hit) fired.push({ gestureId: g.id, detail: hit.direction });
+      } else if (ready && g.kind === 'circle') {
+        const hit = detectCircle(this.tip, {
+          ...CIRCLE_DEFAULTS,
+          direction: g.direction,
+          minRadius: g.minRadius ?? CIRCLE_DEFAULTS.minRadius,
+        });
+        if (hit) fired.push({ gestureId: g.id, detail: hit.clockwise ? 'cw' : 'ccw' });
+      }
+    }
+
+    if (fired.length) {
+      this.lastFireAt = now;
+      this.palm = [];
+      this.tip = [];
+      hold = null;
+    }
+
+    const gain = this.tuning.cursorGain;
+    const cursor = {
+      x: clamp01(0.5 + (palm.x / frame.aspect - 0.5) * gain),
+      y: clamp01(0.5 + (palm.y - 0.5) * gain),
+    };
+
+    const side = frame.side ?? 'right';
+    this.last = {
+      present: true,
+      pose,
+      fingers: ext,
+      fingerStates,
+      cursor,
+      hold: hold ? { ...hold, side } : null,
+      fired: fired.map((f) => ({ ...f, side })),
+      landmarks: lm,
+      aspect: frame.aspect,
+      hands: [
+        {
+          side,
+          present: true,
+          pose,
+          fingers: ext,
+          fingerStates,
+          cursor,
+          landmarks: lm,
+          hold: hold ? { gestureId: hold.gestureId, progress: hold.progress } : null,
+        },
+      ],
+    };
+    return this.last;
+  }
+
+  palmTrail(): readonly Sample[] {
+    return this.palm;
+  }
+
+  currentPose(): PoseName {
+    return this.pose;
+  }
+
+  poseHeldMs(now: number): number {
+    return now - this.poseSince;
+  }
+
+  canFire(now: number): boolean {
+    return now - this.lastFireAt >= this.tuning.cooldownMs;
+  }
+
+  /** Clear motion buffers after a two-hand cast so leftover strokes cannot fire. */
+  absorbCast(now: number, latch?: PoseName): void {
+    this.lastFireAt = now;
+    this.palm = [];
+    this.tip = [];
+    if (latch) this.latched = latch;
+  }
+
+  reset(): void {
+    this.smoother.reset();
+    this.fingers.reset();
+    this.palm = [];
+    this.tip = [];
+    this.scale = 0;
+    this.pose = 'unknown';
+    this.poseSince = 0;
+    this.stillSince = 0;
+    this.latched = null;
+    this.lastFireAt = -Infinity;
+    this.lastSeenAt = -Infinity;
+    this.last = IDLE;
+  }
+
+  /** True if the palm travelled more than STILL_TRAVEL palm-lengths within the last STILL_WINDOW_MS. */
+  private palmMoved(now: number): boolean {
+    const newest = this.palm[this.palm.length - 1];
+    for (let i = this.palm.length - 2; i >= 0; i--) {
+      const s = this.palm[i];
+      if (now - s.t > STILL_WINDOW_MS) break;
+      if (Math.hypot(newest.x - s.x, newest.y - s.y) > STILL_TRAVEL) return true;
+    }
+    return false;
+  }
+
+  private push(buf: Sample[], s: Sample, now: number): void {
+    buf.push(s);
+    while (buf.length && now - buf[0].t > WINDOW_MS) buf.shift();
+  }
+}

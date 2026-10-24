@@ -1,0 +1,1 @@
+export const describeError=(e:unknown)=>e instanceof DOMException&&e.name==='NotAllowedError'?'Camera permission was denied. Allow it and try again.':e instanceof Error?e.message:'Could not start the camera.';
