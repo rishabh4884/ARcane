@@ -49,7 +49,7 @@ export class EnemyCombat {
   private hitSide = 1;
   private disposed = false;
 
-  constructor(readonly root: THREE.Object3D) {
+  constructor(readonly root: THREE.Object3D, options: { frostCrystals?: boolean } = {}) {
     this.originalParent = root.parent;
     if (this.originalParent) this.originalParent.add(this.reactionRoot);
     this.reactionRoot.add(root);
@@ -84,8 +84,19 @@ export class EnemyCombat {
       opacity: 0.82,
       depthWrite: false,
     });
-    this.buildCrystals();
+    if (options.frostCrystals !== false) this.buildCrystals();
     root.add(this.crystalGroup);
+  }
+
+  /** Reset transient reactions without reallocating materials when an encounter restarts. */
+  reset(): void {
+    if (this.disposed) return;
+    this.frostAge = null;
+    this.frostLevel = 0;
+    this.hitAge = HIT_TIME;
+    this.reactionRoot.position.copy(this.originalPosition);
+    this.reactionRoot.rotation.set(0, 0, 0);
+    this.update(0);
   }
 
   get frostAmount(): number { return this.frostLevel; }

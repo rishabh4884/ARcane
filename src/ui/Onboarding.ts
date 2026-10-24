@@ -18,23 +18,23 @@ const SPELL_GUIDE: Record<SpellEffect, { role: string; description: string }> = 
   },
   frost: {
     role: 'CONTROL',
-    description: 'Wrap a target in ice for a few seconds and flash its armor. It does not slow or immobilize gameplay yet.',
+    description: 'Bind a spirit in growing ice. It cannot move or attack while frozen.',
   },
   wind: {
     role: 'STRIKE',
-    description: 'Send a directional gust across the field. It creates an impact reaction, but does not push enemies back.',
+    description: 'A sweeping gust damages and knocks a spirit away, giving you room to move.',
   },
   healing: {
-    role: 'SUPPORT · PREVIEW',
-    description: 'Knit a broken ring of restorative light. Healing is visual only for now; health is not tracked.',
+    role: 'RESTORE',
+    description: 'Restore 30 vitality, up to 100. Mend recovers for seven seconds between casts.',
   },
   summon: {
-    role: 'SUMMON · PREVIEW',
-    description: 'Raise two spectral sentries from the ground. They look the part, but do not fight yet.',
+    role: 'SUMMON',
+    description: 'Spectral sentries rise at your aim point and deal an immediate 28-point spirit strike. They do not remain as allies.',
   },
   shield: {
-    role: 'WARD · PREVIEW',
-    description: 'Unfold a protective ward in front of you. It does not block hits yet.',
+    role: 'WARD',
+    description: 'Absorb up to 45 damage for five seconds. The ward takes six seconds to recover.',
   },
 };
 
@@ -186,7 +186,7 @@ export class Onboarding {
     this.backButton.textContent = compact ? 'Back' : 'Back to setup';
     this.backButton.setAttribute('aria-label', 'Back to camera setup');
     this.skipButton.hidden = !(this.cameraReady || this.previewMode);
-    this.skipButton.textContent = this.previewMode && !this.cameraReady ? 'Back to exploring' : compact ? 'Skip' : 'Skip guide';
+    this.skipButton.textContent = this.previewMode && !this.cameraReady ? 'Back to preview' : compact ? 'Skip' : 'Skip guide';
     this.skipButton.setAttribute('aria-label', 'Close guide and return to the world');
     this.renderSpells();
     this.shell.focus();
@@ -249,7 +249,7 @@ export class Onboarding {
     document.body.dataset.worldMode = this.cameraReady ? 'hands' : 'explore';
     if (this.previewMode && !this.cameraReady) {
       const status = this.hud.querySelector<HTMLElement>('.status');
-      if (status) status.textContent = 'Exploring · camera off';
+      if (status) status.textContent = 'Preview · enable camera to cast';
     }
     qs<HTMLCanvasElement>('#world canvas').focus({ preventScroll: true });
   }

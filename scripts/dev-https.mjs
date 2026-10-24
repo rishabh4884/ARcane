@@ -5,6 +5,7 @@ import { createServer } from 'vite';
 
 const certDir = process.env.ARcane_CERT_DIR ?? '/tmp/arcane-https';
 const port = Number(process.env.PORT ?? 5174);
+const allowedHost = process.env.ARcane_HTTPS_HOST ?? 'fedora.tail016b3f.ts.net';
 
 const server = await createServer({
   configFile: false,
@@ -12,6 +13,8 @@ const server = await createServer({
     host: '0.0.0.0',
     port,
     strictPort: true,
+    // HTTPS skips Vite's HTTP host guard, but its HMR WebSocket still validates it.
+    allowedHosts: [allowedHost],
     https: {
       key: readFileSync(`${certDir}/key.pem`),
       cert: readFileSync(`${certDir}/cert.pem`),

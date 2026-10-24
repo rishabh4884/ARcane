@@ -1,0 +1,66 @@
+/* Woodland chrome follows the scene's quiet ink-and-vellum palette. */
+#hud > .encounter { position: absolute; inset: 0; pointer-events: none; color: #efe9cf; text-shadow: 0 1px 7px #142d30; }
+.is-intro .encounter { visibility: hidden; }
+.encounter-vitals { position: absolute; right: 1.1rem; top: 7.2rem; display: grid; gap: 0.5rem; text-align: right; font-size: 0.69rem; letter-spacing: 0.035em; }
+.vital-health { position: relative; padding: 0 0 0.55rem 1rem; }
+.vital-health::after { content: ''; position: absolute; right: 0; bottom: 0; width: 100%; height: 2px; background: linear-gradient(to right, #bdcc9d var(--health,100%), #455b55 var(--health,100%)); box-shadow: 0 1px 5px #18352a; }
+.vital-shield { color: #c2d7e0; }
+.encounter-message { position: absolute; left: 50%; bottom: 10.5rem; transform: translateX(-50%); width: min(38rem,calc(100% - 2rem)); margin: 0; text-align: center; font-size: 0.73rem; letter-spacing: 0.025em; }
+.encounter-begin { position: absolute; left: 50%; bottom: 12.4rem; transform: translateX(-50%); min-height: 44px; padding: 0.6rem 1.35rem; border: 1px solid #c1b998; border-radius: 3px; background: rgba(28,49,48,0.87); color: #f3e7c5; cursor: pointer; font: italic 400 1.05rem var(--serif); pointer-events: auto; }
+.encounter-begin:hover { background: #486354; border-color: #f2dcac; }
+.encounter-begin[hidden] { display: none; }
+.encounter-target { position: absolute; left: 50%; top: calc(50% + 1.4rem); transform: translateX(-50%); max-width: calc(100% - 2rem); text-align: center; padding: 0.25rem 0.65rem; background: rgba(22,43,43,0.58); border-radius: 2px; font-size: 0.68rem; white-space: nowrap; }
+.encounter-announcement { position: absolute; left: 50%; top: 5.4rem; transform: translateX(-50%); width: min(34rem,calc(100% - 2rem)); margin: 0; text-align: center; font-size: 0.78rem; color: #e0d9bb; }
+.encounter[data-paused='true'] .encounter-announcement { opacity: 0; }
+.encounter[data-impact='hurt']::after { content: ''; position: absolute; inset: 0; box-shadow: inset 0 0 100px rgba(127,55,42,0.25); pointer-events: none; }
+.encounter[data-impact='blocked'] .vital-shield { color: #f0f1de; }
+.encounter[data-mode='lost'] .encounter-message { color: #f3c5ab; }
+#hud .slot { border-color: rgba(207,218,195,0.3); border-radius: 5px; background: rgba(23,43,43,0.76); color: #d7d9c2; }
+#hud .slot .name { color: #e0d9c0; }
+#hud .slot .gesture { color: #b6c2b2; }
+#hud .status, #hud .tool, #hud .guide-tool { border-color: rgba(203,218,196,0.25); background: rgba(23,42,43,0.78); color: #d1d6c4; border-radius: 4px; }
+.exploration-actions button { min-height: 44px; }
+@media (max-width:700px) {
+  .encounter-vitals { top: 11.1rem; right: 1rem; font-size: 0.64rem; }
+  .encounter-message { bottom: 12.1rem; font-size: 0.63rem; }
+  .encounter-begin { bottom: 14.6rem; font-size: 0.95rem; }
+  .encounter-announcement { top: 14rem; font-size: 0.68rem; }
+  .encounter-target { font-size: 0.6rem; }
+  .exploration-pad { bottom: 17.8rem; }
+}
+@media (prefers-reduced-motion:reduce) {
+  .encounter[data-impact='hurt']::after { box-shadow: inset 0 0 40px rgba(127,55,42,0.14); }
+}
+
+/* Stationary caster view: both hands stay free, scenery never follows the pointer. */
+#world canvas, #world canvas.is-looking { cursor: default; }
+#hud > .caster-view { position:absolute; inset:0; pointer-events:none; color:#e7e9d1; text-shadow:0 1px 7px #183b36; }
+.caster-eyebrow { position:absolute; left:1.5rem; top:4.3rem; font-size:.6rem; letter-spacing:.22em; }
+.caster-title { position:absolute; left:1.5rem; top:5.2rem; font:italic 400 1.8rem var(--serif); }
+.caster-hint { position:absolute; bottom:8rem; left:50%; transform:translateX(-50%); width:min(38rem,calc(100% - 2rem)); text-align:center; font-size:.7rem; }
+.is-intro .caster-view, .is-intro .enemy-indicators { visibility:hidden; }
+#hud > .enemy-indicators { position:absolute; inset:0; pointer-events:none; overflow:hidden; }
+.enemy-vital { position:absolute; left:0; top:0; width:108px; color:#edf0d4; text-align:center; text-shadow:0 1px 4px #142d2a; transform-origin:center bottom; }
+.enemy-vital[hidden] { display:none; }
+.enemy-vital-name { display:block; font:italic 500 .69rem var(--serif); line-height:1.2; }
+.enemy-vital-value { display:block; margin:2px 0 4px; font-size:.58rem; font-variant-numeric:tabular-nums; color:#d2ddbf; }
+.enemy-vital-track { position:relative; height:4px; overflow:hidden; background:rgba(16,40,35,.8); border-radius:1px; box-shadow:0 0 0 1px rgba(218,229,191,.25); }
+.enemy-vital-fill, .enemy-vital-lag { position:absolute; inset:0; transform-origin:left; }
+.enemy-vital-fill { background:#b4c98b; }
+.enemy-vital-lag { background:#e2b37e; }
+.enemy-vital[data-state='windup'] .enemy-vital-fill { background:#e0ae73; }
+.enemy-vital[data-state='windup'] .enemy-vital-value { color:#ffdc9d; }
+.enemy-vital[data-state='frozen'] .enemy-vital-fill { background:#b9dbdf; }
+.enemy-vital[data-hit='true'] .enemy-vital-name { color:#fff0ba; }
+.enemy-vital[data-state='dead'] { opacity:.65; }
+.enemy-damage { position:absolute; top:0; left:0; color:#ffe0a3; text-shadow:0 2px 4px #21362e,0 0 7px #4b4132; font:600 1.2rem var(--serif); }
+.enemy-damage[data-effect='frost'] { color:#c6edfa; }
+.enemy-damage[data-effect='lightning'] { color:#e6e8ff; }
+@media(max-width:700px) {
+  .caster-eyebrow { left:1rem; }
+  .caster-title { left:1rem; font-size:1.35rem; }
+  .caster-hint { bottom:10rem; font-size:.62rem; }
+  .enemy-vital { width:78px; }
+  .enemy-vital-name { font-size:.6rem; }
+  .enemy-vital-value { font-size:.53rem; }
+}

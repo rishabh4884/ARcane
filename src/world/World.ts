@@ -1,14 +1,15 @@
 import * as THREE from 'three';
 import type { SpellDef } from '../config/spells.ts';
 import type { HandSide } from '../tracking/types.ts';
-import { Boss, disposeModel } from './Boss.ts';
+import { Encounter } from './Encounter.ts';
 import { EnemyCombat } from './EnemyCombat.ts';
 import { createSpellAnimation, type SpellAnimation } from './effects.ts';
 import { ParticleSystem } from './particles.ts';
 import { makeLabelTexture } from './textures.ts';
 import { ForestEnvironment } from './ForestEnvironment.ts';
-import { ExplorationControls } from './ExplorationControls.ts';
-import { GUARDIAN, SPELL_RANGE, chooseRayTarget, screenPointAtDepth, terrainHeight } from './spatial.ts';
+import { FrameBudget } from './FrameBudget.ts';
+import { CasterView, worldInputBlocked } from './CasterView.ts';
+import { SPELL_RANGE, chooseRayTarget, screenPointAtDepth, terrainHeight } from './spatial.ts';
 
 interface FloatingLabel {
   sprite: THREE.Sprite;
@@ -35,14 +36,15 @@ const SIDES: HandSide[] = ['left', 'right'];
 const LEFT_TINT = '#b9dcff';
 const RIGHT_TINT = '#d9ccff';
 
-/** A living, walkable forest. Hand tracking and spells share one physical world. */
+/** A stationary gesture-controlled clearing with living scenery and approaching spirits. */
 export class World {
   private readonly renderer: THREE.WebGLRenderer;
   private readonly scene = new THREE.Scene();
   private readonly camera = new THREE.PerspectiveCamera(64, 1, 0.15, 240);
   private readonly environment: ForestEnvironment;
-  private readonly controls: ExplorationControls;
+  private readonly controls: CasterView;
   private readonly reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  private readonly budget = new FrameBudget(Math.min(window.devicePixelRatio || 1, 1.5), 1.5);
   private readonly particles: ParticleSystem;
   private readonly wisps: Record<HandSide, Wisp>;
   private readonly labels: FloatingLabel[] = [];
@@ -57,30 +59,30 @@ export class World {
   private raf = 0;
   private running = false;
   private disposed = false;
-  private boss: Boss | null = null;
-  private bossEnemy: EnemyCombat | null = null;
+  private readonly encounter: Encounter;
 
   constructor(container: HTMLElement) {
     this.container = container;
-    const pixelRatio = Math.min(window.devicePixelRatio || 1, 1.75);
+    const pixelRatio = this.budget.ratio;
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
     this.renderer.setPixelRatio(pixelRatio);
     this.renderer.setClearColor('#83bdb5');
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.15;
+    this.renderer.toneMappingExposure = 1.05;
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(this.renderer.domElement);
     this.environment = new ForestEnvironment(this.scene);
-    const obstacles = [...this.environment.obstacles, { ...GUARDIAN, radius: 3.1, height: 6 }];
-    this.controls = new ExplorationControls(this.camera, this.renderer.domElement, obstacles);
+    this.controls = new CasterView(this.camera, this.renderer.domElement);
+    this.encounter = new Encounter(this.scene, this.camera, this.environment.obstacles,
+      (ray, range) => this.environment.intersect(ray, range), () => this.controls.reset());
+    this.renderer.domElement.dataset.world = 'ready';
 
     this.particles = new ParticleSystem(6000, pixelRatio);
     this.scene.add(this.particles.points);
 
-    void this.loadBoss();
 
     this.wisps = {
       left: this.makeWisp('left'),
@@ -98,7 +100,13 @@ export class World {
     const loop = () => {
       if (!this.running) return;
       this.raf = requestAnimationFrame(loop);
-      this.frame(Math.min(this.clock.getDelta(), 0.05));
+      const elapsed = this.clock.getDelta();
+      const ratio = this.budget.sample(elapsed);
+      if (ratio !== null) { this.renderer.setPixelRatio(ratio); this.resize(); }
+      // Bounded substeps preserve seconds of gameplay at variable render rates.
+      const time = Math.min(elapsed, 0.15);
+      const steps = Math.max(1, Math.ceil(time / 0.05));
+      for (let i = 0; i < steps; i++) this.frame(time / steps, i === steps - 1);
     };
     loop();
   }
@@ -110,6 +118,7 @@ export class World {
     cancelAnimationFrame(this.raf);
     window.removeEventListener('resize', this.resize);
     this.controls.dispose();
+    this.encounter.dispose();
     this.environment.dispose();
     for (const label of this.labels) {
       this.scene.remove(label.sprite);
@@ -132,8 +141,6 @@ export class World {
     this.spellAnimations.length = 0;
     for (const enemy of this.enemies) enemy.dispose();
     this.enemies.length = 0;
-    this.bossEnemy = null;
-    this.boss?.dispose();
     this.renderer.dispose();
     this.renderer.domElement.remove();
   }
@@ -162,9 +169,9 @@ export class World {
     }
   }
 
-  /** Numeric demos aim through the crosshair; hand casts follow their own marker. */
-  cast(spell: SpellDef, from?: HandSide | 'both', detail?: string): void {
-    if (this.disposed) return;
+  /** A spell is released by a tracked hand; no movement or number-key controls. */
+  cast(spell: SpellDef, from?: HandSide | 'both', detail?: string): boolean {
+    if (this.disposed || worldInputBlocked() || !this.encounter.cast(spell.effect)) return false;
     this.camera.updateMatrixWorld(true);
     this.scene.updateMatrixWorld(true);
     const color = new THREE.Color(spell.color);
@@ -174,16 +181,13 @@ export class World {
       groundY: terrainHeight(target.x, target.z),
       cameraQuaternion: this.camera.quaternion,
     });
-    animation.setImpactCallback(() => {
-      if (!enemy?.impact(spell.effect, target, color)) return;
-      if (enemy === this.bossEnemy) {
-        this.boss?.react(spell.effect, target);
-        this.boss?.flash(spell.color);
-      }
-    });
+    if (enemy) animation.setImpactCallback(this.encounter.hasEnemy(enemy)
+      ? this.encounter.impactCallback(enemy, spell.effect, target, color)
+      : () => { enemy.impact(spell.effect, target, color); });
     this.scene.add(animation.group);
     this.spellAnimations.push(animation);
     this.spawnLabel(spell.name, spell.color, origin);
+    return true;
   }
 
   /** Register an already-placed enemy model. The returned function unregisters its reactions. */
@@ -195,36 +199,6 @@ export class World {
   /* ─────────────────────────────── internals ─────────────────────────────── */
 
 
-  private async loadBoss(): Promise<void> {
-    const canvas = this.renderer.domElement;
-    canvas.dataset.boss = 'loading';
-    try {
-      const { GLTFLoader } = await import('three/addons/loaders/GLTFLoader.js');
-      if (this.disposed) return;
-      const url = new URL('assets/boss/balrog-mystic.glb', document.baseURI).href;
-      const model = await new GLTFLoader().loadAsync(url);
-      if (this.disposed) {
-        disposeModel(model.scene);
-        return;
-      }
-      this.boss = new Boss(model.scene, undefined, model.animations);
-      this.bossEnemy = this.addEnemy(model.scene);
-      // Stable metre-scale placement: resizing or walking must never refit the enemy.
-      this.boss.group.position.set(GUARDIAN.x, terrainHeight(GUARDIAN.x, GUARDIAN.z) + 0.02, GUARDIAN.z);
-      this.boss.group.scale.setScalar(1);
-      model.scene.traverse((object) => {
-        if (object instanceof THREE.Mesh) { object.castShadow = true; object.receiveShadow = true; }
-      });
-      this.scene.add(this.boss.group);
-      this.scene.updateMatrixWorld(true);
-      canvas.dataset.boss = 'ready';
-    } catch (error) {
-      if (this.disposed) return;
-      canvas.dataset.boss = 'error';
-      // Loading a scenery asset must never block the Begin button or hand tracking.
-      console.warn('[arcane] Balrog could not load; casting remains available.', error);
-    }
-  }
 
   private makeWisp(side: HandSide): Wisp {
     const material = new THREE.LineBasicMaterial({
@@ -274,7 +248,6 @@ export class World {
     const index = this.enemies.indexOf(enemy);
     if (index < 0) return;
     this.enemies.splice(index, 1);
-    if (this.bossEnemy === enemy) this.bossEnemy = null;
     enemy.dispose();
   }
 
@@ -309,8 +282,8 @@ export class World {
 
   private selectSpellTarget(origin: THREE.Vector3): { point: THREE.Vector3; enemy: EnemyCombat | null } {
     const ray = new THREE.Ray(this.camera.position.clone(), origin.clone().sub(this.camera.position).normalize());
-    return chooseRayTarget(ray, SPELL_RANGE, this.environment.intersect(ray, SPELL_RANGE), this.enemies,
-      (enemy, aim, point) => enemy.intersectRay(aim, point));
+    return chooseRayTarget(ray, SPELL_RANGE, this.environment.intersect(ray, SPELL_RANGE), [...this.enemies, ...this.encounter.reactions()],
+      (enemy, aim, point) => this.encounter.hasEnemy(enemy) ? this.encounter.intersectEnemy(enemy, aim, point) : enemy.intersectRay(aim, point));
   }
 
   private cursorToWorld(c: { x: number; y: number }, out: THREE.Vector3): THREE.Vector3 {
@@ -318,11 +291,13 @@ export class World {
     return out;
   }
 
-  private frame(dt: number): void {
+  private frame(dt: number, render = true): void {
     const t = this.clock.elapsedTime;
     this.idleTime += dt;
-    this.controls.update(dt);
     this.environment.update(dt, this.camera, this.reducedMotion.matches);
+    const paused = worldInputBlocked();
+    this.encounter.update(dt, paused, this.reducedMotion.matches);
+    const simulationDt = paused ? 0 : dt;
     const anyHand = SIDES.some((side) => this.wisps[side].cursor !== null);
     for (const side of SIDES) this.updateWisp(this.wisps[side], dt, t, anyHand);
 
@@ -342,17 +317,15 @@ export class World {
 
     for (let i = this.spellAnimations.length - 1; i >= 0; i--) {
       const animation = this.spellAnimations[i];
-      if (animation.update(dt)) continue;
+      if (animation.update(simulationDt)) continue;
       this.scene.remove(animation.group);
       animation.dispose();
       this.spellAnimations.splice(i, 1);
     }
 
     this.particles.update(dt);
-    for (const enemy of this.enemies) enemy.update(dt);
-    if (this.bossEnemy) this.boss?.setFrostAmount(this.bossEnemy.frostAmount);
-    this.boss?.update(dt);
-    this.renderer.render(this.scene, this.camera);
+    for (const enemy of this.enemies) enemy.update(simulationDt);
+    if (render) this.renderer.render(this.scene, this.camera);
   }
 
   /**

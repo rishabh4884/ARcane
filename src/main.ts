@@ -106,11 +106,6 @@ tracker.onFrame = (hands, stats) => {
   }
 };
 
-// Keys 1–6 cast directly, handy for developing the world without a camera.
-window.addEventListener('keydown', (e) => {
-  const i = Number(e.key) - 1;
-  if (i >= 0 && i < SPELLS.length && !(e.target instanceof HTMLInputElement)) cast(SPELLS[i].id);
-});
 
 /* ───────────────────────────── start-up flow ───────────────────────────── */
 
