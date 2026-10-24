@@ -26,21 +26,22 @@ flowchart LR
 Raw landmarks jitter by a few pixels. A **One Euro filter** runs on every coordinate: its cutoff frequency rises with speed, so a still hand is smoothed heavily and a fast hand is barely delayed. Two parameters control it: `minCutoff` (steadiness at rest) and `beta` (responsiveness in motion).
 
 ### 3. Features (`src/gestures/features.ts`)
-For each finger, an **extension score** from 0 (curled) to 1 (straight) blends two cues: joint angles at the knuckles, and how far the tip reaches from the wrist compared with the middle joint. Using two independent cues means one noisy measurement cannot flip a finger. All distances are rotation-invariant, so a tilted hand reads the same as an upright one.
+For each finger, an **extension score** from 0 (curled) to 1 (straight) measures the bend at its two finger joints and at its knuckle. Straight fingers held roughly perpendicular to the palm remain extended; the knuckle check only penalizes fingers folded back toward the palm. This avoids treating a horizontal open hand or naturally short straight finger as curled, or a flexed finger as extended just because its tip is still far from its base. These 3D angle features are invariant to uniform scaling and rigid rotation; camera occlusion and inaccurate depth estimates can still affect them. Collapsed joints mark a frame as unknown, and a fist requires clearly curled scores rather than merely the absence of extended fingers.
 
 ### 4. Poses (`poses.ts`)
-Scores become booleans with **hysteresis**: a finger turns "extended" above 0.62 and "curled" only below 0.38, so a borderline finger does not flicker. The four booleans (index, middle, ring, pinky) form a pattern that maps to a named pose. The thumb is deliberately ignored: it is the least reliable finger and none of the shipped poses need it.
+Scores become booleans with **hysteresis**: by default a finger turns "extended" at 0.68 and "curled" at or below 0.52, so a borderline finger does not flicker. The four booleans (index, middle, ring, pinky) form a pattern that maps to a named pose. Held signs use smoothed landmarks; movement gestures use current-frame features with a separate hysteresis tracker and multi-sample validation, so visual smoothing does not label a quick stroke with the previous hand shape. The thumb is deliberately ignored: none of the shipped poses need it.
 
 ### 5. Motions (`motion.ts`)
 The engine records the palm centre and the index fingertip over the last ~1.7 seconds, in **hand units** (multiples of palm length) so that movements are the same size to the detector whether you sit near or far.
 
-- **Swipes**: looks for a segment ending at the newest sample that is long enough, fast enough, straight enough and aligned with the required axis, while the hand stays open. Because it ends at the newest sample, it fires as soon as the motion qualifies.
+- **Swipes**: looks for a recent segment ending at the newest sample that is long enough, fast enough, straight enough and aligned with the required direction, with the requested hand shape present for most of the segment. Open-hand and fist strokes follow the raw palm centre; pointing strikes (Skybolt, Impale and Wyrm Slash) follow the raw index fingertip. Displacement is divided by palm size, rather than subtracting absolute positions normalized by different sizes. Stopped strokes and single-sample tracking jumps are rejected. A new shape can use one preceding frame as an onset anchor only after at least three consecutive samples confirm it.
 - **Circles**: while pointing, fits a circle to the fingertip path and checks radius, roundness (radial variance), swept angle (≥ 300°) and that the rotation went mostly one way, which rejects scribbles.
 
 ### 6. The engine (`GestureEngine.ts`)
 Ties it together and adds the human factors:
 
 - **Hold-to-cast** for shapes, with progress reported for the HUD.
+- **Stillness for overlapping holds**: a matching held sign cannot charge through its assigned movement gesture. Pointing holds also watch fingertip movement, so Lance does not consume a developing Skybolt stroke. A stationary hold still casts normally; movement during its cooldown remains blocked.
 - **Latching**: a held pose casts once, and re-arms only when you change to another shape.
 - **Cooldown** after every cast, and buffers cleared so the return stroke of a swish does not cast again.
 - **Dropout bridging**: a lost hand is tolerated for 180 ms before state resets.

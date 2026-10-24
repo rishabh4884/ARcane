@@ -21,7 +21,8 @@ const saved = loadJSON<Partial<Tuning>>(TUNING_KEY);
 let tuning: Tuning = {
   ...DEFAULT_TUNING,
   ...saved,
-  smoothing: { ...DEFAULT_TUNING.smoothing, ...saved?.smoothing },
+  // Beta is not player-adjustable; ignore the legacy stored value from before filtering worked.
+  smoothing: { ...DEFAULT_TUNING.smoothing, ...saved?.smoothing, beta: DEFAULT_TUNING.smoothing.beta },
   fingers: { ...DEFAULT_TUNING.fingers, ...saved?.fingers },
 };
 

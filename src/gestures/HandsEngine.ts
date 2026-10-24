@@ -94,8 +94,10 @@ export class HandsEngine {
 
     if (leftOn && rightOn && L.landmarks && R.landmarks) {
       this.lastDualAt = now;
-      const lp = palmCenter(L.landmarks);
-      const rp = palmCenter(R.landmarks);
+      // Match the single-hand motion path: filtered visuals must not let a single sweep
+      // overtake a two-hand stroke merely because the latter lags behind.
+      const lp = palmCenter(bound.left!.landmarks);
+      const rp = palmCenter(bound.right!.landmarks);
       const scale = (handScale(L.landmarks) + handScale(R.landmarks)) / 2;
       // Order by on-screen position, not by slot: the two-hand motions mean "the hand on the
       // left moves left", which must hold whatever the binder happened to call each hand.

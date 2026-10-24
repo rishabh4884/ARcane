@@ -70,6 +70,8 @@ Start with an open palm, pause for a beat so it is recognised, then make one str
 | Skybolt | Point with one index finger and thrust straight upward. |
 | Impale | Point with one index finger and drive it straight downward. |
 
+Pointing strikes follow your **index fingertip**, so a clear wrist flick can work without a large palm sweep. Keep the other three fingers flexed and make the fingertip path reasonably straight; rounded paths are reserved for sigils. If Lance and a pointing strike are both assigned, hold still for Lance and move for the strike. A hold that already cast still applies the normal pause between casts.
+
 ### Sigils — point, then draw
 
 Raise just your index finger. Pause briefly in the pointing pose, then draw one large, round circle in the air. Keep the circle facing the camera and avoid reversing halfway through.

@@ -1,8 +1,67 @@
 import type { PoseName } from './poses.ts';
-export interface Sample { t:number; x:number; y:number; pose:PoseName }
+export interface Sample { t:number; x:number; y:number; pose:PoseName; scale?:number }
 export type SwipeDirection = 'left'|'right'|'up'|'down'|'horizontal'; export type SwipeHand = 'open'|'fist'|'point';
 export const SWIPE_DEFAULTS = { direction: 'horizontal' as SwipeDirection, minTravel: 1.45, minSpeed: 3.5, hand: 'open' as SwipeHand };
-export function detectSwipe(samples: readonly Sample[], o: typeof SWIPE_DEFAULTS): { direction: SwipeDirection } | null { if(samples.length<3)return null; const a=samples[0], b=samples[samples.length-1], dx=b.x-a.x, dy=b.y-a.y, dt=Math.max((b.t-a.t)/1000,.001); const poseOk=o.hand==='open'? b.pose==='open':b.pose===o.hand; if(!poseOk||Math.hypot(dx,dy)<o.minTravel||Math.hypot(dx,dy)/dt<o.minSpeed)return null; const dir=Math.abs(dx)>Math.abs(dy)?dx>0?'right':'left':dy>0?'down':'up'; return o.direction==='horizontal' ? (dir==='left'||dir==='right'?{direction:dir}:null) : dir===o.direction?{direction:dir}:null; }
+export function detectSwipe(samples: readonly Sample[], o: typeof SWIPE_DEFAULTS): { direction: SwipeDirection } | null {
+  if (samples.length < 3) return null;
+  const end = samples[samples.length - 1];
+  if (end.pose !== o.hand) return null;
+  const scale = Math.max(end.scale ?? 1, 1e-6);
+
+  // A stroke must still be moving. Otherwise an old sweep (or a filter settling after it)
+  // can fire when the player is already holding still or a cooldown expires.
+  let tail = samples.length - 2;
+  while (tail > 0 && end.t - samples[tail].t < 80) tail--;
+  const tailStart = samples[tail];
+  const tailSeconds = (end.t - tailStart.t) / 1000;
+  if (tailSeconds <= 0) return null;
+  const vx = (end.x - tailStart.x) / scale / tailSeconds;
+  const vy = (end.y - tailStart.y) / scale / tailSeconds;
+  if (Math.hypot(vx, vy) < o.minSpeed) return null;
+
+  let pathLength = 0;
+  let matching = 1;
+  let movingSteps = 0;
+  for (let i = samples.length - 2; i >= 0; i--) {
+    const start = samples[i];
+    const next = samples[i + 1];
+    const elapsed = (end.t - start.t) / 1000;
+    if (elapsed <= 0 || next.t <= start.t || next.t - start.t > 180 || elapsed > 0.5) break;
+    // The new shape can arrive on the first moving camera frame. Allow the preceding frame
+    // to anchor its onset only after three newer samples agree on the requested shape.
+    // A last-frame shape change must never relabel an entire stroke.
+    const onset = start.pose !== o.hand && start.pose !== 'unknown';
+    if (onset && (matching < 3 || matching !== samples.length - i - 1)) break;
+    if (start.pose === o.hand) matching++;
+    const stepTravel = Math.hypot(next.x - start.x, next.y - start.y) / scale;
+    pathLength += stepTravel;
+    if (stepTravel > 0.05 && (next.x - start.x) * vx + (next.y - start.y) * vy > 0) movingSteps++;
+    if (samples.length - i < 3 || (start.pose !== o.hand && !onset)) continue;
+
+    // Normalize displacement, not absolute positions: hand-size changes alone aren't a swipe.
+    const dx = (end.x - start.x) / scale;
+    const dy = (end.y - start.y) / scale;
+    const travel = Math.hypot(dx, dy);
+    // Finger strikes share their trajectory with sigils: a round arc must not qualify
+    // as a straight stab merely because its endpoints happen to be far apart.
+    const straightness = o.hand === 'point' ? 0.96 : 0.8;
+    if (
+      movingSteps < 2 || travel < o.minTravel || travel / elapsed < o.minSpeed ||
+      (!onset && matching / (samples.length - i) < 0.8) ||
+      travel < pathLength * straightness ||
+      (vx * dx + vy * dy) / Math.max(travel, 1e-6) < o.minSpeed
+    ) {
+      if (onset) break;
+      continue;
+    }
+
+    const direction = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
+    return o.direction === 'horizontal'
+      ? (direction === 'left' || direction === 'right' ? { direction } : null)
+      : (direction === o.direction ? { direction } : null);
+  }
+  return null;
+}
 export const CIRCLE_DEFAULTS = { direction: 'any' as 'any'|'cw'|'ccw', minRadius: .55 };
 export function detectCircle(s: readonly Sample[], o: typeof CIRCLE_DEFAULTS): { clockwise:boolean } | null {
   if (s.length < 12 || s.at(-1)?.pose !== 'point') return null;
