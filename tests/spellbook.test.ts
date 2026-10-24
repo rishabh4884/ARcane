@@ -14,10 +14,10 @@ const memory = (seed: Record<string, string> = {}): KeyValueStore & { data: Reco
 };
 
 describe('config integrity', () => {
-  it('ships six spells with a unique, valid default gesture each', () => {
-    expect(SPELLS).toHaveLength(6);
+  it('ships seven spells with a unique, valid default gesture each', () => {
+    expect(SPELLS).toHaveLength(7);
     const defaults = SPELLS.map((s) => s.defaultGesture);
-    expect(new Set(defaults).size).toBe(6);
+    expect(new Set(defaults).size).toBe(7);
     for (const id of defaults) expect(GESTURES.some((g) => g.id === id)).toBe(true);
   });
 
@@ -46,15 +46,15 @@ describe('config integrity', () => {
 describe('SpellBook', () => {
   it('starts from the defaults', () => {
     const book = new SpellBook(SPELLS, GESTURES, memory());
-    expect(book.spellFor('fist')?.id).toBe('spell-1');
-    expect(book.gestureFor('spell-4')?.id).toBe('swish');
+    expect(book.spellFor('lance')?.id).toBe('spell-1');
+    expect(book.gestureFor('spell-4')?.id).toBe('gale');
   });
 
   it('swaps bindings so a gesture never casts two spells', () => {
     const book = new SpellBook(SPELLS, GESTURES, memory());
     book.assign('spell-1', 'circle');
     expect(book.gestureFor('spell-1')?.id).toBe('circle');
-    expect(book.gestureFor('spell-5')?.id).toBe('fist');
+    expect(book.gestureFor('spell-5')?.id).toBe('lance');
     expect(book.spellFor('circle')?.id).toBe('spell-1');
   });
 
@@ -69,14 +69,14 @@ describe('SpellBook', () => {
     const book = new SpellBook(SPELLS, GESTURES, memory({ 'arcane.spellbook.v1': '{"spell-1":"nope","spell-2":"nope"}' }));
     expect(book.gestureFor('spell-1')).toBeDefined();
     const ids = SPELLS.map((s) => book.gestureFor(s.id)?.id);
-    expect(new Set(ids).size).toBe(6);
+    expect(new Set(ids).size).toBe(7);
   });
 
   it('resets to defaults', () => {
     const book = new SpellBook(SPELLS, GESTURES, memory());
     book.assign('spell-1', 'rise');
     book.resetToDefaults();
-    expect(book.gestureFor('spell-1')?.id).toBe('fist');
+    expect(book.gestureFor('spell-1')?.id).toBe('lance');
   });
 
   it('only activates gestures that are bound to a spell', () => {
@@ -85,14 +85,14 @@ describe('SpellBook', () => {
     book.assign('spell-1', 'eclipse');
     const ids = book.activeGestures().map((g) => g.id);
     expect(ids).toContain('eclipse');
-    expect(ids).not.toContain('fist');
-    expect(ids).toHaveLength(6);
+    expect(ids).not.toContain('lance');
+    expect(ids).toHaveLength(7);
   });
 
   it('lets a gesture nobody uses replace the old one without swapping', () => {
     const book = new SpellBook(SPELLS, GESTURES, memory());
     book.assign('spell-2', 'cataclysm');
     expect(book.gestureFor('spell-2')?.id).toBe('cataclysm');
-    expect(book.spellFor('victory')).toBeUndefined();
+    expect(book.spellFor('impale')).toBeUndefined();
   });
 });
