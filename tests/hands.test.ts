@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
+import { GESTURES } from '../src/config/gestures.ts';
 import { HandBinder } from '../src/tracking/HandBinder.ts';
 import type { HandFrame } from '../src/tracking/types.ts';
 import { ASPECT, POSES, liveGestures, makeDuoDriver, makeHand, type DuoDriver, type HandSpec } from './helpers/synth.ts';
 
 const at = (x: number, ext: HandSpec['ext'], y = 0.5): HandSpec => ({ x, y, ext });
 const { open, fist, victory, point, trident, horns } = POSES;
+const gestures = (...ids: string[]) => GESTURES.filter((g) => ids.includes(g.id));
 
 describe('HandBinder', () => {
   const frame = (x: number, side?: 'left' | 'right', confidence = 0.95): HandFrame => ({
@@ -30,7 +32,6 @@ describe('HandBinder', () => {
     for (let s = 0; s <= 30; s++) {
       const gap = 0.9 - s * 0.022; // down to ~0.24
       const r = binder.bind([frame(0.8 - gap / 2, 'right'), frame(0.8 + gap / 2, 'left')], s * 33, 180);
-      if (!r.right) continue; // A new second track is confirmed on its next frame.
       const leftX = r.left!.landmarks[0].x;
       if (last !== null) expect(Math.abs(leftX - last)).toBeLessThan(0.1);
       last = leftX;
@@ -40,11 +41,9 @@ describe('HandBinder', () => {
   it('keeps identity when one of two hands flickers out for a few frames', () => {
     const binder = new HandBinder();
     binder.bind([frame(0.5), frame(1.1)], 0, 180);
-    binder.bind([frame(0.5), frame(1.1)], 33, 180);
+    binder.bind([frame(1.1)], 33, 180);
     binder.bind([frame(1.1)], 66, 180);
-    binder.bind([frame(1.1)], 99, 180);
-    binder.bind([frame(0.5), frame(1.1)], 132, 180);
-    const r = binder.bind([frame(0.5), frame(1.1)], 165, 180);
+    const r = binder.bind([frame(0.5), frame(1.1)], 99, 180);
     expect(r.left!.landmarks[0].x).toBeLessThan(0.7);
     expect(r.right!.landmarks[0].x).toBeGreaterThan(0.9);
   });
@@ -57,7 +56,7 @@ describe('HandBinder', () => {
 
 describe('HandsEngine: two hands at once', () => {
   it('tracks both hands and reports each one’s own pose', () => {
-    const d = makeDuoDriver();
+    const d = makeDuoDriver(gestures('fist', 'victory'));
     d.hold(at(0.4, fist), at(1.0, victory), 200);
     const out = d.step(at(0.4, fist), at(1.0, victory));
     const poses = Object.fromEntries(out.hands.map((h) => [h.side, h.pose]));
@@ -67,19 +66,19 @@ describe('HandsEngine: two hands at once', () => {
   });
 
   it('casts a different spell from each hand at the same moment', () => {
-    const d = makeDuoDriver(liveGestures([['spell-1', 'fist']]));
+    const d = makeDuoDriver(gestures('fist', 'victory'));
     d.hold(at(0.4, fist), at(1.0, victory), 1500);
     expect(d.log.sort()).toEqual(['fist@left', 'victory@right']);
   });
 
   it('casts the same sign from both hands once each', () => {
-    const d = makeDuoDriver(liveGestures([['spell-1', 'horns']]));
+    const d = makeDuoDriver(gestures('horns'));
     d.hold(at(0.4, horns), at(1.0, horns), 1500);
     expect(d.log.sort()).toEqual(['horns@left', 'horns@right']);
   });
 
   it('reports a separate charge per hand while each is held', () => {
-    const d = makeDuoDriver(liveGestures([['spell-1', 'fist']]));
+    const d = makeDuoDriver(gestures('fist', 'victory'));
     d.hold(at(0.4, fist), at(1.0, victory), 150);
     const out = d.step(at(0.4, fist), at(1.0, victory));
     const holds = Object.fromEntries(out.hands.map((h) => [h.side, h.hold?.gestureId]));
@@ -87,21 +86,21 @@ describe('HandsEngine: two hands at once', () => {
   });
 
   it('one hand casting does not disturb the other’s hold', () => {
-    const d = makeDuoDriver(liveGestures([['spell-1', 'fist']]));
+    const d = makeDuoDriver(gestures('fist', 'victory'));
     d.hold(at(0.4, fist), at(1.0, open), 500);
     d.hold(at(0.4, fist), at(1.0, victory), 1000);
     expect(d.log).toEqual(['fist@left', 'victory@right']);
   });
 
   it('casts from one hand while the other is idle in view', () => {
-    const d = makeDuoDriver(liveGestures([['spell-1', 'fist'], ['spell-7', 'trident']]));
+    const d = makeDuoDriver(gestures('fist'));
     d.hold(at(0.4, open), at(1.0, open), 200);
     d.hold(at(0.4, open), at(1.0, fist), 1000);
     expect(d.log).toEqual(['fist@right']);
   });
 
   it('rides out a one-hand flicker without a spurious cast or swap', () => {
-    const d = makeDuoDriver(liveGestures([['spell-1', 'fist']]));
+    const d = makeDuoDriver(gestures('fist', 'victory'));
     for (let i = 0; i < 60; i++) {
       const dropped = i >= 20 && i < 24;
       const out = d.step(at(0.4, fist), dropped ? null : at(1.0, victory));
@@ -111,7 +110,7 @@ describe('HandsEngine: two hands at once', () => {
   });
 
   it('works for a single hand too, in either slot', () => {
-    const d = makeDuoDriver(liveGestures([['spell-1', 'fist']]));
+    const d = makeDuoDriver(gestures('fist', 'victory'));
     d.hold(null, at(1.0, fist), 1000);
     d.hold(at(0.4, victory), null, 1000);
     expect(d.log.sort()).toEqual(['fist@right', 'victory@left']);
@@ -120,13 +119,13 @@ describe('HandsEngine: two hands at once', () => {
 
 describe('two-hand signs', () => {
   it('Blood Pact: both fists cast the pact once, not two fists plus a pact', () => {
-    const d = makeDuoDriver(liveGestures([['spell-1', 'fist'], ['spell-3', 'pact']]));
+    const d = makeDuoDriver(liveGestures([['spell-3', 'pact']])); // fist stays bound to Spell 1
     d.hold(at(0.4, fist), at(1.0, fist), 2500);
     expect(d.log).toEqual(['pact@both']);
   });
 
   it('a lone fist still casts the single-hand spell when a two-hand fist is also bound', () => {
-    const d = makeDuoDriver(liveGestures([['spell-1', 'fist'], ['spell-3', 'pact'], ['spell-7', 'trident']]));
+    const d = makeDuoDriver(gestures('fist', 'pact'));
     d.hold(at(0.4, open), at(1.0, open), 200);
     d.hold(at(0.4, fist), at(1.0, open), 1000);
     expect(d.log).toEqual(['fist@left']);

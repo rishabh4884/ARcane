@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { describe, expect, it } from 'vitest';
-import { chooseRayTarget, EYE_HEIGHT, forestLayout, GUARDIAN, intersectObstacle, intersectTerrain, moveOnGround, pathX, screenPointAtDepth, seededRandom, SPAWN, SPELL_RANGE, terrainHeight, WORLD_RADIUS } from '../src/world/spatial.ts';
+import { aimAssistRadius, chooseRayTarget, EYE_HEIGHT, forestLayout, GUARDIAN, intersectObstacle, intersectTerrain, moveOnGround, pathX, screenPointAtDepth, seededRandom, SPAWN, SPELL_RANGE, terrainHeight, WORLD_RADIUS } from '../src/world/spatial.ts';
 
 const ray = (origin: number[], direction: number[]) => new THREE.Ray(new THREE.Vector3(...origin), new THREE.Vector3(...direction).normalize());
 
@@ -95,6 +95,12 @@ describe('orientation-independent world aiming', () => {
     expect(chooseRayTarget(aim, 55, 8, [30, 10, 15], intersect).enemy).toBeNull();
     expect(chooseRayTarget(aim, 55, null, [80, -5, NaN, Infinity], intersect).point.x).toBe(55);
     expect(chooseRayTarget(aim, 55, 8, [30, 10, 15], intersect).point.x).toBe(8);
+  });
+
+  it('widens hand aim with distance while capping the assist window', () => {
+    expect(aimAssistRadius(1)).toBeCloseTo(0.38);
+    expect(aimAssistRadius(20)).toBeGreaterThan(1.4);
+    expect(aimAssistRadius(100)).toBe(1.6);
   });
 
   it('keeps screen markers on the camera-facing plane after a full turn and resize', () => {

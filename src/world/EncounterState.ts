@@ -4,10 +4,10 @@ import type { CreatureKind, CreaturePose } from './Creature.ts';
 export interface CreatureSpec { health:number; speed:number; range:number; windup:number; recovery:number; damage:number; radius:number; height:number }
 export const CREATURE_SPECS:Record<CreatureKind,CreatureSpec>={
   // Gesture-first pacing: room to find a sign, hold it, then aim before the next attack.
-  goblin:{health:65,speed:0.9,range:2.15,windup:2.0,recovery:3.6,damage:12,radius:0.5,height:2.0},
-  root:{health:150,speed:0.45,range:3.15,windup:2.6,recovery:4.8,damage:22,radius:0.8,height:3.8},
-  hollow:{health:120,speed:0.6,range:3.25,windup:2.8,recovery:4.5,damage:28,radius:0.65,height:5.3},
-  wraith:{health:75,speed:0.5,range:12,windup:2.8,recovery:5.2,damage:15,radius:0.5,height:3.0},
+  goblin:{health:65,speed:1.08,range:2.15,windup:2.0,recovery:3.6,damage:12,radius:0.5,height:2.0},
+  root:{health:150,speed:0.36,range:3.15,windup:2.6,recovery:4.8,damage:22,radius:0.8,height:3.8},
+  hollow:{health:120,speed:0.62,range:3.25,windup:2.8,recovery:4.5,damage:28,radius:0.65,height:5.3},
+  wraith:{health:75,speed:0.46,range:12,windup:2.8,recovery:5.2,damage:15,radius:0.5,height:3.0},
 };
 const DAMAGE:Partial<Record<SpellEffect,number>>={arrow:32,lightning:48,frost:12,wind:22,summon:8};
 export const COOLDOWNS:Record<SpellEffect,number>={arrow:0.4,lightning:1.5,frost:2.2,wind:1,healing:7,summon:12,shield:6};

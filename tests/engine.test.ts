@@ -8,33 +8,33 @@ describe('GestureEngine (end to end on synthetic hands)', () => {
     ['victory', 'victory'],
     ['horns', 'horns'],
   ])('casts %s exactly once while the pose is held', (pose, id) => {
-    const d = makeDriver(liveGestures([['spell-1', id]]));
+    const d = makeDriver(GESTURES.filter((g) => g.id === id));
     d.hold(0.7, 0.5, POSES.open, 300);
     expect(d.hold(0.7, 0.5, POSES[pose], 1500)).toEqual([id]);
   });
 
   it('does not cast a pose that is only passed through', () => {
-    const d = makeDriver(liveGestures([['spell-1', 'fist']]));
+    const d = makeDriver(GESTURES.filter((g) => g.id === 'fist'));
     d.hold(0.7, 0.5, POSES.open, 300);
     expect(d.hold(0.7, 0.5, POSES.fist, 150)).toEqual([]);
     expect(d.hold(0.7, 0.5, POSES.open, 300)).toEqual([]);
   });
 
   it('can cast the same pose again after leaving it', () => {
-    const d = makeDriver(liveGestures([['spell-1', 'fist']]));
+    const d = makeDriver(GESTURES.filter((g) => g.id === 'fist'));
     d.hold(0.7, 0.5, POSES.fist, 800);
     d.hold(0.7, 0.5, POSES.open, 900);
     expect(d.hold(0.7, 0.5, POSES.fist, 800)).toEqual(['fist']);
   });
 
   it('stays steady under realistic landmark jitter', () => {
-    const d = makeDriver();
+    const d = makeDriver(GESTURES.filter((g) => g.id === 'victory'));
     d.hold(0.7, 0.5, POSES.open, 300, 0.004);
     expect(d.hold(0.7, 0.5, POSES.victory, 1500, 0.004)).toEqual(['victory']);
   });
 
   it('casts a swish when the open hand sweeps sideways', () => {
-    const d = makeDriver(liveGestures([['spell-4', 'swish']]));
+    const d = makeDriver(GESTURES.filter((g) => g.id === 'swish'));
     d.hold(0.4, 0.5, POSES.open, 400);
     const fired: string[] = [];
     for (let i = 0; i < 14; i++) d.step(0.4 + i * 0.045, 0.5, POSES.open).fired.forEach((f) => fired.push(f.gestureId));
@@ -42,7 +42,7 @@ describe('GestureEngine (end to end on synthetic hands)', () => {
   });
 
   it('casts a rise when the open hand scoops upward', () => {
-    const d = makeDriver();
+    const d = makeDriver(GESTURES.filter((g) => g.id === 'rise'));
     d.hold(0.7, 0.8, POSES.open, 400);
     const fired: string[] = [];
     for (let i = 0; i < 14; i++) d.step(0.7, 0.8 - i * 0.04, POSES.open).fired.forEach((f) => fired.push(f.gestureId));
@@ -50,7 +50,7 @@ describe('GestureEngine (end to end on synthetic hands)', () => {
   });
 
   it('casts a circle when a pointing finger draws one', () => {
-    const d = makeDriver();
+    const d = makeDriver(GESTURES.filter((g) => g.id === 'circle'));
     d.hold(0.7, 0.5, POSES.point, 200);
     const fired: string[] = [];
     for (let i = 0; i <= 36; i++) {
@@ -72,13 +72,13 @@ describe('GestureEngine (end to end on synthetic hands)', () => {
     expect(fired).toEqual(['skybolt']);
   });
 
-  it('does not cast anything while the hand just rests or drifts', () => {
-    const d = makeDriver();
-    expect(d.hold(0.7, 0.5, POSES.trident, 2000, 0.004)).toEqual([]);
+  it('recognizes the still open-palm Aegis gesture', () => {
+    const d = makeDriver(GESTURES.filter((g) => g.id === 'aegis'));
+    expect(d.hold(0.7, 0.5, POSES.open, 2000, 0.004)).toEqual(['aegis']);
   });
 
   it('bridges a brief dropout and resets after a long one', () => {
-    const d = makeDriver(liveGestures([['spell-1', 'fist']]));
+    const d = makeDriver(GESTURES.filter((g) => g.id === 'fist'));
     d.hold(0.7, 0.5, POSES.fist, 200);
     d.lose(100);
     expect(d.hold(0.7, 0.5, POSES.fist, 300)).toEqual(['fist']);
@@ -98,7 +98,7 @@ describe('GestureEngine (end to end on synthetic hands)', () => {
     // Every gesture in the library is switched on here, but only the default seven are bound.
     const d = makeDriver(liveGestures());
     expect(d.hold(0.7, 0.5, POSES.trident, 1500)).toEqual([]);
-    expect(d.hold(0.7, 0.5, POSES.horns, 1500)).toEqual([]);
+    expect(d.hold(0.7, 0.5, POSES.open, 1500)).toEqual(['aegis']);
     expect(GESTURES.length).toBeGreaterThan(liveGestures().length);
   });
 

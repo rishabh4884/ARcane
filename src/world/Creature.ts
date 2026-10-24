@@ -61,23 +61,34 @@ export class Creature {
     if(pose==='frozen'&&this.pose==='frozen')return;
     if(pose==='frozen')this.freezeTime=time;
     this.pose=pose;if(pose==='frozen')time=this.freezeTime;
-    const s=SIZES[this.kind],walking=pose==='walk',phase=time*(this.kind==='goblin'?3.5:this.kind==='hollow'?1.7:2.1);
+    const s=SIZES[this.kind],walking=pose==='walk';
+    const profile=this.kind==='goblin'
+      ? { cadence:5.2,bounce:.055,crouch:.075,lunge:.28,windup:.075,strike:.09,armWindup:.95,armStrike:1.05,headWindup:.07,headStrike:.03 }
+      : this.kind==='root'
+        ? { cadence:1.15,bounce:.028,crouch:.035,lunge:.10,windup:.11,strike:.055,armWindup:.66,armStrike:.82,headWindup:.025,headStrike:.015 }
+        : this.kind==='hollow'
+          ? { cadence:1.55,bounce:.038,crouch:.03,lunge:.18,windup:.09,strike:.13,armWindup:.42,armStrike:.58,headWindup:.14,headStrike:.18 }
+          : { cadence:1.9,bounce:.07,crouch:.02,lunge:.045,windup:.04,strike:.025,armWindup:.72,armStrike:.34,headWindup:.035,headStrike:.02 };
+    const phase=time*profile.cadence;
     const gait=walking?Math.sin(phase):0,windup=pose==='windup'?Math.sin(progress*Math.PI/2):0;
     const strike=pose==='strike'?Math.sin(progress*Math.PI):0,dead=pose==='dead'?THREE.MathUtils.smoothstep(progress,0,1):0;
     const idle=reducedMotion?0:Math.sin(time*1.3)*0.014;
     const blend=1-Math.exp(-dt*14);
     const turn=(o:THREE.Object3D,value:number)=>{o.rotation.z=THREE.MathUtils.lerp(o.rotation.z,value,blend);};
-    this.body.position.y=(this.kind==='wraith'?0.16+(reducedMotion?0:Math.sin(time*1.5)*0.07):Math.abs(gait)*0.018)+idle-dead*s.height*0.12;
-    this.body.position.x=-windup*0.045+strike*0.12+recoil*0.12;
-    this.body.rotation.x=windup*-0.03+strike*0.04;
-    turn(this.body,gait*0.018-windup*0.045+strike*0.075+dead*0.65+recoil*0.13);
-    turn(this.head,(reducedMotion?0:Math.sin(time*0.5)*0.018)-windup*0.04);
+    this.body.position.y=(this.kind==='wraith'?0.16+(reducedMotion?0:Math.sin(time*1.5)*profile.bounce):Math.abs(gait)*profile.bounce)+idle-dead*s.height*0.12;
+    this.body.position.x=-windup*profile.crouch+strike*profile.lunge+recoil*0.12;
+    this.body.rotation.x=windup*-profile.windup+strike*profile.strike;
+    turn(this.body,gait*(this.kind==='goblin' ? .028 : .018)-windup*profile.windup+strike*profile.strike+dead*.65+recoil*.13);
+    turn(this.head,(reducedMotion?0:Math.sin(time*(this.kind==='hollow' ? .7 : .5))*.018)-windup*profile.headWindup+strike*profile.headStrike);
     for(let i=0;i<2;i++){
       const side=i===0?-1:1;
-      turn(this.arms[i],side*(0.05+windup*0.85-strike*0.50)+gait*side*0.08);
-      this.arms[i].position.y=s.leg+s.body*0.70+(walking?Math.sin(phase+side)*0.015:0);
-      turn(this.legs[i],gait*side*0.055);
-      this.legs[i].position.y=s.leg+0.09+(walking?Math.max(0,gait*side)*0.045:0);
+      const armWindup=this.kind==='wraith'&&i===1?profile.armWindup*1.28:profile.armWindup;
+      const armStrike=this.kind==='root'?profile.armStrike*(i===0?1:-1):profile.armStrike;
+      const armGait=this.kind==='wraith'?Math.sin(phase+side)*.035:gait*side*(this.kind==='goblin' ? .13 : .08);
+      turn(this.arms[i],side*(.05+windup*armWindup-strike*armStrike)+armGait);
+      this.arms[i].position.y=s.leg+s.body*.70+(walking?Math.sin(phase+side)*profile.bounce*.55:0);
+      turn(this.legs[i],gait*side*(this.kind==='root' ? .035 : this.kind==='goblin' ? .075 : .055));
+      this.legs[i].position.y=s.leg+.09+(walking?Math.max(0,gait*side)*profile.bounce*.8:0);
     }
     turn(this.lantern,reducedMotion?0:Math.sin(time*1.3)*0.12);
     this.group.scale.set(1-dead*0.12,1-dead*0.78,1);this.group.visible=dead<0.99;

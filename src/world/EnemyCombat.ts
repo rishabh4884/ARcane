@@ -103,9 +103,9 @@ export class EnemyCombat {
   get frozen(): boolean { return this.frostAge !== null && this.frostLevel > 0.95; }
 
   /** Approximate broad-phase targeting; caller should choose the nearest hit. */
-  intersectRay(ray: THREE.Ray, point: THREE.Vector3): number | null {
+  intersectRay(ray: THREE.Ray, point: THREE.Vector3, padding = 0): number | null {
     this.root.updateWorldMatrix(true, true);
-    const hit = ray.intersectBox(new THREE.Box3().setFromObject(this.root), point);
+    const hit = ray.intersectBox(new THREE.Box3().setFromObject(this.root).expandByScalar(padding), point);
     return hit ? hit.distanceTo(ray.origin) : null;
   }
 

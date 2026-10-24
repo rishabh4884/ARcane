@@ -9,7 +9,7 @@ import { makeLabelTexture } from './textures.ts';
 import { ForestEnvironment } from './ForestEnvironment.ts';
 import { FrameBudget } from './FrameBudget.ts';
 import { CasterView, worldInputBlocked } from './CasterView.ts';
-import { SPELL_RANGE, chooseRayTarget, screenPointAtDepth, terrainHeight } from './spatial.ts';
+import { aimAssistRadius, SPELL_RANGE, chooseRayTarget, screenPointAtDepth, terrainHeight } from './spatial.ts';
 
 interface FloatingLabel {
   sprite: THREE.Sprite;
@@ -285,7 +285,9 @@ export class World {
   private selectSpellTarget(origin: THREE.Vector3): { point: THREE.Vector3; enemy: EnemyCombat | null } {
     const ray = new THREE.Ray(this.camera.position.clone(), origin.clone().sub(this.camera.position).normalize());
     return chooseRayTarget(ray, SPELL_RANGE, this.environment.intersect(ray, SPELL_RANGE), [...this.enemies, ...this.encounter.reactions()],
-      (enemy, aim, point) => this.encounter.hasEnemy(enemy) ? this.encounter.intersectEnemy(enemy, aim, point) : enemy.intersectRay(aim, point));
+      (enemy, aim, point) => this.encounter.hasEnemy(enemy)
+        ? this.encounter.intersectEnemy(enemy, aim, point)
+        : enemy.intersectRay(aim, point, aimAssistRadius(enemy.root.getWorldPosition(this.scratch).distanceTo(aim.origin))));
   }
 
   private cursorToWorld(c: { x: number; y: number }, out: THREE.Vector3): THREE.Vector3 {

@@ -10,6 +10,7 @@ import { HandTracker, type TrackerStats } from './tracking/HandTracker.ts';
 import type { HandSide } from './tracking/types.ts';
 import { DebugOverlay } from './ui/DebugOverlay.ts';
 import { qs } from './ui/dom.ts';
+import { describeError } from './ui/errors.ts';
 import { Hud } from './ui/Hud.ts';
 import { Onboarding } from './ui/Onboarding.ts';
 import { SettingsPanel } from './ui/SettingsPanel.ts';

@@ -3,6 +3,13 @@ import * as THREE from 'three';
 /** World units are metres. Y is up; all navigation takes place in X/Z. */
 export const WORLD_RADIUS = 76;
 export const SPELL_RANGE = 55;
+/**
+ * Hand tracking is naturally a little less precise than a mouse.  This keeps aimed
+ * spells forgiving at a distance without turning a nearby enemy into auto-aim.
+ */
+export function aimAssistRadius(distance: number): number {
+  return THREE.MathUtils.clamp(distance * Math.tan(THREE.MathUtils.degToRad(4.25)), 0.38, 1.6);
+}
 export const EYE_HEIGHT = 1.85;
 export const SPAWN = { x: 0, z: 17 };
 export const GUARDIAN = { x: 0, z: -12 };
