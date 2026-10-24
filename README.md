@@ -116,6 +116,10 @@ Rename a spell, recolour it, give it another effect, or point it at a different 
 | `npm run format` | Format the code with Prettier |
 | `npm run setup:assets` | (Re)fetch the offline hand-tracking files |
 
+## Deploy to Vercel
+
+Import this repository with the project root set to `.` and use `main` for production. The root-level [`vercel.json`](vercel.json) configures the Vite build and static output; no environment variables are required. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the MediaPipe asset and HTTPS camera notes.
+
 ## Roadmap
 
 ARcane is in early access. The hand-reading engine is the foundation; the worlds and spells grow on top of it.

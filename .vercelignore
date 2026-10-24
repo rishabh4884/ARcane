@@ -1,0 +1,3 @@
+# Local Blender source and autosave backups are not needed for the web build.
+*.blend
+*.blend1
