@@ -178,9 +178,16 @@ export class World {
     const origin = this.castOrigin(from).clone();
     const { point: target, enemy } = this.selectSpellTarget(origin);
     const effectTarget = spell.effect === 'summon' ? origin : target;
+    const targetNdc = effectTarget.clone().project(this.camera);
+    const cameraTarget = effectTarget.clone().applyMatrix4(this.camera.matrixWorldInverse);
+    const lightningStart = new THREE.Vector3();
+    if (spell.effect === 'lightning' && -cameraTarget.z > 0) {
+      screenPointAtDepth(this.camera, THREE.MathUtils.clamp((targetNdc.x + 1) * 0.5, 0.01, 0.99), 0.015, -cameraTarget.z, lightningStart);
+    }
     const animation = createSpellAnimation(spell.effect, origin, effectTarget, color, detail, {
       groundY: terrainHeight(effectTarget.x, effectTarget.z),
       cameraQuaternion: this.camera.quaternion,
+      lightningStart: spell.effect === 'lightning' ? lightningStart : undefined,
     });
     if (spell.effect === 'summon') this.encounter.summon(origin, target, enemy);
     if (enemy && spell.effect !== 'summon') animation.setImpactCallback(this.encounter.hasEnemy(enemy)

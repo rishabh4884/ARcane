@@ -22,11 +22,11 @@ export function createSpellAnimation(
   target: THREE.Vector3,
   color: THREE.Color,
   detail?: string,
-  context?: { groundY: number; cameraQuaternion: THREE.Quaternion },
+  context?: { groundY: number; cameraQuaternion: THREE.Quaternion; lightningStart?: THREE.Vector3 },
 ): SpellAnimation {
   switch (kind) {
     case 'arrow': return accent(arrow(origin,target,color,detail),target,color,56,.88,4.2,5.5);
-    case 'lightning': return accent(lightning(target,color),target,color,88,.92,7.0,8.0);
+    case 'lightning': return accent(lightning(target,color,context?.lightningStart,context?.cameraQuaternion),target,color,88,.92,7.0,8.0);
     case 'frost': return accent(frost(target,color,context?.groundY),target,color,66,1.05,3.2,5.5);
     case 'wind': return accent(gale(origin,target,color,detail),target,color,58,.95,4.2,6.5);
     case 'healing': {
@@ -160,14 +160,19 @@ function arrow(origin: THREE.Vector3, target: THREE.Vector3, color: THREE.Color,
   }, duration * 0.79);
 }
 
-function lightning(target: THREE.Vector3, color: THREE.Color): SpellAnimation {
+function lightning(target: THREE.Vector3, color: THREE.Color, screenTop?: THREE.Vector3, cameraQuaternion?: THREE.Quaternion): SpellAnimation {
   const group = new THREE.Group();
   group.position.copy(target);
+  if (cameraQuaternion) group.quaternion.copy(cameraQuaternion);
   const core = color.clone().lerp(new THREE.Color('#ffffff'), 0.75);
-  const points = [
-    [0, 5.1, 0], [0.28, 4.55, 0], [-0.14, 4.08, 0], [0.38, 3.5, 0],
-    [0.08, 2.94, 0], [0.3, 2.38, 0], [-0.22, 1.74, 0], [0.14, 1.14, 0], [-0.06, 0.56, 0], [0, 0, 0],
-  ].map(([x, y, z]) => new THREE.Vector3(x!, y!, z!));
+  const start = screenTop
+    ? screenTop.clone().sub(target).applyQuaternion(group.quaternion.clone().invert())
+    : new THREE.Vector3(0, 5.1, 0);
+  const points = Array.from({ length: 10 }, (_, index) => {
+    const progress = index / 9;
+    const jitter = index === 0 || index === 9 ? 0 : (index % 2 ? 0.28 : -0.22);
+    return new THREE.Vector3(start.x * (1 - progress) + jitter, start.y * (1 - progress), start.z * (1 - progress));
+  });
   const main = addLine(group, points, lineMaterial(core, 1));
   const mainSegments = addBoltSegments(group, points, 0.052, core);
   const branchPoints = [
