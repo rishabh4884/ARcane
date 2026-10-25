@@ -181,6 +181,7 @@ export class World {
     const animation = createSpellAnimation(spell.effect, origin, effectTarget, color, detail, {
       groundY: terrainHeight(effectTarget.x, effectTarget.z),
       cameraQuaternion: this.camera.quaternion,
+      camera: this.camera,
     });
     if (spell.effect === 'summon') this.encounter.summon(origin, target, enemy);
     if (enemy && spell.effect !== 'summon') animation.setImpactCallback(this.encounter.hasEnemy(enemy)

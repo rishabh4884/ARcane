@@ -39,7 +39,7 @@ export class EnemyCombat {
   private readonly localBounds = new THREE.Box3();
   private readonly materials: MaterialState[] = [];
   private readonly crystalGroup = new THREE.Group();
-  private readonly crystalGeometry: THREE.ConeGeometry;
+  private readonly crystalGeometry: THREE.BufferGeometry;
   private readonly crystalMaterial: THREE.MeshStandardMaterial;
   private readonly crystals: Crystal[] = [];
   private readonly iceColor = ICE.clone();
@@ -72,8 +72,9 @@ export class EnemyCombat {
     }
 
     this.installMaterials();
-    this.crystalGeometry = new THREE.ConeGeometry(0.5, 1, 5);
-    this.crystalGeometry.translate(0, 0.5, 0);
+    const thorn: THREE.Vector2[] = [];
+    for (let i = 0; i <= 12; i++) { const u = i / 12; thorn.push(new THREE.Vector2(Math.max(0.002, 0.5 * (1 - Math.pow(u, 1.45)) * (0.6 + 0.4 * Math.sin(Math.min(1, u * 1.9) * Math.PI * 0.5))), u)); }
+    this.crystalGeometry = new THREE.LatheGeometry(thorn, 16);
     this.crystalMaterial = new THREE.MeshStandardMaterial({
       color: ICE,
       emissive: '#63c8ff',
