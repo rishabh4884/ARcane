@@ -26,34 +26,33 @@
       <section class="onboarding-shell" role="dialog" aria-modal="true" aria-labelledby="onboarding-title" tabindex="-1">
         <div class="onboarding-topline">
           <span class="onboarding-brand"><span aria-hidden="true">✦</span> ARcane</span>
-          <span id="onboarding-step" class="onboarding-step">FIRST LIGHT <i>01 / 02</i></span>
+          <span id="onboarding-step" class="onboarding-step" hidden>FIRST LIGHT <i>01 / 02</i></span>
         </div>
 
         <section id="onboarding-welcome" class="welcome-step" aria-labelledby="onboarding-title">
           <div class="welcome-copy">
-            <p class="eyebrow">A field guide for new casters</p>
-            <h1 id="onboarding-title">The magic<br />starts with you.</h1>
-            <p class="welcome-lead">Your hands are the wand. Let’s get you ready to cast.</p>
+            <h1 id="onboarding-title">Arcane</h1>
             <div class="welcome-actions">
-              <button id="onboarding-begin" class="button-primary" type="button">Enable camera &amp; continue</button>
-              <button id="onboarding-review" class="button-secondary" type="button">See the spell guide first</button>
-              <button id="onboarding-explore" class="button-secondary" type="button">Preview the clearing · no camera</button>
+              <button id="onboarding-begin" class="button-primary" type="button">Begin casting</button>
             </div>
-            <p id="onboarding-message" class="onboarding-message" role="status" aria-live="polite">
-              Your browser will ask for camera access.
-            </p>
+            <p id="onboarding-message" class="onboarding-message" role="status" aria-live="polite"></p>
           </div>
 
-          <aside class="setup-card" aria-label="Camera setup and privacy">
-            <span class="setup-mark" aria-hidden="true">◉</span>
-            <p class="eyebrow">Make room for magic</p>
-            <ul class="setup-list">
-              <li><span>01</span> Sit about an arm’s length from the screen.</li>
-              <li><span>02</span> Face a light source; avoid a bright window behind you.</li>
-              <li><span>03</span> Keep your palm and fingertips in view.</li>
-            </ul>
-            <p class="privacy-note">Your camera is processed in this browser. Video is never shown, saved, or sent anywhere.</p>
-          </aside>
+        </section>
+
+        <section id="onboarding-story" class="story-step" aria-labelledby="story-quote" hidden>
+          <div class="story-copy">
+            <p class="story-quote" id="story-quote">“Long before the world forgot its magic, the forest learned to keep it.”</p>
+            <div class="story-body">
+              <p>In the forgotten reaches of Hushwood, something ancient stirs beneath the trees.</p>
+              <p>Once, magic flowed freely through this land. Then came the silence and the old paths vanished into mist. Now, strange lights flicker between the branches, and forgotten forces begin to awaken.</p>
+              <p>You have found your way here for a reason.</p>
+              <p>The forest does not answer words. It answers to intent and the will to shape what lies unseen.</p>
+              <p>Raise your hands. The woods are watching.</p>
+            </div>
+            <p class="story-end">Your story begins now</p>
+            <button id="onboarding-story-enter" class="button-primary" type="button">Enter Hushwood</button>
+          </div>
         </section>
 
         <section id="onboarding-guide" class="guide-step" aria-labelledby="guide-title" hidden>
@@ -63,13 +62,11 @@
               <h2 id="guide-title">Seven spells. One pair of hands.</h2>
               <p class="guide-lead">Each spell has its own move. Your live bindings are shown below.</p>
             </div>
-            <span class="guide-key-hint"><kbd>1</kbd>–<kbd>7</kbd> cast in the arena</span>
           </header>
           <div id="spell-guide-grid" class="spell-guide-grid" aria-label="Spell guide" tabindex="0"></div>
           <aside class="casting-primer" aria-label="How casting works">
-            <strong>CASTING 101</strong>
-            <p>Follow the hand marker to aim. Hold hand signs until their charge fills; sweeps and circles cast as soon as the motion is recognized. Arcane Bow is the exception: point, pinch with your other hand, pull, then release.</p>
-            <span>Want a different move? Rebind any spell in the <b>Spellbook</b>.</span>
+            <strong>CASTING</strong>
+            <p>Follow the hand marker to aim. Hold hand signs until their charge fills; sweeps and circles cast as soon as the motion is recognized. For Arcane Bow, point, pinch with your other hand, pull, then release.</p>
           </aside>
           <p class="combat-note">
             <strong>Hold your ground</strong> Your view stays fixed, leaving both hands free to cast. Eight spirits approach after “Awaken the wood”. Watch their health and attack wind-up; freeze them to interrupt, or use Mend and Aegis to survive. Spells are gesture-controlled—no movement or number-key casting.
@@ -78,7 +75,7 @@
           <footer class="guide-actions">
             <button id="guide-back" class="button-secondary" type="button">Back to setup</button>
             <div class="guide-action-end">
-              <button id="guide-skip" class="button-secondary" type="button">Skip guide</button>
+              <button id="guide-skip" class="button-secondary" type="button">Close guide</button>
               <button id="guide-enter" class="button-primary" type="button">Enter the arena</button>
             </div>
           </footer>

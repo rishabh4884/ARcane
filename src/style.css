@@ -85,6 +85,65 @@ input {
   overflow: hidden;
 }
 .onboarding-shell[aria-busy='true'] { cursor: progress; }
+.onboarding-shell:not(.guide-open):not(.story-open) {
+  display: grid;
+  width: min(42rem, 100%);
+  min-height: min(78vh, 38rem);
+  place-items: center;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.onboarding-shell:not(.guide-open):not(.story-open) .onboarding-topline { display: none; }
+.onboarding-shell:not(.guide-open):not(.story-open) .welcome-step {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 1fr;
+  justify-items: center;
+  padding: 2rem 0;
+  text-align: center;
+}
+.onboarding-shell:not(.guide-open):not(.story-open) .welcome-copy { display: grid; justify-items: center; }
+.onboarding-shell:not(.guide-open):not(.story-open) h1 {
+  font-size: clamp(4.5rem, 12vw, 8rem);
+  font-style: normal;
+  letter-spacing: -0.055em;
+}
+.onboarding-shell:not(.guide-open):not(.story-open) .welcome-actions { margin-top: 2rem; }
+.onboarding-shell:not(.guide-open):not(.story-open) #onboarding-begin { min-width: 12rem; min-height: 3.3rem; }
+.onboarding-shell:not(.guide-open):not(.story-open) .onboarding-message:empty { display: none; }
+.onboarding-shell.story-open {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  place-items: center;
+  width: min(62rem, 100%);
+  max-height: calc(100vh - 2rem);
+  max-height: calc(100dvh - 2rem);
+  overflow-y: auto;
+  scrollbar-width: none;
+  background:
+    radial-gradient(ellipse at 50% 0%, rgba(180, 191, 149, 0.13), transparent 48%),
+    linear-gradient(155deg, rgba(24, 29, 25, 0.98), rgba(8, 11, 10, 0.99) 72%);
+}
+.intro.story-scene { place-items: center; overflow: hidden; padding: 1rem; }
+.story-open::-webkit-scrollbar,
+.story-step::-webkit-scrollbar { display: none; }
+.story-step { width: min(46rem, 100%); max-height: 100%; margin: auto; overflow-y: auto; padding: clamp(1rem, 4vh, 2.8rem) 0; scrollbar-width: none; }
+.story-copy { animation: story-arrive 850ms cubic-bezier(.16, 1, .3, 1) both; }
+.story-copy, .story-body { text-align: center; }
+.story-quote {
+  max-width: 19ch;
+  margin: 0 auto clamp(1.4rem, 4vh, 2.5rem);
+  color: #eef0dd;
+  font: italic 500 clamp(2rem, 5vw, 3.7rem)/1.08 var(--serif);
+  letter-spacing: -0.025em;
+}
+.story-body { max-width: 56ch; margin-inline: auto; color: #d0d8c9; font: 1rem/1.8 var(--serif); }
+.story-body p { margin: 0 0 0.95rem; }
+.story-end { margin: 1.7rem 0 1rem; color: #eff1df; font: italic 1.4rem/1.3 var(--serif); }
+.story-step .button-primary { display: block; margin-inline: auto; }
+@keyframes story-arrive { from { opacity: 0; transform: translateY(0.8rem); } to { opacity: 1; transform: translateY(0); } }
+.story-open .onboarding-topline { margin-bottom: 0; }
 .onboarding-topline {
   display: flex;
   align-items: center;
@@ -207,7 +266,7 @@ kbd {
   display: grid;
   min-height: 0;
   flex: 1 1 auto;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   align-content: start;
   gap: 0.65rem;
   overflow: auto;
@@ -216,20 +275,30 @@ kbd {
   scrollbar-width: thin;
 }
 .spell-guide-card {
+  position: relative;
+  display: flex;
+  min-height: 13rem;
+  flex-direction: column;
   min-width: 0;
-  padding: 0.9rem;
-  border: 1px solid color-mix(in srgb, var(--spell) 27%, transparent);
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--spell) 4%, rgba(13, 15, 14, 0.74));
+  overflow: hidden;
+  padding: 1rem;
+  border: 1px solid color-mix(in srgb, var(--spell) 35%, rgba(222,230,210,.12));
+  border-radius: 14px;
+  background:
+    radial-gradient(ellipse at 0% 0%, color-mix(in srgb, var(--spell) 13%, transparent), transparent 58%),
+    linear-gradient(150deg, rgba(27,31,28,.96), rgba(11,14,13,.92));
+  box-shadow: inset 0 1px rgba(255,255,255,.035), 0 9px 24px rgba(0,0,0,.16);
+  transition: transform 180ms ease, border-color 180ms ease, background-color 180ms ease;
 }
-.spell-guide-heading { display: flex; align-items: center; gap: 0.6rem; }
+.spell-guide-card:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--spell) 58%, transparent); }
+.spell-guide-heading { display: flex; align-items: center; gap: 0.7rem; }
 .guide-spell-icon { flex: none; width: 2rem; height: 2rem; color: var(--spell); }
 .spell-guide-name { min-width: 0; flex: 1; }
 .spell-guide-name h3 { overflow: hidden; margin: 0; color: var(--spell); font: italic 600 1rem/1.2 var(--serif); text-overflow: ellipsis; }
-.spell-role { color: #c6d2bd; font-size: 0.59rem; font-weight: 700; letter-spacing: 0.11em; }
+.spell-role { display: inline-block; margin-top: .18rem; color: color-mix(in srgb, var(--spell) 72%, #e7ecd9); font-size: 0.59rem; font-weight: 750; letter-spacing: 0.12em; }
 .spell-key { flex: none; min-width: 1.5rem; min-height: 1.5rem; }
-.spell-description { min-height: 0; margin: 0.75rem 0 0.85rem; color: var(--vellum); font-size: 0.79rem; line-height: 1.45; }
-.spell-gesture { display: grid; gap: 0.26rem; padding-top: 0.6rem; border-top: 1px solid color-mix(in srgb, var(--spell) 23%, transparent); }
+.spell-description { min-height: 0; margin: 0.9rem 0 1rem; color: #e1e5d6; font-size: 0.82rem; line-height: 1.55; }
+.spell-gesture { display: grid; gap: 0.32rem; margin-top: auto; padding-top: 0.72rem; border-top: 1px solid color-mix(in srgb, var(--spell) 28%, transparent); }
 .spell-gesture-label { color: var(--spell); font-size: 0.65rem; font-weight: 750; letter-spacing: 0.055em; text-transform: uppercase; }
 .spell-gesture-hint { color: var(--mist); font-size: 0.71rem; line-height: 1.42; }
 .casting-primer {
@@ -280,12 +349,13 @@ kbd {
   cursor: pointer;
 }
 .guide-tool:hover { border-color: #dfe8d3; }
+.tool { display: none !important; }
 .is-intro .guide-tool { opacity: 0; pointer-events: none; }
 .guide-tool,
 .tool { transition: opacity 0.25s, border-color 0.15s; }
 @media (max-width: 760px) {
   .welcome-step { grid-template-columns: minmax(0, 1fr) minmax(14rem, 0.85fr); gap: 1.4rem; padding-inline: 0; }
-  .spell-guide-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+   .spell-guide-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .spell-description { min-height: 0; }
 }
 @media (max-width: 680px) {
@@ -294,6 +364,11 @@ kbd {
 @media (max-width: 560px) {
   .intro { place-items: start center; padding: 0.55rem; }
   .onboarding-shell { max-height: none; padding: 1rem; border-radius: 16px; }
+  .onboarding-shell:not(.guide-open):not(.story-open) { min-height: calc(100dvh - 1.1rem); padding: 1rem; }
+  .onboarding-shell.story-open { width: 100%; max-height: calc(100dvh - 2rem); padding: 1.15rem; }
+  .story-step { padding: 1rem 0; }
+  .story-quote { font-size: clamp(1.85rem, 8vw, 2.7rem); }
+  .story-body { font-size: 0.94rem; line-height: 1.7; }
   .onboarding-shell.guide-open { width: 100%; height: auto; max-height: calc(100vh - 1.1rem); max-height: calc(100dvh - 1.1rem); overflow: auto; }
   .guide-step:not([hidden]) { display: block; min-height: 0; }
   .onboarding-topline { margin-bottom: 1.25rem; }
@@ -309,8 +384,8 @@ kbd {
   .privacy-note { margin-top: 0.9rem; padding-top: 0.75rem; }
   .guide-header { align-items: flex-start; flex-direction: column; gap: 0.6rem; }
   .guide-key-hint { padding: 0; }
-  .spell-guide-grid { grid-template-columns: 1fr; gap: 0.45rem; overflow: visible; }
-  .spell-guide-card { padding: 0.7rem; }
+  .spell-guide-grid { grid-template-columns: 1fr; gap: 0.65rem; overflow: visible; }
+  .spell-guide-card { min-height: 0; padding: 0.85rem; }
   .guide-spell-icon { width: 1.7rem; height: 1.7rem; }
   .spell-guide-heading { gap: 0.38rem; }
   .spell-guide-name h3 { font-size: 0.9rem; }
@@ -701,4 +776,3 @@ kbd {
   .exploration-pad [data-direction='KeyS'] { grid-row: 2; grid-column: 2; }
   .exploration-pad [data-direction='KeyD'] { grid-row: 2; grid-column: 3; }
 }
-

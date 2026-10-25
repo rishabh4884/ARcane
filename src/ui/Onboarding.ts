@@ -43,12 +43,12 @@ export class Onboarding {
   private readonly dialog = qs<HTMLElement>('#intro');
   private readonly shell = qs<HTMLElement>('.onboarding-shell');
   private readonly welcome = qs<HTMLElement>('#onboarding-welcome');
+  private readonly story = qs<HTMLElement>('#onboarding-story');
   private readonly guide = qs<HTMLElement>('#onboarding-guide');
   private readonly stepLabel = qs<HTMLElement>('#onboarding-step');
   private readonly title = qs<HTMLElement>('#onboarding-title');
-  private readonly lead = qs<HTMLElement>('.welcome-lead');
   private readonly beginButton = qs<HTMLButtonElement>('#onboarding-begin');
-  private readonly reviewButton = qs<HTMLButtonElement>('#onboarding-review');
+  private readonly storyEnterButton = qs<HTMLButtonElement>('#onboarding-story-enter');
   private readonly welcomeMessage = qs<HTMLElement>('#onboarding-message');
   private readonly guideMessage = qs<HTMLElement>('#guide-message');
   private readonly guideGrid = qs<HTMLElement>('#spell-guide-grid');
@@ -62,7 +62,6 @@ export class Onboarding {
   private hasSeenGuide = loadJSON<boolean>(SEEN_KEY) === true;
   private cameraReady = false;
   private canReturnToWelcome = false;
-  private previewMode = false;
 
   constructor(root: HTMLElement, book: SpellBook, startCamera: () => Promise<void>) {
     this.hud = root;
@@ -84,12 +83,9 @@ export class Onboarding {
 
     this.beginButton.addEventListener('click', () => void this.beginFromWelcome());
     this.enterButton.addEventListener('click', () => void this.enterGame());
+    this.storyEnterButton.addEventListener('click', () => void this.enterGame());
     this.backButton.addEventListener('click', () => this.showWelcome());
-    qs<HTMLButtonElement>('#onboarding-explore').addEventListener('click', () => {
-      this.previewMode = true;
-      this.close();
-    });
-    this.skipButton.onclick = () => { if (this.cameraReady || this.previewMode) this.close(); };
+    this.skipButton.onclick = () => { if (this.cameraReady) this.close(); };
     this.book.onChange(() => this.renderSpells());
     document.addEventListener('keydown', (event) => this.onKeyDown(event));
 
@@ -100,7 +96,7 @@ export class Onboarding {
 
   private async beginFromWelcome(): Promise<void> {
     if (this.cameraReady) {
-      this.showGuide(true);
+      this.showStory();
       return;
     }
     this.setBusy(this.beginButton, true, 'Starting camera…', this.welcomeMessage);
@@ -110,8 +106,7 @@ export class Onboarding {
       this.cameraReady = true;
       this.welcomeMessage.textContent = '';
       this.welcomeMessage.dataset.state = '';
-      if (this.hasSeenGuide) this.close();
-      else this.showGuide(true);
+      this.showStory();
     } catch (error) {
       this.showError(this.welcomeMessage, error);
       this.beginButton.textContent = 'Try camera again';
@@ -152,30 +147,37 @@ export class Onboarding {
   private showWelcome(): void {
     this.dialog.hidden = false;
     this.shell.classList.remove('guide-open');
+    this.dialog.classList.remove('story-scene');
     this.hud.inert = true;
     this.welcome.hidden = false;
+    this.story.hidden = true;
     this.guide.hidden = true;
     this.canReturnToWelcome = false;
     document.body.classList.add('is-intro');
-    this.stepLabel.replaceChildren('FIRST LIGHT ', el('i', {}, '01 / 02'));
+    this.stepLabel.hidden = true;
+    this.shell.setAttribute('aria-labelledby', 'onboarding-title');
+    this.shell.classList.remove('story-open');
     this.renderWelcome();
-    this.welcomeMessage.textContent = this.cameraReady
-      ? 'Camera ready. You can review the guide or continue playing.'
-      : 'Your browser will ask for camera access.';
+    this.welcomeMessage.textContent = '';
     this.welcomeMessage.dataset.state = '';
     this.shell.focus();
   }
 
   private showGuide(returnToWelcome: boolean): void {
     this.dialog.hidden = false;
+    this.dialog.classList.remove('story-scene');
     this.shell.classList.add('guide-open');
     this.hud.inert = true;
     this.welcome.hidden = true;
+    this.story.hidden = true;
     this.guide.hidden = false;
     this.canReturnToWelcome = returnToWelcome;
     this.backButton.hidden = !returnToWelcome;
     document.body.classList.add('is-intro');
     this.stepLabel.replaceChildren('SPELLBOOK ', el('i', {}, '02 / 02'));
+    this.stepLabel.hidden = false;
+    this.shell.setAttribute('aria-labelledby', 'guide-title');
+    this.shell.classList.remove('story-open');
     this.guideMessage.textContent = '';
     this.guideMessage.dataset.state = '';
     const compact = window.matchMedia('(max-width: 560px)').matches;
@@ -185,37 +187,38 @@ export class Onboarding {
     this.enterButton.setAttribute('aria-label', this.cameraReady ? 'Enter the arena' : 'Enable camera and enter the arena');
     this.backButton.textContent = compact ? 'Back' : 'Back to setup';
     this.backButton.setAttribute('aria-label', 'Back to camera setup');
-    this.skipButton.hidden = !(this.cameraReady || this.previewMode);
-    this.skipButton.textContent = this.previewMode && !this.cameraReady ? 'Back to preview' : compact ? 'Skip' : 'Skip guide';
+    this.skipButton.hidden = !this.cameraReady;
+    this.skipButton.textContent = compact ? 'Skip' : 'Skip guide';
     this.skipButton.setAttribute('aria-label', 'Close guide and return to the world');
     this.renderSpells();
     this.shell.focus();
   }
 
+  private showStory(): void {
+    this.dialog.hidden = false;
+    this.dialog.classList.add('story-scene');
+    this.shell.classList.add('story-open');
+    this.hud.inert = true;
+    this.welcome.hidden = true;
+    this.guide.hidden = true;
+    this.story.hidden = false;
+    this.canReturnToWelcome = false;
+    this.stepLabel.hidden = true;
+    this.shell.setAttribute('aria-labelledby', 'story-quote');
+    document.body.classList.add('is-intro');
+    this.shell.focus();
+    this.storyEnterButton.focus();
+  }
+
   private renderWelcome(): void {
-    if (this.hasSeenGuide) {
-      this.title.replaceChildren('Welcome', document.createElement('br'), 'back, caster.');
-      this.lead.textContent = 'The field is waiting. Review your spells or jump straight in.';
-      this.beginButton.textContent = this.cameraReady ? 'Continue to spell guide' : 'Begin casting';
-      this.reviewButton.textContent = this.cameraReady ? 'Enter the arena' : 'Review the spell guide';
-      this.reviewButton.onclick = () => {
-        if (this.cameraReady) void this.enterGame();
-        else this.showGuide(true);
-      };
-      return;
-    }
-    this.title.replaceChildren('The magic', document.createElement('br'), 'starts with you.');
-    this.lead.textContent = 'Your hands are the wand. Let’s get you ready to cast.';
-    this.beginButton.textContent = this.cameraReady ? 'Continue to spell guide' : 'Enable camera & continue';
-    this.reviewButton.textContent = 'See the spell guide first';
-    this.reviewButton.onclick = () => this.showGuide(true);
+    this.title.textContent = 'Arcane';
+    this.beginButton.textContent = this.cameraReady ? 'Begin casting' : 'Begin casting';
   }
 
   private renderSpells(): void {
-    this.guideGrid.replaceChildren(...this.book.spells.map((spell, index) => {
+    this.guideGrid.replaceChildren(...this.book.spells.map((spell) => {
       const gesture = this.book.gestureFor(spell.id);
       const guide = SPELL_GUIDE[spell.effect];
-      const key = el('kbd', { class: 'spell-key', 'aria-label': `Keyboard shortcut ${index + 1}` }, String(index + 1));
       const icon = createSpellIcon(spell.id);
       icon.classList.add('guide-spell-icon');
       return el(
@@ -229,14 +232,13 @@ export class Onboarding {
             el('h3', {}, spell.name),
             el('span', { class: 'spell-role' }, guide.role),
           ),
-          key,
         ),
         el('p', { class: 'spell-description' }, guide.description),
         el(
           'div',
           { class: 'spell-gesture' },
           el('span', { class: 'spell-gesture-label' }, `CAST · ${gesture?.glyph ?? '✦'} ${gesture?.name ?? 'Unbound'}`),
-          el('span', { class: 'spell-gesture-hint' }, gesture?.hint ?? 'Choose a gesture in the Spellbook.'),
+          el('span', { class: 'spell-gesture-hint' }, gesture?.hint ?? 'No gesture is currently assigned.'),
         ),
       );
     }));
@@ -244,13 +246,10 @@ export class Onboarding {
 
   private close(): void {
     this.dialog.hidden = true;
+    this.dialog.classList.remove('story-scene');
     document.body.classList.remove('is-intro');
     this.hud.inert = false;
     document.body.dataset.worldMode = this.cameraReady ? 'hands' : 'explore';
-    if (this.previewMode && !this.cameraReady) {
-      const status = this.hud.querySelector<HTMLElement>('.status');
-      if (status) status.textContent = 'Preview · enable camera to cast';
-    }
     qs<HTMLCanvasElement>('#world canvas').focus({ preventScroll: true });
   }
 
@@ -269,8 +268,11 @@ export class Onboarding {
     if (this.dialog.hidden) return;
     if (event.key === 'Escape') {
       event.preventDefault();
-      if (this.cameraReady || this.previewMode) this.close();
-      else if (!this.guide.hidden) this.showWelcome();
+      if (!this.story.hidden || this.welcome.hidden && this.guide.hidden) return;
+      if (!this.guide.hidden) {
+        if (this.cameraReady) this.close();
+        else this.showWelcome();
+      }
       return;
     }
     if (event.key !== 'Tab') return;
