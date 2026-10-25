@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { Illustration, billboardMaterial } from './Illustration.ts';
 import { VolumetricFog } from './VolumetricFog.ts';
+import { LanternGrove } from './LanternGrove.ts';
+import { illuminateIllustration } from './LanternLighting.ts';
 import { GrassField } from './GrassField.ts';
 import { ArtResources } from './storybook.ts';
 import { forestLayout, intersectObstacle, intersectTerrain, pathX, seededRandom, terrainHeight, type Obstacle } from './spatial.ts';
@@ -21,6 +23,7 @@ export class ForestEnvironment {
   private readonly sky: THREE.Mesh;
   private readonly grass:GrassField;
   private readonly fog:VolumetricFog;
+  private readonly lantern:LanternGrove;
   private disposed = false;
 
   constructor(private readonly scene: THREE.Scene) {
@@ -28,13 +31,14 @@ export class ForestEnvironment {
     scene.background = new THREE.Color('#10171a');
     scene.fog = new THREE.FogExp2('#222b29', 0.023);
     scene.add(this.group);
-    const ambient = new THREE.HemisphereLight('#a9b9b2', '#25312e', 1.85);
-    const sun = new THREE.DirectionalLight('#e9c99b', 1.0); sun.position.set(-20,32,-35);
+    const ambient = new THREE.HemisphereLight('#789591', '#192824', 1.15);
+    const sun = new THREE.DirectionalLight('#97aebc', .38); sun.position.set(-20,32,-35);
+    this.lantern=new LanternGrove();this.group.add(this.lantern.group);
     this.group.add(ambient,sun);
     this.sky = this.makeSky();
     this.makeCarpet(); this.makeTrees(); this.makeRocks(); this.makeLandmarks(); this.makeAtmosphere();
-    this.fog=new VolumetricFog();this.group.add(this.fog.group);
-    this.grass=new GrassField(this.obstacles);this.group.add(this.grass.group);
+    this.fog=new VolumetricFog(this.lantern.lanterns);this.group.add(this.fog.group);
+    this.grass=new GrassField(this.obstacles,this.lantern.lanterns);this.group.add(this.grass.group);
   }
 
   private cutout(map: THREE.Texture, sites: Cutout['sites'], tint = '#ffffff', sway = 0.035): THREE.InstancedMesh {
@@ -56,6 +60,7 @@ export class ForestEnvironment {
       };
       material.customProgramCacheKey=()=>`rooted-illustration-${sway}`;
     }
+    illuminateIllustration(material,this.lantern.lanterns,map.name.startsWith('tree-')?.36:.43);
     const mesh = new THREE.InstancedMesh(geometry,material,sites.length);
     mesh.frustumCulled = false;
     // Scenery has a fixed world orientation. No camera-facing rotation or per-frame sorting.
@@ -96,6 +101,7 @@ export class ForestEnvironment {
     }
     geometry.setAttribute('color',new THREE.BufferAttribute(colors,3));geometry.computeVertexNormals();
     const ground=this.art.material(new THREE.MeshBasicMaterial({vertexColors:true,fog:true}));ground.toneMapped=false;
+    illuminateIllustration(ground,this.lantern.lanterns,.32);
     const field=new THREE.Mesh(geometry,ground);this.group.add(field);
   }
 
@@ -174,18 +180,12 @@ export class ForestEnvironment {
       fragmentShader:'varying float alpha;varying float fogDepth;void main(){float d=length(gl_PointCoord-.5)*2.;if(d>1.)discard;float fade=1.-smoothstep(36.,88.,fogDepth);gl_FragColor=vec4(.98,.84,.48,pow(1.-d,2.)*alpha*fade*.62);}'
     }));
     const points=new THREE.Points(geometry,material);points.frustumCulled=false;this.group.add(points);
-    const mistMap=this.illustration.texture('mist',256,128,ctx=>{
-      const g=ctx.createRadialGradient(128,64,0,128,64,128);g.addColorStop(0,'rgba(203,227,212,0.28)');g.addColorStop(1,'rgba(203,227,212,0)');ctx.fillStyle=g;ctx.scale(1,0.5);ctx.fillRect(0,0,256,256);
-    });
-    const mistMat=this.art.material(new THREE.MeshBasicMaterial({map:mistMap,color:'#728483',transparent:true,opacity:0.12,depthWrite:false,side:THREE.DoubleSide}));
-    const mistGeo=this.art.geometry(new THREE.PlaneGeometry(24,5));
-    for(let i=0;i<12;i++){const x=(this.random()-.5)*110,z=-13-this.random()*73;const mist=new THREE.Mesh(mistGeo,mistMat);mist.position.set(x,terrainHeight(x,z)+1.5,z);this.group.add(mist);}
   }
 
   intersect(ray:THREE.Ray,range:number):number|null {
     let nearest=intersectTerrain(ray,range);
     for(const obstacle of this.obstacles){const d=intersectObstacle(ray,obstacle,nearest??range);if(d!==null&&(nearest===null||d<nearest))nearest=d;}return nearest;
   }
-  update(dt:number,camera:THREE.Camera,reducedMotion:boolean):void {this.motion.value=reducedMotion?0:1;if(!reducedMotion)this.time.value+=dt;this.sky.position.copy(camera.position);this.grass.update(dt,camera,reducedMotion);this.fog.update(dt,camera,reducedMotion);}
-  dispose():void {if(this.disposed)return;this.disposed=true;this.fog.dispose();this.grass.dispose();this.scene.remove(this.group);this.art.dispose();this.illustration.dispose();}
+  update(dt:number,camera:THREE.Camera,reducedMotion:boolean):void {this.motion.value=reducedMotion?0:1;if(!reducedMotion)this.time.value+=dt;this.sky.position.copy(camera.position);this.lantern.update(dt,reducedMotion);this.grass.update(dt,camera,reducedMotion);this.fog.update(dt,camera,reducedMotion);}
+  dispose():void {if(this.disposed)return;this.disposed=true;this.lantern.dispose();this.fog.dispose();this.grass.dispose();this.scene.remove(this.group);this.art.dispose();this.illustration.dispose();}
 }

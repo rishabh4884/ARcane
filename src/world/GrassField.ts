@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { makeGrassTile, grassLod, GRASS_TILE, type GrassLod, type GrassSite } from './grass-layout.ts';
 import { seededRandom, terrainHeight, type Obstacle } from './spatial.ts';
+import { createLanternUniform, LANTERN_GLSL, type LanternUniform } from './LanternLighting.ts';
 
 /** Curved, tapered ribbons with a shallow ridge: actual blade silhouettes, never grass cards. */
 export function makeGrassClump(blades:number,segments:number):THREE.BufferGeometry {
@@ -38,11 +39,12 @@ export class GrassField {
   private readonly frustum=new THREE.Frustum();
   private readonly projection=new THREE.Matrix4();
   private readonly bounds=new THREE.Sphere();
+  private cullFrame=0;
   private disposed=false;
 
-  constructor(obstacles:readonly Obstacle[]){
+  constructor(obstacles:readonly Obstacle[],private readonly lantern:LanternUniform=createLanternUniform()){
     this.group.name='Living geometry grass — curved individual blades';
-    this.material=new THREE.ShaderMaterial({side:THREE.DoubleSide,fog:true,uniforms:{...THREE.UniformsUtils.clone(THREE.UniformsLib.fog),grassTime:this.time},
+    this.material=new THREE.ShaderMaterial({side:THREE.DoubleSide,fog:true,uniforms:{...THREE.UniformsUtils.clone(THREE.UniformsLib.fog),grassTime:this.time,uLanterns:this.lantern},
       vertexShader:`
         attribute vec3 rootOffset; attribute vec4 grassParams; attribute vec3 grassGround;
         attribute vec2 bladeRoot;
@@ -70,15 +72,17 @@ export class GrassField {
         }`,
       fragmentShader:`
         varying float bladeHeight;varying float patchShade;varying vec3 bladeNormal;varying vec3 worldPoint;
+        ${LANTERN_GLSL}
         #include <fog_pars_fragment>
         void main(){
           vec3 normal=normalize(bladeNormal)*(gl_FrontFacing?1.0:-1.0);
           vec3 light=normalize(vec3(-0.45,0.8,-0.35));
-          float diffuse=abs(dot(normal,light))*0.35+0.65;
+          float diffuse=abs(dot(normal,light))*.22+.58;
           float tip=smoothstep(0.0,1.0,bladeHeight);
-          vec3 rootColor=mix(vec3(0.019,0.067,0.039),vec3(0.028,0.092,0.049),patchShade);
-          vec3 tipColor=mix(vec3(0.075,0.18,0.072),vec3(0.14,0.25,0.105),patchShade);
-          vec3 color=mix(rootColor,tipColor,tip*0.9)*diffuse;
+          float lamp=lanternIllumination(worldPoint);
+          vec3 rootColor=mix(vec3(.012,.039,.026),vec3(.023,.068,.04),patchShade);
+          vec3 tipColor=mix(vec3(.041,.104,.043),vec3(.078,.155,.061),patchShade);
+          vec3 color=mix(rootColor,tipColor,tip*.88)*diffuse+vec3(.98,.57,.24)*lamp*(.035+.12*tip);
           gl_FragColor=vec4(color,1.0);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
@@ -107,6 +111,8 @@ export class GrassField {
   }
   update(dt:number,camera:THREE.Camera,reducedMotion:boolean):void {
     if(!reducedMotion)this.time.value+=Math.max(0,dt);
+    // Tile visibility is stable across adjacent frames; amortize the CPU culling pass.
+    if((this.cullFrame++&1)!==0)return;
     this.projection.multiplyMatrices(camera.projectionMatrix,camera.matrixWorldInverse);this.frustum.setFromProjectionMatrix(this.projection);
     for(const tile of this.tiles){
       const distance=Math.hypot(tile.center.x-camera.position.x,tile.center.z-camera.position.z),lod=grassLod(Math.max(0,distance-GRASS_TILE*0.5));

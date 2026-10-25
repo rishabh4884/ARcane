@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { seededRandom, terrainHeight } from './spatial.ts';
+import { createLanternUniform, LANTERN_GLSL, type LanternUniform } from './LanternLighting.ts';
 
 /** Several depth-separated, softly-lit fog volumes drift independently through the fixed forest. */
 export class VolumetricFog {
@@ -12,7 +13,7 @@ export class VolumetricFog {
   // on integrated GPUs.
   private cloudCount=32;
   private disposed=false;
-  constructor(){
+  constructor(private readonly lanterns:LanternUniform=createLanternUniform()){
     this.group.name='Rolling, illuminated forest fog';
     const random=seededRandom(0xf06ba9),origins:number[]=[],sizes:number[]=[],colors:number[]=[];
     // Fog pools where cold air would settle: low ground, the pond and the old gate. Elsewhere it thins to
@@ -44,7 +45,7 @@ export class VolumetricFog {
     geometry.setAttribute('fogShade',new THREE.InstancedBufferAttribute(new Float32Array(colors),1));geometry.instanceCount=this.cloudCount;
     source.dispose();
     const material=new THREE.ShaderMaterial({
-      transparent:true,depthWrite:false,depthTest:true,side:THREE.DoubleSide,uniforms:{uTime:this.time,uMotion:this.motion},
+      transparent:true,depthWrite:false,depthTest:true,side:THREE.DoubleSide,uniforms:{uTime:this.time,uMotion:this.motion,uLanterns:this.lanterns},
       vertexShader:`attribute vec4 fogOrigin;attribute vec2 fogSize;attribute float fogShade;uniform float uTime;uniform float uMotion;
         varying vec2 vUv;varying vec3 vWorld;varying float vDepth;varying float vShade;
         void main(){vUv=uv;vShade=fogShade;
@@ -56,7 +57,8 @@ export class VolumetricFog {
           world.x+=cos(uTime*.035+fogOrigin.w)*.8*uMotion;
           vWorld=world;vec4 mv=viewMatrix*vec4(world,1.0);vDepth=-mv.z;gl_Position=projectionMatrix*mv;
         }`,
-      fragmentShader:`varying vec2 vUv;varying vec3 vWorld;varying float vDepth;varying float vShade;uniform float uTime;
+       fragmentShader:`varying vec2 vUv;varying vec3 vWorld;varying float vDepth;varying float vShade;uniform float uTime;
+         ${LANTERN_GLSL}
         float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453123);}
         float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(hash(i),hash(i+vec2(1.,0.)),f.x),mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),f.x),f.y);}
         float fbm(vec2 p){float n=0.0,a=.65;for(int i=0;i<2;i++){n+=noise(p)*a;p=p*2.03+vec2(7.1,3.7);a*=.5;}return n;}
@@ -79,7 +81,8 @@ export class VolumetricFog {
           if(alpha<.009)discard;
           vec3 shadowFog=vec3(.12,.18,.19),litFog=vec3(.22,.29,.27);
           float innerLight=vUv.y*.16+pow(max(0.,sin(vWorld.x*.035+uTime*.03)),3.0)*.06;
-          vec3 color=mix(shadowFog,litFog,clamp(innerLight*vShade+.08,0.,.38));
+           float lantern=lanternIllumination(vWorld);
+           vec3 color=mix(shadowFog,litFog,clamp(innerLight*vShade+.08,0.,.38))+vec3(.42,.22,.08)*lantern;
           gl_FragColor=vec4(color,alpha);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
