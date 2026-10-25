@@ -1,6 +1,6 @@
 
 # ARcane
-<img width="1675" height="660" alt="image" src="https://github.com/user-attachments/assets/8ec3c489-8020-4993-9f59-186f854fb0cb" />
+<img width="2172" height="724" alt="Arcane Forest_ Where Unreal Feels Real" src="https://github.com/user-attachments/assets/a54d5355-0b58-4404-a44b-c429de7f069e" />
 
 ### Magic was never meant to be bound to a button.
 
