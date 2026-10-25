@@ -10,5 +10,6 @@ export const DEFAULT_TUNING: Tuning = {
   cooldownMs: 600,
   lostGraceMs: 180,
   cursorGain: 1.35,
-  cameraFps: 60,
+  // 30 FPS leaves headroom for synchronous hand inference and scene rendering.
+  cameraFps: 30,
 };

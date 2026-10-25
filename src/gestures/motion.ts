@@ -2,7 +2,8 @@ import type { PoseName } from './poses.ts';
 export interface Sample { t:number; x:number; y:number; pose:PoseName; scale?:number }
 export type SwipeDirection = 'left'|'right'|'up'|'down'|'horizontal'; export type SwipeHand = 'open'|'fist'|'point';
 export const SWIPE_DEFAULTS = { direction: 'horizontal' as SwipeDirection, minTravel: 1.45, minSpeed: 3.5, hand: 'open' as SwipeHand };
-export function detectSwipe(samples: readonly Sample[], o: typeof SWIPE_DEFAULTS): { direction: SwipeDirection } | null {
+export interface SwipeOptions { direction: SwipeDirection; minTravel: number; minSpeed: number; hand: SwipeHand; straightness?: number }
+export function detectSwipe(samples: readonly Sample[], o: SwipeOptions): { direction: SwipeDirection } | null {
   if (samples.length < 3) return null;
   const end = samples[samples.length - 1];
   if (end.pose !== o.hand) return null;
@@ -59,7 +60,7 @@ export function detectSwipe(samples: readonly Sample[], o: typeof SWIPE_DEFAULTS
     const travel = Math.hypot(dx, dy);
     // Finger strikes share their trajectory with sigils: a round arc must not qualify
     // as a straight stab merely because its endpoints happen to be far apart.
-    const straightness = o.hand === 'point' ? 0.96 : 0.8;
+    const straightness = o.straightness ?? (o.hand === 'point' ? 0.96 : 0.8);
     if (
       movingMs < 45 || forwardTravel / Math.max(forwardTravel + backwardTravel, 1e-6) < 0.68 ||
       travel < o.minTravel || travel / elapsed < o.minSpeed ||

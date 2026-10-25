@@ -25,7 +25,7 @@ let tuning: Tuning = {
   // Beta is not player-adjustable; ignore the legacy stored value from before filtering worked.
   smoothing: { ...DEFAULT_TUNING.smoothing, ...saved?.smoothing, beta: DEFAULT_TUNING.smoothing.beta },
   fingers: { ...DEFAULT_TUNING.fingers, ...saved?.fingers },
-  cameraFps: saved?.cameraFps === 30 ? 30 : 60,
+  cameraFps: saved?.cameraFps === 60 ? 60 : DEFAULT_TUNING.cameraFps,
 };
 
 const world = new World(qs('#world'));

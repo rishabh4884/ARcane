@@ -87,7 +87,7 @@ export class HandTracker {
   private requestedFps: 30 | 60;
   private frameRateApply: Promise<void> = Promise.resolve();
 
-  constructor(requestedFps: 30 | 60 = 60) {
+  constructor(requestedFps: 30 | 60 = 30) {
     this.requestedFps = requestedFps;
   }
 
@@ -141,8 +141,8 @@ export class HandTracker {
       audio: false,
       video: {
         facingMode: 'user',
-        width: { ideal: 640 },
-        height: { ideal: 480 },
+        width: { ideal: 480, max: 640 },
+        height: { ideal: 360, max: 480 },
         frameRate: { ideal: this.requestedFps, max: this.requestedFps },
       },
     });

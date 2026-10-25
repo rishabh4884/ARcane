@@ -93,6 +93,25 @@ describe('pointing-strike accuracy', () => {
     expect(fired).toEqual(['skybolt']);
   });
 
+  it('recognizes a slightly arcing, noisy downward Skyfall thrust', () => {
+    const engine = new GestureEngine(GESTURES.filter((g) => g.id === 'impale'), DEFAULT_TUNING);
+    const rng = makeRng(42);
+    let now = 1000;
+    const fired: string[] = [];
+    for (let i = 0; i < 30; i++) {
+      now += 1000 / 30;
+      const progress = Math.max(0, (i - 24) / 5);
+      const arc = Math.sin(progress * Math.PI) * 0.035;
+      const landmarks = relaxedPoint().map((p) => ({
+        x: p.x + arc + (rng() - 0.5) * 0.004,
+        y: p.y + progress * 0.25 + (rng() - 0.5) * 0.004,
+        z: p.z + (rng() - 0.5) * 0.004,
+      }));
+      fired.push(...engine.process({ time: now, landmarks, aspect: ASPECT, confidence: 1 }, now).fired.map((f) => f.gestureId));
+    }
+    expect(fired).toEqual(['impale']);
+  });
+
   it('still casts Lance once when a pointing hold is stationary and Skybolt is assigned', () => {
     const engine = new GestureEngine(GESTURES.filter((g) => ['lance', 'skybolt'].includes(g.id)), DEFAULT_TUNING);
     const fired: string[] = [];

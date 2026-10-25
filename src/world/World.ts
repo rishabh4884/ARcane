@@ -71,8 +71,8 @@ export class World {
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 1.05;
-    this.renderer.shadowMap.enabled = true;
-    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    // Scene shadows are painted into the artwork; no mesh casts a real-time shadow.
+    this.renderer.shadowMap.enabled = false;
     container.appendChild(this.renderer.domElement);
     this.environment = new ForestEnvironment(this.scene);
     this.controls = new CasterView(this.camera, this.renderer.domElement);
@@ -272,11 +272,17 @@ export class World {
   private castOrigin(from?: HandSide | 'both'): THREE.Vector3 {
     const l = this.wisps.left;
     const r = this.wisps.right;
-    if (from === 'left' && l.cursor) return l.marker.position;
-    if (from === 'right' && r.cursor) return r.marker.position;
-    if (from === 'both' && l.cursor && r.cursor) return this.mid.copy(l.marker.position).add(r.marker.position).multiplyScalar(0.5);
-    if (from && l.cursor) return l.marker.position;
-    if (from && r.cursor) return r.marker.position;
+    // Aim from the newest tracked cursor, not the decorative marker easing toward it.
+    // Fast strikes otherwise land behind the hand by one or more animation frames.
+    if (from === 'left' && l.cursor) return this.cursorToWorld(l.cursor, this.mid);
+    if (from === 'right' && r.cursor) return this.cursorToWorld(r.cursor, this.mid);
+    if (from === 'both' && l.cursor && r.cursor) {
+      this.cursorToWorld(l.cursor, this.mid);
+      this.cursorToWorld(r.cursor, this.scratch);
+      return this.mid.add(this.scratch).multiplyScalar(0.5);
+    }
+    if (from && l.cursor) return this.cursorToWorld(l.cursor, this.mid);
+    if (from && r.cursor) return this.cursorToWorld(r.cursor, this.mid);
     // No hand (or a numeric demo): always use the present camera, never a stale cursor.
     screenPointAtDepth(this.camera, 0.5, 0.5, 2, this.mid);
     return this.mid;

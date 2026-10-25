@@ -56,6 +56,8 @@ export interface SwipeGesture extends GestureBase {
   hand?: SwipeHand;
   minTravel?: number;
   minSpeed?: number;
+  /** Lower for natural curved thrusts; path direction and travel are still validated. */
+  straightness?: number;
 }
 
 /** Trace a circle with a pointing finger. Optional fields override CIRCLE_DEFAULTS. */
@@ -272,6 +274,9 @@ export const GESTURES: readonly GestureDef[] = [
     kind: 'swipe',
     direction: 'down',
     hand: 'point',
+    minTravel: 1.05,
+    minSpeed: 3.1,
+    straightness: 0.82,
     name: 'Skyfall',
     hint: 'Point one finger above an enemy, then bring it down to call lightning onto that spot.',
     glyph: '🌩️',

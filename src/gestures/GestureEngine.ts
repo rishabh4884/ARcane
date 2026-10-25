@@ -219,6 +219,7 @@ export class GestureEngine {
           minTravel: g.minTravel ?? SWIPE_DEFAULTS.minTravel,
           minSpeed: g.minSpeed ?? SWIPE_DEFAULTS.minSpeed,
           hand: g.hand ?? SWIPE_DEFAULTS.hand,
+          straightness: g.straightness,
         });
         const pending = this.pendingSwipe?.gestureId === g.id ? this.pendingSwipe : null;
         if (hit || pending) {
