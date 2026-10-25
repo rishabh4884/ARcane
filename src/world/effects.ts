@@ -179,11 +179,6 @@ function lightning(target: THREE.Vector3, color: THREE.Color): SpellAnimation {
   const branchSegments = branchPoints.map((points) => addBoltSegments(group, points, 0.032, color));
   const mainReveal = mainSegments.map(makeBoltReveal);
   const branchReveal = branchSegments.map((segments) => segments.map(makeBoltReveal));
-  const impact = new THREE.Mesh(new THREE.TorusGeometry(0.35, 0.024, 5, 40), glow(core, 0.8));
-  impact.rotation.x = Math.PI / 2;
-  impact.position.y = -0.48;
-  impact.scale.setScalar(0.15);
-  group.add(impact);
   const duration = 0.72;
   return animate(group, duration, (t, age) => {
     const strike = clamp01(age / 0.15);
@@ -200,9 +195,6 @@ function lightning(target: THREE.Vector3, color: THREE.Color): SpellAnimation {
     mainSegments.forEach((segment) => ((segment.material as THREE.MeshBasicMaterial).opacity = fade));
     branches.forEach((branch) => ((branch.material as THREE.LineBasicMaterial).opacity = fade * 0.82));
     branchSegments.forEach((segments) => segments.forEach((segment) => ((segment.material as THREE.MeshBasicMaterial).opacity = fade * 0.72)));
-    const impactProgress = clamp01((age - 0.12) / 0.32);
-    impact.scale.setScalar(0.2 + easeOut(impactProgress) * 2.3);
-    (impact.material as THREE.MeshBasicMaterial).opacity = fade * impactProgress * 0.75;
   }, 0.15);
 }
 
