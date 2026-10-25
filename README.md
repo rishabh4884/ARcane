@@ -10,7 +10,7 @@ Make a fist. Draw a circle in the air. Raise your palm against the dark.
 
 Through your webcam, ARcane transforms your movements into magic, bringing spells to life in a strange, liminal world caught between dreams and forgotten memories.
 
-## ✦ Enter the World of Hushwood
+##  Enter the World of Hushwood
 
 A forest suspended between the familiar and the otherworldly. Where shadows seem to breathe, ancient magic stirs, and the world feels alive with secrets.
 
