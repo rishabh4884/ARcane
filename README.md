@@ -23,7 +23,7 @@ Hushwood is ARcane's liminal fantasy realm — a world of ethereal light, drifti
 
 **The easiest way to enter Hushwood is right in your browser.**
 
-### [✦ Enter Hushwood](https://ar-cane-nine.vercel.app/)
+### [ Enter Hushwood](https://ar-cane-nine.vercel.app/)
 
 Open the experience, allow webcam access, and use your hands to cast magic.
 
