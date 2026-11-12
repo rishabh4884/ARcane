@@ -64,6 +64,11 @@ export interface EngineOutput {
 }
 
 const WINDOW_MS = 1700;
+const CURSOR_STEP_BASE = 0.12;
+const CURSOR_STEP_PER_MS = 0.0005;
+const CURSOR_CONFIRM_BASE = 0.12;
+const CURSOR_CONFIRM_PER_MS = 0.004;
+const CURSOR_CANDIDATE_MAX_AGE_MS = 100;
 /**
  * An open palm that is sweeping is not "holding" a ward. Open-palm holds (Aegis, Eclipse) only
  * charge while the palm stays within this many palm-lengths over this many ms, otherwise every
@@ -118,6 +123,8 @@ export class GestureEngine {
   private lastSeenAt = -Infinity;
   private last: EngineOutput = IDLE;
   private pendingSwipe: { gestureId: string; detail: string; since: number } | null = null;
+  private cursorAnchor: { x: number; y: number; t: number } | null = null;
+  private cursorCandidate: { x: number; y: number; t: number } | null = null;
 
   constructor(gestures: readonly GestureDef[], tuning: Tuning) {
     this.gestures = gestures;
@@ -265,10 +272,13 @@ export class GestureEngine {
     }
 
     const gain = this.tuning.cursorGain;
-    const cursor = {
+    const cursor = this.stabilizeCursor({
       x: clamp01(0.5 + (palm.x / frame.aspect - 0.5) * gain),
       y: clamp01(0.5 + (palm.y - 0.5) * gain),
-    };
+    }, {
+      x: clamp01(0.5 + (motionPalm.x / frame.aspect - 0.5) * gain),
+      y: clamp01(0.5 + (motionPalm.y - 0.5) * gain),
+    }, now);
 
     const side = frame.side ?? 'right';
     this.last = {
@@ -341,6 +351,52 @@ export class GestureEngine {
     this.lastFireAt = -Infinity;
     this.lastSeenAt = -Infinity;
     this.last = IDLE;
+    this.cursorAnchor = null;
+    this.cursorCandidate = null;
+  }
+
+  private stabilizeCursor(
+    position: { x: number; y: number },
+    rawPosition: { x: number; y: number },
+    now: number,
+  ): { x: number; y: number } {
+    if (!this.cursorAnchor) {
+      this.cursorAnchor = { ...position, t: now };
+      return position;
+    }
+
+    const anchor = this.cursorAnchor;
+    const elapsed = Math.min(Math.max(0, now - anchor.t), CURSOR_CANDIDATE_MAX_AGE_MS);
+    const maxStep = CURSOR_STEP_BASE + elapsed * CURSOR_STEP_PER_MS;
+    const candidate = this.cursorCandidate;
+    if (candidate && now - candidate.t <= CURSOR_CANDIDATE_MAX_AGE_MS) {
+      const candidateElapsed = Math.max(0, now - candidate.t);
+      const confirmStep = CURSOR_CONFIRM_BASE + candidateElapsed * CURSOR_CONFIRM_PER_MS;
+      if (distance2d(rawPosition, candidate) <= confirmStep) {
+        this.cursorAnchor = { ...position, t: now };
+        this.cursorCandidate = null;
+        return position;
+      }
+    }
+
+    const anchorConfirmStep = CURSOR_CONFIRM_BASE + Math.min(elapsed, CURSOR_CANDIDATE_MAX_AGE_MS) * CURSOR_CONFIRM_PER_MS;
+    const rawStep = distance2d(rawPosition, anchor);
+    const filteredStep = distance2d(position, anchor);
+    if (rawStep <= maxStep && filteredStep <= maxStep) {
+      this.cursorCandidate = null;
+      this.cursorAnchor = { ...position, t: now };
+      return position;
+    }
+
+    if (rawStep <= anchorConfirmStep) {
+      this.cursorCandidate = null;
+      return { x: anchor.x, y: anchor.y };
+    }
+
+    // Confirm discontinuities with raw samples; the landmark smoother can carry a one-frame
+    // tracking spike forward and would otherwise make that spike look like sustained movement.
+    this.cursorCandidate = { ...rawPosition, t: now };
+    return { x: anchor.x, y: anchor.y };
   }
 
   /** True if the palm travelled more than STILL_TRAVEL palm-lengths within the last STILL_WINDOW_MS. */
@@ -362,4 +418,8 @@ export class GestureEngine {
     buf.push(s);
     while (buf.length && now - buf[0].t > WINDOW_MS) buf.shift();
   }
+}
+
+function distance2d(a: { x: number; y: number }, b: { x: number; y: number }): number {
+  return Math.hypot(a.x - b.x, a.y - b.y);
 }

@@ -45,7 +45,7 @@ Ties it together and adds the human factors:
 - **Latching**: a held pose casts once, and re-arms only when you change to another shape.
 - **Cooldown** after every cast, and buffers cleared so the return stroke of a swish does not cast again.
 - **Dropout bridging**: a lost hand is tolerated for 180 ms before state resets. State also expires when a delayed camera result arrives after a longer stall, even if no null frames were delivered in between.
-- **Cursor**: the palm position mapped to 0..1 screen coordinates, with adjustable reach.
+- **Cursor**: the palm position mapped to 0..1 screen coordinates, with adjustable reach. Large one-frame aim jumps are held at the last anchor until consecutive raw samples confirm the relocation; this check is separate from the raw motion trails, so it does not slow fast gesture recognition.
 
 `GestureEngine` takes a `HandFrame | null` plus the timestamp of the captured video frame and returns an `EngineOutput`. It has no dependency on the DOM, camera or Three.js, which is why the whole thing is unit-tested with synthetic hands and replayed at different capture rates. Swipe, circle and two-hand motion thresholds are expressed in elapsed time and palm-relative travel rather than assuming a fixed number of samples.
 
