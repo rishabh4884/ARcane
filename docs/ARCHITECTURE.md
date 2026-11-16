@@ -56,11 +56,46 @@ Slot memory expires per hand, not per result array. An established hand that ret
 
 The engine only listens for gestures that are bound to a spell (`SpellBook.activeGestures()`), so unassigned gestures cannot fire or consume the cooldown.
 
+#### Bow Draw (`BowRecognizer.ts`)
+The bow arms when one hand points and the other pinches (thumb–index gap in palm lengths, measured in 3D or as a tight on-screen overlap, with hysteresis). The draw is the pinching hand's pull away from the pointer, measured on screen *and* in depth: a hand receding from the lens shrinks, so `(s₀/s − 1) × 5.5` palm lengths of pull is added, relative to the aiming hand so leaning back does not count. A draw survives hand drop-outs up to 240 ms and `unknown`/`fist` misreads of a foreshortened pointing finger; only a clearly different aim shape held for 260 ms abandons it. The shot uses the peak draw from the last 200 ms. While engaged, `HandsEngine` calls `GestureEngine.suspend()` (clear trails, restart holds, **no** cast pause); only a fired arrow starts the cast pause. Before the pinch closes, *bow intent* (one hand pointing, the other's thumb approaching its index) suppresses the aiming hand's pointing strikes and sigils and the nocking hand's holds through `ProcessContext`.
+
+#### Cross-gesture arbitration
+- **Strike confirmation:** while a sigil is live, a pointing strike is held for 150 ms and cancelled if the smoothed fingertip path keeps turning more than 30° (arc-length resampled, cusps ignored). A path that already turned more than 150° in the last 650 ms is a sigil in progress and cannot strike.
+- **Direction dominance:** single-direction sweeps need their main axis at least 1.15× the other.
+- **Blur tolerance:** `unknown` frames are a quarter vote in stroke shape checks; sigils allow up to 15% `unknown` frames, never more than two in a row.
+- **Confidence-weighted holds:** charge rate 0.85–1.2× based on how far every finger sits from its hysteresis edge; capped at 1× when the shape also starts a live motion.
+
 ### 7. Spells (`src/spells/`, `src/config/`)
 The engine reports **gesture ids** such as `"fist"`. The `SpellBook` maps gestures to spells (one gesture, one spell, always) and persists the player's choices. Gestures and spells are declared as data in `src/config/gestures.ts` and `spells.ts`.
 
 ### 8. World and UI (`src/world/`, `src/ui/`)
 `World` renders a Three.js scene, turns the cursor into a wisp in 3D space, and paints a particle effect plus a floating label for each spell. It also loads `public/assets/boss/balrog.glb` as optional scenery: `scripts/export-boss.py` preserves the source's Z-up standing pose (the glTF exporter converts that to Y-up) and writes the authored vertex palette as the first color attribute. `Boss.ts` fits projected stage corners inside the camera view with room for the spell dock, adds an ember plinth/cinders, and applies a restrained standing breath and shader-driven wing-tip flex. Cast spells briefly illuminate it. Asset failure is non-blocking for camera tracking. The world renders at the display's frame rate, independent of the camera's, and eases the wisp toward the latest cursor so motion stays fluid even at 30 camera frames per second. The HUD, Spellbook panel and debug overlay are small DOM modules.
+
+### 9. Presentation pipeline (`src/world/`, `src/audio/`, `src/ui/ScreenFX.ts`)
+
+```mermaid
+flowchart LR
+  cast[World.cast] --> fx[effects.ts<br/>spell animation]
+  fx --> ps[ParticleSystem<br/>additive + mist]
+  fx --> tr[Trail ribbons]
+  fx --> lp[Light pool]
+  fx --> sf[ScreenFX<br/>flash · edge · shake]
+  enc[Encounter] --> ev((GameEvents))
+  cast --> ev
+  ev --> au[AudioEngine]
+  ev --> sf
+  scene[Scene] --> post[PostFX<br/>bloom · grade]
+```
+
+- **`particles.ts`** pools GPU particles (glow, spark and mist styles) with world-unit sizes, swap-remove compaction and one draw call per pool (additive and normal-blended mist).
+- **`vfx.ts`** holds camera-facing `Trail` ribbons, shared cached glow/ring/flare textures (never disposed per effect), easing helpers and the `FxContext` an effect may draw into.
+- **`effects.ts`** builds each spell. Lightning bolts are camera-plane ribbons with width proportional to target depth (constant on-screen thickness) and fractal displacement proportional to segment length (scale-invariant shape). Effects never add lights; they borrow from a fixed pool of three in `World`, so no cast recompiles a lit shader.
+- **`events.ts`** is a typed `GameEvents` bus (casts, impacts, wind-ups, strikes, hits, deaths, projectiles, player damage, encounter state). Presentation listens; gameplay never depends on a listener.
+- **`PostFX.ts`** renders bloom at half resolution, then a display-space grade (highlight shoulder, split tone, vignette, grain). The renderer itself does no tone mapping because the illustrated scene is authored untonemapped. Post is switched off automatically when the frame budget bottoms out, or with `?post=0`.
+- **Camera shake** is trauma-based and applied only for the draw call, then the camera is restored, so aiming and targeting always use the steady view.
+- **`AudioEngine.ts`** synthesises everything with WebAudio (oscillators, filtered noise, a generated reverb impulse and a compressor) and unlocks on the first user gesture.
+- **`Creature.ts`** patches every cut-paper part with a shared shader: arm planes bend and curl along their length, and a noise-front dissolve handles death and awakening. Eyes and mouth are overlay meshes flagged `userData.arcaneOverlay`, which `EnemyCombat` leaves untouched.
+- **`Atmosphere.ts`** adds terrain-following ground mist, drifting fog wisps, moonlight shafts and the shader-timed watchers. `VolumetricFog.ts` draws the domain-warped fog banks.
 
 ## Design decisions
 
@@ -71,4 +106,4 @@ The engine reports **gesture ids** such as `"fist"`. The `SpellBook` maps gestur
 
 ## Performance
 
-Tracking runs at the camera's frame rate (a 640×480 stream keeps it light). The world is a single draw call for particles plus a handful of meshes. Pixel ratio is capped at 2. The per-frame gesture analysis touches a few dozen numbers and allocates little.
+Tracking runs at the camera's frame rate (a 640×480 stream keeps it light). Particles are two draw calls regardless of count. Bloom runs at half resolution. The adaptive `FrameBudget` lowers the pixel ratio first and drops post-processing only if frames are still slow at the floor. Fog and mist shaders reject invisible fragments before evaluating noise. The per-frame gesture analysis touches a few dozen numbers and allocates little.

@@ -89,6 +89,7 @@ function cast(spellId: string, from?: HandSide | 'both', detail?: string): void 
   const spell = SPELLS.find((s) => s.id === spellId);
   if (!spell) return;
   if (world.cast(spell, from, detail)) hud.flash(spell.id);
+  else hud.refuse(spell.id);
 }
 
 function handle(out: EngineOutput, stats: TrackerStats): void {

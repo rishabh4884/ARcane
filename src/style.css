@@ -546,6 +546,13 @@ kbd {
 .slot.recovering .cooldown { opacity: 1; }
 .slot.recovering .spell-icon, .slot.recovering .name { filter: saturate(0.4) brightness(0.8); }
 .slot.ready { animation: slot-ready 0.55s ease-out; }
+.slot.refused { animation: slot-refused 0.32s ease-out; }
+@keyframes slot-refused {
+  20% { transform: translateX(-3px); }
+  45% { transform: translateX(3px); }
+  70% { transform: translateX(-2px); }
+}
+@media (prefers-reduced-motion: reduce) { .slot.refused { animation: none; } }
 @keyframes slot-ready {
   0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--spell) 70%, transparent); }
   100% { box-shadow: 0 0 0 12px transparent; }

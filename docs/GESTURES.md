@@ -7,7 +7,7 @@ There are two kinds of gesture:
 - **Shapes** are held for a moment (about a third of a second). The spell slot fills with light while you hold; when it is full, the spell is released. Pass through a shape quickly and nothing happens, which is what keeps stray movements from casting.
 - **Motions** fire the instant the movement is clear: a quick sweep or a drawn circle.
 
-After any cast there is a short pause (600 ms by default) so one flourish never casts twice.
+After any cast there is a short pause (500 ms by default) so one flourish never casts twice. While a sign charges, the ring around your hand marker fills and a soft tone rises; when a spell is still recovering, its dock slot shows a sweep and shakes if you try it.
 
 ## Using both hands
 
@@ -31,7 +31,14 @@ Only seven gestures are assigned out of the box. The Spellbook dropdown offers t
 
 **Two-hand motions**: Bow Draw (point with one hand, pinch and pull back with the other, then release), Rift (pull open hands apart), Bind (draw them together), Skywake (lift both), Cataclysm (slam both down).
 
-For **Bow Draw**, keep the pointing hand on the target. Pinch thumb and index finger on the other hand, pull that hand away from the pointer, then release after the charge bar fills. Either hand can aim. A short pull cancels; losing either hand cancels rather than firing.
+For **Bow Draw**, keep the pointing hand on the target. Pinch thumb and index finger on the other hand, pull that hand away from the pointer, then release after the charge bar fills. Either hand can aim.
+
+- **Pull any natural way.** Sideways on screen counts, and so does drawing straight back toward your face (the camera sees that hand get smaller). Both together count most.
+- **Your hands can start far apart** (up to about six palm-lengths, shoulder width at arm's length).
+- **Small hiccups are forgiven.** If the tracker loses a hand for a moment during a fast pull, or briefly misreads your pointing finger, the draw carries on. A hand that stays gone for about a quarter of a second, or a pointing hand that clearly opens, cancels the shot instead of firing it.
+- **A cancelled draw costs nothing:** you can pinch and pull again immediately.
+- **Nocking is safe.** While one hand points and the other brings thumb to index, the pointing hand cannot fire Skyfall or a sigil and the other hand cannot charge a sign.
+- A short pull still cancels. The shot uses your strongest draw from the last moment before release, so the small forward flick as you let go does not weaken it.
 
 ## How to perform every gesture
 
@@ -72,7 +79,7 @@ Start with an open palm, pause for a beat so it is recognised, then make one str
 | Skybolt | Point with one index finger and thrust straight upward. |
 | Skyfall | Point above an enemy, then bring one index finger down to call lightning onto that spot. |
 
-Pointing strikes follow your **index fingertip**, so a clear wrist flick can work without a large palm sweep. Keep the other three fingers flexed and make the fingertip path reasonably straight; rounded paths are reserved for sigils. If Lance and a pointing strike are both assigned, hold still for Lance and move for the strike. A hold that already cast still applies the normal pause between casts.
+Pointing strikes follow your **index fingertip**, so a clear wrist flick can work without a large palm sweep. Keep the other three fingers flexed and make the fingertip path reasonably straight; rounded paths are reserved for sigils. When a sigil is also assigned (Mend is by default), a pointing strike waits about 150 ms to confirm your fingertip is not still curling into a circle, so drawing Mend never fires Skyfall halfway round. If Lance and a pointing strike are both assigned, hold still for Lance and move for the strike. A hold that already cast still applies the normal pause between casts.
 
 ### Sigils — point, then draw
 
@@ -111,9 +118,11 @@ Start with both open palms visible, roughly shoulder-width apart. Keep both hand
 The Spellbook shows each gesture’s short instruction under the spell it is assigned to. Tips that apply to many of them:
 
 - **Shapes** need the fingers clearly up or clearly folded. Fold the middle and ring fingers all the way for Horns; tuck ring and little finger in firmly for a Fist.
-- **Sweeps** need to be decisive: roughly two and a half hand-widths in one quick, fairly straight stroke. A lazy drift is ignored on purpose. Start with your hand low in the frame for Rise.
+- **Sweeps** need to be decisive: roughly two and a half hand-widths in one quick, fairly straight stroke. A lazy drift is ignored on purpose. Start with your hand low in the frame for Rise. A sweep must clearly lead along one direction: a 45° diagonal is ambiguous and casts neither Gale nor Rise.
 - **Sigils**: draw a rounder, slightly larger circle than feels natural, and pause a beat in the pointing pose first.
-- **Open-palm holds** (Aegis, Eclipse) only charge while the palm is still, so sweeping an open hand never charges them on the way.
+- **Open-palm holds** (Aegis, Eclipse) only charge while the palm is still, so sweeping an open hand never charges them on the way. While an open-hand sweep is also assigned, "still" is stricter, so hovering before a Gale does not raise Aegis.
+- **Clean signs charge faster.** A crisp, unambiguous hand shape charges up to 20% quicker than a borderline one (unless the same shape also starts an assigned motion, where holds never rush).
+- **Motion blur is tolerated.** A single blurred frame inside a stroke or a circle no longer breaks it.
 - **Two-hand motions** work with either hand leading; you do not need to match “left” and “right” to the screen.
 
 ## Getting reliable detection

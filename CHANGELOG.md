@@ -8,6 +8,15 @@ All notable changes to ARcane are recorded here. The format follows
 
 ### Added
 
+- Pooled GPU particle system, camera-facing ribbon trails and half-resolution bloom with a display-space grade (vignette, split tone, highlight shoulder, grain). Post-processing switches itself off on slow devices, or with `?post=0`.
+- Rebuilt spell visuals: an energy Arcane Arrow on a gravity arc with trail, motes, launch and impact staging; branching, flickering lightning with scorch, crawl, sparks, screen flash and shake; shattering frost; spiral gale trails with leaves; rune-sigil Mend and Rise with a light pillar; an unfolding hex-lattice Aegis with a persistent ward vignette.
+- Screen feedback layer: lightning flash, healing and ward edge glows, a red hurt vignette and camera shake when struck.
+- Procedural WebAudio sound for everything: forest ambience (wind, drone, crickets, owl, whispers), every spell, creature wind-ups, hits and deaths, player damage and blocks, charge tones and the bow creak. A sound pill in the HUD, `M` to mute, and volume in the Spellbook.
+- Living creature faces: glowing eyes that blink, dart, glare red on the wind-up and frost over, plus a breathing jaw that gapes on the strike. Claws sway, flex and twitch through a vertex-shader bend; heads tilt slowly and jerk rarely; torsos breathe. Spirits dissolve into embers when they fall and rise out of the ground when the wood awakens.
+- Atmosphere: flowing domain-warped fog banks, creeping ground mist, drifting wisps, a moon with clouds and stars, moonlight shafts, flickering lantern halos, and pairs of watching eyes between distant trees.
+- Hand markers show a charge ring that fills while a sign is held. Spell dock slots show a recovery sweep, a ready shimmer and a refusal shake.
+- `GameEvents` bus, `GestureEngine.suspend()`, and `ProcessContext.suppressPointing` / `suppressHolds`.
+
 - The supplied Balrog sculpt is exported as a textured, upright GLB with a hand-painted-style garnet hide, ember-red wings, antique-gold torso marks and bone-toned horns, plus an ember plinth, drifting cinders, gently flexing wing tips and spell-color flashes. Camera tracking stays independent if the model fails to load.
 - Selectable 30/60fps camera caps, capture-time timestamps and inference-age reporting. Direct MediaPipe inference remains the default; the experimental worker can be compared using `?tracking=worker`.
 - Two-hand tracking: both hands are read at once, each with its own cursor, wisp, charge bar and debug skeleton, and each can cast its own spell at the same moment.
@@ -17,6 +26,10 @@ All notable changes to ARcane are recorded here. The format follows
 
 ### Changed
 
+- Bow Draw measures the pull in depth as well as on screen, bridges hand drop-outs (240 ms) and aim misreads (260 ms), arms with hands up to six palm-lengths apart, uses the recent peak draw at release, and no longer spends the cast pause when a draw is cancelled.
+- Default pause between casts is 500 ms (was 600 ms). Crisp signs charge up to 1.2× faster when no live motion shares the shape.
+- The renderer no longer tone-maps the illustrated scene; the post grade rolls off only the highlights.
+
 - Landmark smoothing now applies a One Euro filter to all hand coordinates; the Smoothness control is live and fast movements remain responsive.
 - Camera capture timestamps now flow through landmark, gesture and motion processing; cursor render easing is shortened so smoothing is not applied twice.
 - Only gestures bound to a spell are live in the engine. Previously unassigned gestures could still fire silently, burning the cooldown and clearing the motion buffers.
@@ -24,6 +37,14 @@ All notable changes to ARcane are recorded here. The format follows
 - When both hands show the same sign and a two-hand version is assigned, the two-hand gesture wins over the single-hand ones.
 
 ### Fixed
+
+- Bow Draw could fail intermittently: one dropped frame of either hand reset the draw, and the reset spent a 600 ms pause that blocked re-arming from the right place.
+- Drawing a Mend circle with the default bindings fired Skyfall (sometimes twice) on its downward arc. Pointing strikes now confirm over 150 ms while a sigil is live.
+- The aiming hand could fire Skyfall, or the other hand charge Aegis, while a bow shot was being set up.
+- Diagonal sweeps could cast the wrong directional spell; a single motion-blurred frame could break a stroke or a sigil.
+- Lightning rendered as thick, squashed shapes on close targets: its width and jitter were fixed world sizes. Both now scale with depth and bolt length.
+- The arrow was drawn tilted sideways along a sideways arc.
+- Spell lights were added and removed per cast, recompiling lit shaders mid-fight.
 
 - Removed the 180 ms result-age cutoff that converted valid slow detections into missing hands. Slow results are now reported without silently dropping their landmarks, and worker inference is no longer enabled by default.
 - Straight fingers angled horizontally from the palm no longer read as a closed fist during Cataclysm and other palm-down gestures. Borderline curl scores and collapsed finger joints report an unknown pose instead of charging a fist; deliberate clenched fists still cast normally.

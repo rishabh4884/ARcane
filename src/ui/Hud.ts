@@ -74,6 +74,15 @@ export class Hud {
     }
   }
 
+  /** The gesture was recognised but the spell is still recovering: a small shake on its slot. */
+  refuse(spellId: string): void {
+    const slot = this.slots.get(spellId);
+    if (!slot) return;
+    slot.root.classList.remove('refused');
+    void slot.root.offsetWidth;
+    slot.root.classList.add('refused');
+  }
+
   flash(spellId: string): void {
     const slot = this.slots.get(spellId);
     if (!slot) return;
