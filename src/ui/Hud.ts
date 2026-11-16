@@ -8,6 +8,9 @@ interface Slot {
   root: HTMLElement;
   gesture: HTMLElement;
   bar: HTMLElement;
+  cooldown: HTMLElement;
+  effect: string;
+  recovering: boolean;
 }
 
 /** The spell dock and hand-status line. Purely presentational: it never touches tracking. */
@@ -51,6 +54,26 @@ export class Hud {
     }
   }
 
+  /** Recovery sweep per slot, keyed by spell effect. */
+  setCooldowns(cooldowns: Record<string, { remaining: number; total: number }>): void {
+    for (const slot of this.slots.values()) {
+      const cd = cooldowns[slot.effect];
+      const fraction = cd && cd.total > 0 ? Math.max(0, Math.min(1, cd.remaining / cd.total)) : 0;
+      const recovering = fraction > 0.001;
+      slot.cooldown.style.setProperty('--cd', fraction.toFixed(3));
+      if (recovering !== slot.recovering) {
+        slot.recovering = recovering;
+        slot.root.classList.toggle('recovering', recovering);
+        // A short shimmer when a spell becomes ready again.
+        if (!recovering) {
+          slot.root.classList.remove('ready');
+          void slot.root.offsetWidth;
+          slot.root.classList.add('ready');
+        }
+      }
+    }
+  }
+
   flash(spellId: string): void {
     const slot = this.slots.get(spellId);
     if (!slot) return;
@@ -67,16 +90,18 @@ export class Hud {
       const icon = createSpellIcon(spell.id);
       const gesture = el('span', { class: 'gesture' }, g ? `${g.glyph} ${g.name}` : '');
       const bar = el('span', { class: 'bar' });
+      const cooldown = el('span', { class: 'cooldown', 'aria-hidden': 'true' });
       const root = el(
         'div',
         { class: 'slot', style: { '--spell': spell.color }, title: g?.hint ?? '', 'aria-label': `${spell.name}: ${g?.name ?? 'unbound'}` },
+        cooldown,
         icon,
         el('span', { class: 'name' }, spell.name),
         gesture,
         bar,
       );
       this.dock.append(root);
-      this.slots.set(spell.id, { root, gesture, bar });
+      this.slots.set(spell.id, { root, gesture, bar, cooldown, effect: spell.effect, recovering: false });
     }
   }
 }

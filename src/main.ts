@@ -121,6 +121,26 @@ tracker.onFrame = (hands, stats) => {
 };
 
 
+// Spell recovery is a game-clock value; a light poll keeps the dock honest without a camera frame.
+window.setInterval(() => hud.setCooldowns(world.cooldowns()), 100);
+
 document.addEventListener('visibilitychange', () => {
   if (document.hidden) engine.reset();
 });
+
+// Development-only console hook for checking spell visuals without a camera. Stripped from builds.
+if (import.meta.env.DEV) {
+  Object.assign(window, {
+    arcane: {
+      cast: (spellId: string, side: HandSide = 'right') => cast(spellId, side, spellId === 'spell-1' ? '90% draw' : 'left'),
+      aim: (x: number, y: number, side: HandSide = 'right') => world.setCursors({ [side]: { x, y } }),
+      charge: (progress: number, side: HandSide = 'right') => world.setCharges({ [side]: { progress, color: '#b69cff' } }),
+      skipIntro: () => {
+        document.body.classList.remove('is-intro');
+        qs<HTMLElement>('#intro').hidden = true;
+        hudRoot.inert = false;
+      },
+      world,
+    },
+  });
+}

@@ -68,3 +68,16 @@
   .enemy-vital-value { font-size:.53rem; }
 }
 
+
+/* Screen-level spell feedback (ScreenFX). Layers sit above the canvas and never take input. */
+.screen-fx { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 1; }
+.screen-fx > div { position: absolute; inset: 0; opacity: 0; will-change: opacity; }
+.screen-fx-flash { background: radial-gradient(ellipse at 50% 35%, color-mix(in srgb, var(--fx-color, #fff) 70%, white) 0%, color-mix(in srgb, var(--fx-color, #fff) 45%, transparent) 45%, transparent 85%); mix-blend-mode: screen; }
+.screen-fx-edge { background: radial-gradient(ellipse at center, transparent 48%, color-mix(in srgb, var(--fx-color, #fff) 55%, transparent) 100%); mix-blend-mode: screen; }
+.screen-fx-hurt { background: radial-gradient(ellipse at center, transparent 40%, rgba(120, 18, 14, 0.55) 82%, rgba(70, 6, 6, 0.85) 100%); }
+.screen-fx-ward { background: radial-gradient(ellipse at center, transparent 56%, color-mix(in srgb, var(--fx-color, #c6d9ff) 32%, transparent) 100%); mix-blend-mode: screen; transition: opacity 400ms ease; animation: ward-breathe 2.6s ease-in-out infinite; }
+@keyframes ward-breathe { 50% { filter: brightness(1.35); } }
+@media (prefers-reduced-motion: reduce) {
+  .screen-fx-flash { display: none; }
+  .screen-fx-ward { animation: none; }
+}

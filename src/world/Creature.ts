@@ -54,6 +54,8 @@ export class Creature {
     return new THREE.Mesh(this.art.geometry(new THREE.PlaneGeometry(width,height,1,3)),material);
   }
   hit():void{this.hitTime=0;}
+  /** Restart presentation state when the wood awakens. */
+  awaken():void{this.hitTime=1;this.pose='idle';}
 
   animate(time:number,pose:CreaturePose,progress:number,dt:number,reducedMotion=false):void {
     this.hitTime+=dt;

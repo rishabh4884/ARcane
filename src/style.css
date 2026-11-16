@@ -516,6 +516,22 @@ kbd {
 .slot.cast {
   animation: cast 0.7s ease-out;
 }
+.slot .cooldown {
+  --cd: 0;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: conic-gradient(from 0deg, rgba(4, 6, 6, 0.62) calc(var(--cd) * 360deg), transparent 0);
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+.slot.recovering .cooldown { opacity: 1; }
+.slot.recovering .spell-icon, .slot.recovering .name { filter: saturate(0.4) brightness(0.8); }
+.slot.ready { animation: slot-ready 0.55s ease-out; }
+@keyframes slot-ready {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--spell) 70%, transparent); }
+  100% { box-shadow: 0 0 0 12px transparent; }
+}
 .slot.cast .spell-icon--spell-1 .bow-arrow {
   animation: bow-shot 0.42s cubic-bezier(0.16, 1, 0.3, 1);
 }

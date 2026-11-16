@@ -1,5 +1,7 @@
 import * as THREE from 'three';
+import type { ParticleSystem } from './particles.ts';
 import { EYE_HEIGHT, moveOnGround, terrainHeight, type Obstacle } from './spatial.ts';
+import { Trail, glowSprite } from './vfx.ts';
 
 export const GNOME_LIFETIME = 10;
 export const GNOME_ATTACK_RANGE = 35;
@@ -26,7 +28,7 @@ interface Scout {
 
 interface Bolt {
   group: THREE.Group;
-  trail: THREE.Line;
+  trail: Trail;
   targetId: number;
   age: number;
 }
@@ -40,7 +42,8 @@ export class GnomeSummons {
   private readonly boltGeometry = new THREE.ConeGeometry(0.065, 0.24, 6);
   private readonly boltShaft = new THREE.CylinderGeometry(0.023, 0.035, 0.16, 6);
   private readonly boltMaterial = new THREE.MeshBasicMaterial({ color: '#ffe0a0', toneMapped: false });
-  private readonly trailMaterial = new THREE.LineBasicMaterial({ color: '#ffc96f', transparent: true, opacity: 0.78, depthWrite: false, toneMapped: false });
+  private readonly sparkColor = new THREE.Color('#ffd98f');
+  private camera = new THREE.Vector3();
   private readonly shadowGeometry = new THREE.CircleGeometry(0.5, 24);
   private readonly shadows: THREE.MeshBasicMaterial[] = [];
   private readonly ray = new THREE.Ray();
@@ -58,6 +61,7 @@ export class GnomeSummons {
     obstacles: readonly Obstacle[],
     intersectEnvironment: (ray: THREE.Ray, range: number) => number | null,
     private readonly onHit: (targetId: number, point: THREE.Vector3) => void,
+    private readonly particles?: ParticleSystem,
   ) {
     this.obstacles = obstacles;
     this.intersectEnvironment = intersectEnvironment;
@@ -115,6 +119,7 @@ export class GnomeSummons {
   update(dt: number, canAttack: boolean, player: THREE.Vector3, targets: readonly GnomeTarget[], reducedMotion = false): void {
     if (this.disposed || this.scouts.length === 0) return;
     dt = Math.max(0, Math.min(dt, 0.05));
+    this.camera.copy(player);
     this.elapsed += dt;
     this.age += dt;
     const fade = Math.min(1, Math.max(0, (GNOME_LIFETIME - this.age) / 0.8));
@@ -182,7 +187,6 @@ export class GnomeSummons {
     this.boltGeometry.dispose();
     this.boltShaft.dispose();
     this.boltMaterial.dispose();
-    this.trailMaterial.dispose();
     this.shadowGeometry.dispose();
     this.group.removeFromParent();
   }
@@ -209,12 +213,13 @@ export class GnomeSummons {
     tip.position.y = 0.12;
     const shaft = new THREE.Mesh(this.boltShaft, this.boltMaterial);
     shaft.position.y = -0.04;
-    group.add(tip, shaft);
+    const halo = glowSprite('#ffcf7a', 0.55, undefined, 0.8);
+    group.add(tip, shaft, halo);
     group.position.copy(scout.root.position);
     group.position.y += 0.9;
-    const lineGeometry = new THREE.BufferGeometry().setFromPoints([group.position, group.position]);
-    const trail = new THREE.Line(lineGeometry, this.trailMaterial);
-    this.group.add(group, trail);
+    const trail = new Trail('#ffc96f', 0.09, 0.18, 24, 1);
+    this.group.add(group, trail.mesh);
+    this.particles?.burst(group.position, 8, { speed: 1.4, color: this.sparkColor, size: 0.06, ttl: 0.3, drag: 3, style: 'spark' });
     this.bolts.push({ group, trail, targetId: target.id, age: 0 });
   }
 
@@ -229,6 +234,7 @@ export class GnomeSummons {
       const direction = this.scratch.copy(this.hitPoint).sub(bolt.group.position);
       const distance = direction.length();
       if (distance < 0.42) {
+        this.particles?.burst(this.hitPoint, 18, { speed: 3.6, color: this.sparkColor, size: 0.06, ttl: 0.45, gravity: 6, drag: 1.2, style: 'spark' });
         this.onHit(target.id, this.hitPoint.clone());
         this.removeBolt(bolt); this.bolts.splice(i, 1); continue;
       }
@@ -239,16 +245,14 @@ export class GnomeSummons {
       if (blocker !== null && blocker < step - 0.04) { this.removeBolt(bolt); this.bolts.splice(i, 1); continue; }
       bolt.group.position.addScaledVector(direction, step);
       bolt.group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), direction);
-      const trailPositions = bolt.trail.geometry.getAttribute('position') as THREE.BufferAttribute;
-      trailPositions.setXYZ(0, bolt.group.position.x, bolt.group.position.y, bolt.group.position.z);
-      trailPositions.setXYZ(1, bolt.group.position.x - direction.x * 0.42, bolt.group.position.y - direction.y * 0.42, bolt.group.position.z - direction.z * 0.42);
-      trailPositions.needsUpdate = true;
-      bolt.trail.geometry.computeBoundingSphere();
+      bolt.trail.push(bolt.group.position);
+      bolt.trail.update(dt, this.camera);
     }
   }
 
   private removeBolt(bolt: Bolt): void {
-    this.group.remove(bolt.group, bolt.trail);
-    bolt.trail.geometry.dispose();
+    this.group.remove(bolt.group);
+    bolt.group.traverse((object) => { if (object instanceof THREE.Sprite) object.material.dispose(); });
+    bolt.trail.dispose();
   }
 }
