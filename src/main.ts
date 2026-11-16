@@ -1,4 +1,5 @@
 import './style.css';
+import { AudioEngine } from './audio/AudioEngine.ts';
 import { GESTURES } from './config/gestures.ts';
 import { SPELLS } from './config/spells.ts';
 import { DEFAULT_TUNING, type Tuning } from './config/tuning.ts';
@@ -9,7 +10,7 @@ import { loadJSON, saveJSON } from './storage.ts';
 import { HandTracker, type TrackerStats } from './tracking/HandTracker.ts';
 import type { HandSide } from './tracking/types.ts';
 import { DebugOverlay } from './ui/DebugOverlay.ts';
-import { qs } from './ui/dom.ts';
+import { el, qs } from './ui/dom.ts';
 import { describeError } from './ui/errors.ts';
 import { Hud } from './ui/Hud.ts';
 import { Onboarding } from './ui/Onboarding.ts';
@@ -31,6 +32,13 @@ let tuning: Tuning = {
 const world = new World(qs('#world'));
 world.start();
 
+const audio = new AudioEngine();
+world.events.on((event) => audio.handle(event));
+// Browsers keep audio locked until a user gesture; the Begin button is the first one.
+const unlockAudio = () => audio.unlock();
+window.addEventListener('pointerdown', unlockAudio, { capture: true });
+window.addEventListener('keydown', unlockAudio, { capture: true });
+
 const book = new SpellBook(SPELLS, GESTURES);
 // Only gestures bound to a spell are live; the rest are just choices in the Spellbook dropdown.
 const engine = new HandsEngine(book.activeGestures(), tuning);
@@ -41,7 +49,23 @@ const hudRoot = qs('#hud');
 const hud = new Hud(hudRoot, book);
 const debug = new DebugOverlay(hudRoot);
 new Onboarding(hudRoot, book, () => tracker.start());
+const soundButton = el('button', { class: 'sound-tool', type: 'button', onclick: () => audio.toggleMuted() });
+const renderSound = () => {
+  soundButton.textContent = audio.muted ? 'Sound off' : 'Sound on';
+  soundButton.setAttribute('aria-pressed', String(!audio.muted));
+  soundButton.setAttribute('aria-label', audio.muted ? 'Turn sound on (M)' : 'Turn sound off (M)');
+};
+audio.onChange(renderSound);
+renderSound();
+hudRoot.append(soundButton);
+window.addEventListener('keydown', (event) => {
+  if ((event.key === 'm' || event.key === 'M') && !event.metaKey && !event.ctrlKey && !(event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement)) {
+    audio.toggleMuted();
+  }
+});
+
 new SettingsPanel(hudRoot, {
+  sound: audio,
   book,
   tuning,
   defaults: DEFAULT_TUNING,
@@ -96,9 +120,16 @@ function handle(out: EngineOutput, stats: TrackerStats): void {
     world.setCharge(twin.progress, twinSpell.color, 'both');
     charges.length = 0;
     charges.push({ spellId: twinSpell.id, progress: twin.progress });
+    audio.setCharge('left', twin.progress);
+    audio.setCharge('right', 0);
   } else {
     world.setCharges(perHand);
+    // The bow has its own creak; the hold tone is for signs.
+    audio.setCharge('left', out.bow ? 0 : perHand.left?.progress ?? 0);
+    audio.setCharge('right', out.bow ? 0 : perHand.right?.progress ?? 0);
   }
+  const drawCursor = out.bow ? cursors[out.bow.drawSide] : null;
+  audio.setBowDraw(out.bow && out.bow.phase !== 'arming' ? out.bow.progress : null, drawCursor ? drawCursor.x * 2 - 1 : 0);
   hud.update(out, charges);
   debug.draw(out, stats);
 

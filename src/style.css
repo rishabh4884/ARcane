@@ -349,6 +349,24 @@ kbd {
   cursor: pointer;
 }
 .guide-tool:hover { border-color: #dfe8d3; }
+.sound-tool {
+  position: absolute;
+  top: 6.15rem;
+  right: 1rem;
+  padding: 0.3rem 0.8rem;
+  border: 1px solid rgba(203, 218, 196, 0.25);
+  border-radius: 999px;
+  background: rgba(23, 42, 43, 0.78);
+  color: #d1d6c4;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  pointer-events: auto;
+  transition: opacity 0.25s, border-color 0.15s;
+}
+.sound-tool:hover { border-color: #dfe8d3; }
+.sound-tool[aria-pressed='false'] { color: #9aa597; }
+.is-intro .sound-tool { opacity: 0; pointer-events: none; }
 .tool { display: none !important; }
 .is-intro .guide-tool { opacity: 0; pointer-events: none; }
 .guide-tool,

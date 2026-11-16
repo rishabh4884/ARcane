@@ -11,6 +11,8 @@ export interface SettingsOptions {
   onTuning: (t: Tuning) => void;
   onDebug: (visible: boolean) => void;
   isDebugVisible: () => boolean;
+  /** Optional master volume and mute. */
+  sound?: { readonly volume: number; readonly muted: boolean; setVolume(v: number): void; setMuted(m: boolean): void };
 }
 
 const smoothnessToCutoff = (s: number): number => 4 - (s / 100) * 3.5;
@@ -37,6 +39,25 @@ export class SettingsPanel {
     this.panel.hidden = !open;
     this.toggleButton.setAttribute('aria-expanded', String(open));
     if (open) this.render();
+  }
+
+  private soundControls(): HTMLElement[] {
+    const sound = this.o.sound;
+    if (!sound) return [];
+    const out = el('output', {}, `${Math.round(sound.volume * 100)}%`);
+    const volume = el('input', { type: 'range', min: 0, max: 100, step: 1, value: Math.round(sound.volume * 100), 'aria-label': 'Volume' });
+    volume.addEventListener('input', () => {
+      out.textContent = `${volume.value}%`;
+      sound.setVolume(Number(volume.value) / 100);
+    });
+    const mute = el('input', { type: 'checkbox' });
+    mute.checked = sound.muted;
+    mute.addEventListener('change', () => sound.setMuted(mute.checked));
+    return [
+      el('h3', {}, 'Sound'),
+      el('label', { class: 'row slider' }, el('span', { class: 'label' }, 'Volume'), volume, out),
+      el('label', { class: 'row check' }, mute, el('span', {}, 'Mute (M)')),
+    ];
   }
 
   private render(): void {
@@ -108,6 +129,7 @@ export class SettingsPanel {
       slider('Pause between casts', 200, 1500, 50, this.tuning.cooldownMs, ' ms', (v) => (this.tuning.cooldownMs = v)),
       slider('Reach', 1, 2, 0.05, this.tuning.cursorGain, '×', (v) => (this.tuning.cursorGain = v)),
       el('label', { class: 'row check' }, debug, el('span', {}, 'Show tracking view (D)')),
+      ...this.soundControls(),
       el('button', {
         class: 'reset',
         type: 'button',
