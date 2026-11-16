@@ -206,6 +206,8 @@ export class EnemyCombat {
   private installMaterials(): void {
     this.root.traverse((object) => {
       if (!(object instanceof THREE.Mesh)) return;
+      // Glowing eyes and other expression overlays are animated by their owner, not tinted here.
+      if (object.userData.arcaneOverlay) return;
       const original = object.material;
       const sources = Array.isArray(original) ? original : [original];
       const owned = sources.map((source) => {

@@ -25,7 +25,7 @@ export class CreatureArtwork {
           ink(ctx,'M 171 218 Q 171 145 253 146 Q 336 143 347 223 Q 354 333 321 383 Q 286 415 236 401 Q 169 371 166 282 Z',light(ctx,'#738867','#365648'),outline,3);
           ink(ctx,'M 64 150 Q 132 172 164 215 Q 116 228 64 150 Z','#536a54');ink(ctx,'M 447 148 Q 379 178 350 219 Q 401 219 447 148 Z','#536a54');
           ink(ctx,'M 192 240 Q 218 212 242 233 L 242 255 Q 212 264 191 251 Z','#173d36');ink(ctx,'M 272 233 Q 300 212 325 235 L 324 251 Q 298 262 272 252 Z','#173d36');
-          ink(ctx,'M 199 242 Q 216 233 235 243 Q 220 253 202 250 Z','#e5d79e');ink(ctx,'M 279 242 Q 298 231 318 241 L 315 249 Q 298 254 279 249 Z','#e5d79e');
+          ink(ctx,'M 199 242 Q 216 233 235 243 Q 220 253 202 250 Z','#06120f');ink(ctx,'M 279 242 Q 298 231 318 241 L 315 249 Q 298 254 279 249 Z','#06120f');
           ink(ctx,'M 245 241 Q 259 218 267 248 L 289 310 Q 267 331 241 311 Z',light(ctx,'#91a07b','#49664f'));
           ink(ctx,'M 208 347 Q 254 363 306 341 Q 268 382 215 360 Z','#213e37');
           ink(ctx,'M 223 355 L 231 331 L 237 358 Z','#d5c99a');ink(ctx,'M 289 352 L 299 328 L 301 350 Z','#d5c99a');
@@ -46,7 +46,7 @@ export class CreatureArtwork {
         if(part==='head'){
           ink(ctx,'M 171 167 L 101 101 L 97 29 L 132 67 L 151 34 L 166 121 L 205 158 L 239 122 L 224 26 L 257 73 L 284 8 L 289 113 L 323 161 L 372 90 L 382 22 L 407 84 L 434 57 L 411 140 L 350 212 L 364 390 L 318 462 L 195 464 L 149 391 Z',light(ctx,'#8b9272','#34554b'),outline,5);
           ink(ctx,'M 204 248 Q 257 209 310 248 L 323 369 Q 270 411 202 376 Z','#183b37');
-          ink(ctx,'M 210 275 Q 234 253 250 272 L 244 288 L 214 289 Z','#d9cc8d');ink(ctx,'M 267 274 Q 291 253 309 272 L 305 289 L 274 289 Z','#d9cc8d');
+          ink(ctx,'M 210 275 Q 234 253 250 272 L 244 288 L 214 289 Z','#07130f');ink(ctx,'M 267 274 Q 291 253 309 272 L 305 289 L 274 289 Z','#07130f');
           ink(ctx,'M 230 342 L 252 331 L 272 343 L 291 329 L 304 351 L 277 369 L 245 359 L 218 365 Z','#3d5b45');
           ctx.strokeStyle='#b4ad7c';ctx.lineWidth=3;ctx.beginPath();ctx.moveTo(180,217);ctx.bezierCurveTo(193,290,166,353,189,399);ctx.stroke();
         }else if(part==='body'){
@@ -69,7 +69,7 @@ export class CreatureArtwork {
           };antler(-1);antler(1);
           ink(ctx,'M 215 222 Q 255 198 296 220 L 314 285 L 285 407 L 258 456 L 226 412 L 198 287 Z',light(ctx,'#d2d2b1','#7d9a89'),outline,4);
           ink(ctx,'M 212 280 Q 231 259 245 282 L 237 302 L 219 302 Z','#173839');ink(ctx,'M 270 283 Q 284 260 302 278 L 296 301 L 276 303 Z','#173839');
-          ellipse(ctx,232,287,4,4,'#eedfa4');ellipse(ctx,284,287,4,4,'#eedfa4');
+          ellipse(ctx,229,289,9,8,'#081b1b');ellipse(ctx,286,289,9,8,'#081b1b');
           ink(ctx,'M 255 300 L 244 365 L 260 377 L 270 362 Z','#698a7e');
           ctx.strokeStyle='#547b73';ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(258,392);ctx.lineTo(258,425);ctx.stroke();
         }else if(part==='body'){
@@ -84,7 +84,7 @@ export class CreatureArtwork {
         if(part==='head'){
           ink(ctx,'M 162 233 Q 173 75 261 68 Q 354 102 365 254 L 347 395 L 292 455 L 207 438 L 155 373 Z',light(ctx,'#8ca3a5','#3c6970'),outline,5);
           ink(ctx,'M 202 245 Q 249 181 307 245 L 318 332 Q 276 378 214 345 Z','#183940');
-          ink(ctx,'M 218 273 Q 237 262 249 273 L 244 283 L 223 284 Z','#e8dca4');ink(ctx,'M 267 273 Q 283 262 298 273 L 294 283 L 273 283 Z','#e8dca4');
+          ink(ctx,'M 218 273 Q 237 262 249 273 L 244 283 L 223 284 Z','#071518');ink(ctx,'M 267 273 Q 283 262 298 273 L 294 283 L 273 283 Z','#071518');
         }else if(part==='body'){
           ink(ctx,'M 204 40 L 308 38 Q 335 164 356 253 L 405 438 L 351 409 L 331 478 L 292 448 L 272 500 L 242 466 L 207 497 L 196 454 L 146 485 L 158 420 L 112 446 Q 173 251 204 40 Z',light(ctx,'#789697','#365c66'),outline,4);
           ink(ctx,'M 224 61 Q 174 280 180 420 L 211 454 Q 216 231 247 109 Z','#9cacab');ink(ctx,'M 279 63 Q 302 230 294 443 L 325 463 Q 351 276 302 82 Z','#4e777c');
@@ -94,6 +94,14 @@ export class CreatureArtwork {
           ink(ctx,'M 182 24 L 292 22 Q 254 236 335 429 L 299 475 L 266 444 L 215 487 L 183 446 Q 207 218 182 24 Z',light(ctx,'#759596','#426b70'),outline,4);
         }
       }
+    });
+  }
+  /** A soft, dark mouth hollow that the rig opens and closes over the painted mouth. */
+  mouth():THREE.Texture {
+    return this.art.texture('creature-mouth',128,64,ctx=>{
+      ctx.save();ctx.translate(64,32);ctx.scale(1,0.5);
+      const g=ctx.createRadialGradient(0,0,0,0,0,60);g.addColorStop(0,'rgba(3,7,6,0.98)');g.addColorStop(0.62,'rgba(6,14,12,0.9)');g.addColorStop(1,'rgba(6,14,12,0)');
+      ctx.fillStyle=g;ctx.beginPath();ctx.arc(0,0,62,0,Math.PI*2);ctx.fill();ctx.restore();
     });
   }
   dispose():void{this.art.dispose();}
