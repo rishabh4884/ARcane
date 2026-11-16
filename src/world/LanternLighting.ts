@@ -9,7 +9,40 @@ export function createLanternUniform(): LanternUniform {
   return { value: Array.from({ length: LANTERN_COUNT }, () => new THREE.Vector4()) };
 }
 
-export const LANTERN_GLSL = `
+/**
+ * Two short-lived world lights (a lightning strike and its bolt) that every illustrated surface,
+ * grass blade, fog bank and creature responds to. Most of the forest is unlit artwork, so real
+ * three.js lights cannot brighten it; this shared uniform can.
+ *   uSpellLights[i]: xyz position, w intensity   uSpellColors[i]: rgb colour, w radius
+ */
+export const SPELL_LIGHT_COUNT = 2;
+export const SPELL_LIGHTS = {
+  uSpellLights: { value: Array.from({ length: SPELL_LIGHT_COUNT }, () => new THREE.Vector4()) },
+  uSpellColors: { value: Array.from({ length: SPELL_LIGHT_COUNT }, () => new THREE.Vector4(1, 1, 1, 1)) },
+};
+
+export const SPELL_LIGHT_GLSL = `
+  uniform vec4 uSpellLights[2];
+  uniform vec4 uSpellColors[2];
+  vec3 spellIllumination(vec3 surface) {
+    vec3 light = vec3(0.0);
+    for (int i = 0; i < 2; i++) {
+      vec4 l = uSpellLights[i];
+      if (l.w <= 0.0) continue;
+      float reach = 1.0 - smoothstep(0.0, max(uSpellColors[i].w, 0.001), length(surface - l.xyz));
+      light += uSpellColors[i].rgb * reach * reach * l.w;
+    }
+    return light;
+  }
+`;
+
+/** Attach the shared spell-light uniforms to a compiled shader. */
+export function bindSpellLights(uniforms: Record<string, THREE.IUniform>): void {
+  uniforms.uSpellLights = SPELL_LIGHTS.uSpellLights;
+  uniforms.uSpellColors = SPELL_LIGHTS.uSpellColors;
+}
+
+export const LANTERN_GLSL = SPELL_LIGHT_GLSL + `
   uniform vec4 uLanterns[6];
   float lanternIllumination(vec3 surface) {
     float amount = 0.0;
@@ -31,6 +64,7 @@ export function illuminateIllustration(material: THREE.MeshBasicMaterial, lanter
   material.onBeforeCompile = (shader, renderer) => {
     previous.call(material, shader, renderer);
     shader.uniforms.uLanterns = lanterns;
+    bindSpellLights(shader.uniforms);
     shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vLanternWorld;');
     shader.vertexShader = shader.vertexShader.replace('#include <project_vertex>', `#include <project_vertex>
       vec4 lampVertex = vec4(transformed, 1.0);
@@ -42,8 +76,9 @@ export function illuminateIllustration(material: THREE.MeshBasicMaterial, lanter
     shader.fragmentShader = shader.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
       float lamplight = lanternIllumination(vLanternWorld);
       diffuseColor.rgb *= vec3(${ambient.toFixed(3)}, ${(ambient * 1.10).toFixed(3)}, ${(ambient * 1.11).toFixed(3)})
-                        + lamplight * vec3(0.83, 0.55, 0.22);`);
+                        + lamplight * vec3(0.83, 0.55, 0.22)
+                        + spellIllumination(vLanternWorld);`);
   };
   const key = material.customProgramCacheKey.bind(material);
-  material.customProgramCacheKey = () => `${key()}-lantern-lit-${ambient}`;
+  material.customProgramCacheKey = () => `${key()}-lantern-lit-v2-${ambient}`;
 }

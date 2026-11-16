@@ -14,6 +14,7 @@ import { FrameBudget } from './FrameBudget.ts';
 import { CasterView, worldInputBlocked } from './CasterView.ts';
 import { aimAssistRadius, SPELL_RANGE, chooseRayTarget, screenPointAtDepth, terrainHeight } from './spatial.ts';
 import { disposeGroup, type ScreenFeedback } from './vfx.ts';
+import { SPELL_LIGHTS, SPELL_LIGHT_COUNT } from './LanternLighting.ts';
 
 interface FloatingLabel {
   sprite: THREE.Sprite;
@@ -27,6 +28,8 @@ interface Wisp {
   opacity: number;
   color: THREE.Color;
   ring: THREE.ShaderMaterial;
+  /** Seconds this marker stays hidden (the hand is the bow's drawing hand). */
+  hiddenFor: number;
   cursor: { x: number; y: number } | null;
   charge: number;
   chargeColor: THREE.Color;
@@ -52,7 +55,7 @@ const LEFT_TINT = '#b9dcff';
 const RIGHT_TINT = '#d9ccff';
 const LIGHT_POOL = 3;
 const MAX_STUCK_ARROWS = 24;
-const MARKER_OPACITY = 0.7;
+const MARKER_OPACITY = 1;
 
 /** A stationary gesture-controlled clearing with living scenery and approaching spirits. */
 export class World {
@@ -76,8 +79,7 @@ export class World {
   private readonly spellAnimations: SpellAnimation[] = [];
   private readonly enemies: EnemyCombat[] = [];
   private readonly stuckArrows: StuckArrow[] = [];
-  /** Hand markers stay hidden while both hands are busy drawing the bow (and briefly after). */
-  private markersHiddenFor = 0;
+  private readonly worldLights = Array.from({ length: SPELL_LIGHT_COUNT }, () => ({ position: new THREE.Vector3(), color: new THREE.Color(), level: 0, radius: 10 }));
   private readonly container: HTMLElement;
   private readonly clock = new THREE.Clock();
   private readonly scratch = new THREE.Vector3();
@@ -221,9 +223,12 @@ export class World {
     for (const side of SIDES) this.wisps[side].cursor = cursors[side] ?? null;
   }
 
-  /** Hide both hand markers while a two-hand gesture (the bow) owns the hands. */
-  setMarkersHidden(hidden: boolean): void {
-    if (hidden) this.markersHiddenFor = 0.35;
+  /**
+   * Hide one hand's marker while both hands make a single spell (the bow's drawing hand): the
+   * aiming hand keeps its marker, so there is exactly one cursor for one spell.
+   */
+  hideMarker(side: HandSide): void {
+    this.wisps[side].hiddenFor = 0.35;
   }
 
   /** 0..1 build-up while a hand shape is being held; tints the matching marker. */
@@ -294,6 +299,14 @@ export class World {
       mist: this.mist,
       screen: this.reducedMotion.matches ? { flash: (c, s, m) => this.feedback.flash(c, s * 0.4, m), shake: () => undefined } : this.feedback,
       light: (position, lightColor, intensity, duration, distance) => this.flashLight(position, lightColor, intensity, duration, distance),
+      illuminate: (slot, position, lightColor, level, radius) => {
+        const light = this.worldLights[slot];
+        if (!light) return;
+        light.position.copy(position);
+        light.color.copy(lightColor);
+        light.level = Math.max(0, level);
+        light.radius = radius;
+      },
       onStick: spell.effect === 'arrow' ? (point, tip, scale) => this.stickArrow(point, tip, scale, color, enemy) : undefined,
     });
     if (spell.effect === 'summon') this.encounter.summon(origin, target, enemy);
@@ -405,7 +418,7 @@ export class World {
     // A small, quiet marker: a fine ring and a soft centre dot. The ring's arc fills while a sign
     // charges, so the hold timer lives where the hand is without cluttering the view.
     const ring = new THREE.ShaderMaterial({
-      transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending,
+      transparent: true, depthWrite: false, depthTest: false,
       uniforms: { uProgress: { value: 0 }, uOpacity: { value: 0 }, uBase: { value: new THREE.Color(tint) }, uCharge: { value: new THREE.Color('#ffffff') } },
       vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
       fragmentShader: `
@@ -413,18 +426,24 @@ export class World {
         void main(){
           vec2 p = vUv * 2.0 - 1.0; float r = length(p);
           float angle = fract(atan(p.x, p.y) / 6.2831853 + 1.0);
-          float ring = (1.0 - smoothstep(0.0, 0.03, abs(r - 0.62))) * 0.4;
-          float dotCore = 1.0 - smoothstep(0.06, 0.13, r);
+          float d = abs(r - 0.62);
+          float ring = 1.0 - smoothstep(0.03, 0.055, d);
+          float dotCore = 1.0 - smoothstep(0.09, 0.15, r);
+          // A soft dark outline keeps the marker legible over bright fog, sky and spells.
+          float outline = (1.0 - smoothstep(0.06, 0.12, d)) + (1.0 - smoothstep(0.13, 0.22, r));
           float charging = step(0.001, uProgress);
-          float arc = (1.0 - smoothstep(0.0, 0.06, abs(r - 0.62))) * step(angle, uProgress) * charging;
-          vec3 c = mix(uBase, uCharge, charging);
-          gl_FragColor = vec4(c, (ring + dotCore * 0.7 + arc) * uOpacity);
+          float arc = (1.0 - smoothstep(0.045, 0.075, d)) * step(angle, uProgress) * charging;
+          vec3 light = mix(uBase, uCharge, max(arc, charging * 0.35));
+          float lit = clamp(ring * 0.9 + dotCore + arc, 0.0, 1.0);
+          float alpha = clamp(lit + outline * 0.45, 0.0, 1.0) * uOpacity;
+          vec3 c = mix(vec3(0.02, 0.03, 0.03), light * (1.0 + arc * 0.4), lit / max(lit + outline * 0.45, 0.001));
+          gl_FragColor = vec4(c, alpha);
         }`,
     });
     const ringMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9), ring);
     ringMesh.renderOrder = 9;
     marker.add(ringMesh);
-    marker.scale.setScalar(0.6);
+    marker.scale.setScalar(0.62);
     this.scene.add(marker);
     return {
       side,
@@ -432,6 +451,7 @@ export class World {
       opacity: 0,
       color: new THREE.Color(tint),
       ring,
+      hiddenFor: 0,
       cursor: null,
       charge: 0,
       chargeColor: new THREE.Color('#ffffff'),
@@ -514,7 +534,6 @@ export class World {
     const paused = worldInputBlocked();
     this.encounter.update(dt, paused, this.reducedMotion.matches);
     const simulationDt = paused ? 0 : dt;
-    this.markersHiddenFor = Math.max(0, this.markersHiddenFor - dt);
     for (const side of SIDES) this.updateWisp(this.wisps[side], dt);
 
     for (let i = this.labels.length - 1; i >= 0; i--) {
@@ -539,6 +558,14 @@ export class World {
       animation.dispose();
       this.spellAnimations.splice(i, 1);
     }
+
+    // Shared world lights: upload this frame's levels, then let them die unless refreshed.
+    this.worldLights.forEach((light, i) => {
+      SPELL_LIGHTS.uSpellLights.value[i].set(light.position.x, light.position.y, light.position.z, light.level);
+      SPELL_LIGHTS.uSpellColors.value[i].set(light.color.r, light.color.g, light.color.b, light.radius);
+      light.level *= Math.exp(-dt * 30);
+      if (light.level < 0.005) light.level = 0;
+    });
 
     for (const pooled of this.lights) {
       pooled.age += dt;
@@ -592,7 +619,8 @@ export class World {
     w.marker.position.lerp(w.target, 1 - Math.exp(-dt * (has ? 32 : 2)));
     w.marker.quaternion.copy(this.camera.quaternion);
     w.marker.scale.setScalar(0.6 + w.charge * 0.12);
-    const goal = has && this.markersHiddenFor <= 0 ? MARKER_OPACITY : 0;
+    w.hiddenFor = Math.max(0, w.hiddenFor - dt);
+    const goal = has && w.hiddenFor <= 0 ? MARKER_OPACITY : 0;
     w.opacity += (goal - w.opacity) * (1 - Math.exp(-dt * (goal === 0 ? 14 : 6)));
     w.color.copy(w.baseTint).lerp(w.chargeColor, w.charge);
     w.ring.uniforms.uOpacity.value = w.opacity;

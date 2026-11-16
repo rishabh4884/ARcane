@@ -26,6 +26,10 @@ All notable changes to ARcane are recorded here. The format follows
 
 ### Changed
 
+- Lightning sounds like lightning: a clipped double crack, a burst of electrical crackle, a sub boom and thunder that rolls away in uneven swells across the stereo field.
+- A lightning strike lights its surroundings. Ground, trees, rocks, grass, fog, mist and nearby spirits brighten with the bolt and flicker with it, through a shared world-light uniform (most of the forest is unlit artwork that ordinary three.js lights cannot reach).
+- During Bow Draw only the drawing hand's marker hides; the aiming hand keeps one marker, whose ring fills with the draw. Markers are fully opaque with a soft dark outline, so they read clearly over fog and spells.
+- Rise: the gnomes climb out of the summoning circle exactly where it opens, hold a firing position between the caster and their target (they used to run past it), turn to face it, and shoot with a visible brace, recoil and settle. Bolts leave from the crossbow tip and fly slower and brighter.
 - Skyfall casts from a short fingertip flick (0.72 palm-lengths, slower strokes accepted) and strikes the spirit in the column beneath the aim point, so pointing at or above an enemy is enough. A raise-then-drop U-turn is no longer mistaken for a sigil arc.
 - Hand markers are now a small fine ring and soft dot (no crosshair or particle trail). The charge arc remains. Both markers hide while a bow draw is in progress.
 - Arrows fly to the spirit's actual body rather than the edge of the aim-assist box, and stay stuck in it at a visible angle. They move and recoil with the spirit and fade when it dissolves; arrows that miss stick in the ground or trees for a few seconds.

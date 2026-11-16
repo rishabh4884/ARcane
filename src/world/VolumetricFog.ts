@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { seededRandom, terrainHeight } from './spatial.ts';
-import { createLanternUniform, LANTERN_GLSL, type LanternUniform } from './LanternLighting.ts';
+import { createLanternUniform, LANTERN_GLSL, SPELL_LIGHTS, type LanternUniform } from './LanternLighting.ts';
 
 /** Several depth-separated, softly-lit fog volumes drift independently through the fixed forest. */
 export class VolumetricFog {
@@ -45,7 +45,7 @@ export class VolumetricFog {
     geometry.setAttribute('fogShade',new THREE.InstancedBufferAttribute(new Float32Array(colors),1));geometry.instanceCount=this.cloudCount;
     source.dispose();
     const material=new THREE.ShaderMaterial({
-      transparent:true,depthWrite:false,depthTest:true,side:THREE.DoubleSide,uniforms:{uTime:this.time,uMotion:this.motion,uLanterns:this.lanterns},
+      transparent:true,depthWrite:false,depthTest:true,side:THREE.DoubleSide,uniforms:{uTime:this.time,uMotion:this.motion,uLanterns:this.lanterns,...SPELL_LIGHTS},
       vertexShader:`attribute vec4 fogOrigin;attribute vec2 fogSize;attribute float fogShade;uniform float uTime;uniform float uMotion;
         varying vec2 vUv;varying vec3 vWorld;varying float vDepth;varying float vShade;
         void main(){vUv=uv;vShade=fogShade;
@@ -85,7 +85,7 @@ export class VolumetricFog {
            float lantern=lanternIllumination(vWorld);
            vec3 color=mix(shadowFog,litFog,clamp(innerLight*vShade+.08,0.,.38));
            // Moonlight silvers the upper edges of each bank; lanterns warm what is near them.
-           color=mix(color,moonFog,smoothstep(.45,1.0,vUv.y)*.5*(1.0-density*.5))+vec3(.46,.24,.09)*lantern;
+           color=mix(color,moonFog,smoothstep(.45,1.0,vUv.y)*.5*(1.0-density*.5))+vec3(.46,.24,.09)*lantern+spellIllumination(vWorld)*.35;
           gl_FragColor=vec4(color,alpha);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>

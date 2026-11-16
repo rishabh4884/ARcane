@@ -243,7 +243,8 @@ export class AudioEngine {
         break;
       }
       case 'lightning':
-        this.noise({ filter: 'highpass', freq: 3000, decay: 0.15, gain: 0.08, pan, attack: 0.1 });
+        // Static gathering in the air for the instant before the strike.
+        this.noise({ filter: 'bandpass', freq: 1200, freqEnd: 6000, q: 1.4, attack: 0.12, decay: 0.04, gain: 0.07, pan, tremolo: { rate: 60, depth: 0.9 } });
         break;
       case 'frost':
         this.noise({ filter: 'highpass', freq: 4000, freqEnd: 7000, attack: 0.05, decay: 0.3, gain: 0.07, pan });
@@ -278,14 +279,9 @@ export class AudioEngine {
         this.noise({ filter: 'lowpass', freq: 1800, decay: 0.12, gain: 0.25, pan });
         this.noise({ filter: 'highpass', freq: 5000, decay: 0.18, gain: 0.06, pan, when: 0.02 });
         break;
-      case 'lightning': {
-        // The crack, a sizzle, then thunder rolling in from the distance.
-        this.noise({ filter: 'highpass', freq: 900, decay: 0.2, gain: 0.85, pan, attack: 0.002 });
-        this.noise({ filter: 'bandpass', freq: 3200, q: 0.8, decay: 0.55, gain: 0.18, pan, when: 0.04 });
-        this.tone({ type: 'sawtooth', freq: 70, freqEnd: 40, decay: 0.3, gain: 0.25, filter: { type: 'lowpass', freq: 400 }, pan });
-        this.noise({ filter: 'lowpass', freq: 220, freqEnd: 90, brown: true, attack: 0.18, decay: 3.2, gain: 0.9, when: 0.28, pan: pan * 0.4, reverb: 0.9 });
+      case 'lightning':
+        this.thunderclap(pan);
         break;
-      }
       case 'frost':
         for (let i = 0; i < 7; i++) this.tone({ type: 'sine', freq: 1800 + Math.random() * 2600, decay: 0.7 + Math.random() * 0.5, gain: 0.035, when: i * 0.025, pan: pan + (Math.random() - 0.5) * 0.4, reverb: 0.8 });
         for (let i = 0; i < 4; i++) this.noise({ filter: 'bandpass', freq: 2600 + i * 500, q: 3, decay: 0.07, gain: 0.16, when: i * 0.05, pan });
@@ -300,6 +296,97 @@ export class AudioEngine {
       default:
         break;
     }
+  }
+
+  /**
+   * A close lightning strike: a saturated double crack, a burst of electrical crackle, a sub boom
+   * felt more than heard, then thunder rolling away in several uneven swells.
+   */
+  private thunderclap(pan: number): void {
+    const ctx = this.ctx!;
+    const now = ctx.currentTime;
+    const out = this.output(pan, 0.35);
+    // 1. The crack: broadband, clipped, and doubled a few milliseconds apart like a real return stroke.
+    for (const [delay, level] of [[0, 1], [0.028, 0.75], [0.07, 0.4]] as const) {
+      const src = ctx.createBufferSource();
+      src.buffer = this.white;
+      const high = ctx.createBiquadFilter();
+      high.type = 'highpass';
+      high.frequency.value = 300;
+      const shaper = ctx.createWaveShaper();
+      shaper.curve = this.drive();
+      const gain = ctx.createGain();
+      const t = now + delay;
+      gain.gain.setValueAtTime(0.0001, t);
+      gain.gain.exponentialRampToValueAtTime(0.9 * level, t + 0.002);
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.16 + delay);
+      src.connect(high).connect(shaper).connect(gain).connect(out);
+      src.start(t, Math.random());
+      src.stop(t + 0.35);
+    }
+    // 2. Crackle: dozens of tiny sparks, dense at first and thinning out, spread across the stereo field.
+    for (let i = 0; i < 46; i++) {
+      const when = 0.01 + Math.pow(Math.random(), 1.8) * 0.6;
+      this.noise({ filter: 'bandpass', freq: 1800 + Math.random() * 5200, q: 2.5, attack: 0.001, decay: 0.004 + Math.random() * 0.012, gain: 0.12 + Math.random() * 0.22 * (1 - when), when, pan: pan + (Math.random() - 0.5) * 0.9, reverb: 0.25 });
+    }
+    // 3. The boom you feel in your chest.
+    this.tone({ type: 'sine', freq: 62, freqEnd: 28, attack: 0.004, decay: 0.75, gain: 0.7, pan: pan * 0.5 });
+    this.noise({ filter: 'lowpass', freq: 160, brown: true, attack: 0.01, decay: 0.45, gain: 0.6, pan: pan * 0.5 });
+    // 4. Rolling thunder: two decorrelated layers (left/right) with uneven swells that drift lower.
+    for (const side of [-1, 1]) {
+      const src = ctx.createBufferSource();
+      src.buffer = this.brown;
+      src.loop = true;
+      const low = ctx.createBiquadFilter();
+      low.type = 'lowpass';
+      low.Q.value = 0.7;
+      low.frequency.setValueAtTime(420, now + 0.15);
+      low.frequency.exponentialRampToValueAtTime(85, now + 4.8);
+      const body = ctx.createBiquadFilter();
+      body.type = 'lowshelf';
+      body.frequency.value = 120;
+      body.gain.value = 8;
+      const gain = ctx.createGain();
+      const panner = ctx.createStereoPanner();
+      panner.pan.value = Math.max(-1, Math.min(1, pan * 0.4 + side * 0.55));
+      gain.gain.setValueAtTime(0.0001, now);
+      let t = now + 0.12 + Math.random() * 0.05;
+      gain.gain.exponentialRampToValueAtTime(0.0001, t);
+      let level = 1.05;
+      // Each roll: a quick swell and a slower sag, a little later, quieter and longer than the last.
+      for (let roll = 0; roll < 5; roll++) {
+        const rise = 0.08 + roll * 0.06 + Math.random() * 0.08;
+        const fall = 0.3 + roll * 0.22 + Math.random() * 0.3;
+        gain.gain.exponentialRampToValueAtTime(level * (0.75 + Math.random() * 0.35), t + rise);
+        gain.gain.exponentialRampToValueAtTime(level * (0.2 + Math.random() * 0.15), t + rise + fall);
+        t += rise + fall;
+        level *= 0.62;
+      }
+      gain.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
+      src.connect(low).connect(body).connect(gain).connect(panner);
+      panner.connect(this.sfx);
+      const send = ctx.createGain();
+      send.gain.value = 0.9;
+      panner.connect(send).connect(this.reverbSend);
+      src.start(now, Math.random() * 1.5);
+      src.stop(t + 1.3);
+    }
+  }
+
+  private driveCurve: Float32Array<ArrayBuffer> | null = null;
+
+  /** Soft-clipping curve that gives the crack its torn, saturated edge. */
+  private drive(): Float32Array<ArrayBuffer> {
+    if (!this.driveCurve) {
+      const n = 1024;
+      const curve = new Float32Array(n);
+      for (let i = 0; i < n; i++) {
+        const x = (i / (n - 1)) * 2 - 1;
+        curve[i] = Math.tanh(x * 7) * 0.9;
+      }
+      this.driveCurve = curve;
+    }
+    return this.driveCurve;
   }
 
   /* ─────────────────────────────── creatures ─────────────────────────────── */

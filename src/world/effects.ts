@@ -25,6 +25,11 @@ export interface SpellContext extends FxContext {
   depth?: number;
   hand?: 'left' | 'right' | 'both';
   light?: LightFlash;
+  /**
+   * Light the surrounding world (ground, trees, grass, fog, creatures) this frame. `slot` picks one
+   * of the shared world lights; it fades within a few frames unless refreshed.
+   */
+  illuminate?: (slot: number, position: THREE.Vector3, color: THREE.Color, level: number, radius: number) => void;
   /** Arrow only: called at impact with the point and the tip direction the arrow should stick at. */
   onStick?: (point: THREE.Vector3, tipDirection: THREE.Vector3, scale: number) => void;
 }
@@ -429,6 +434,12 @@ function lightning(target: THREE.Vector3, color: THREE.Color, ctx: SpellContext)
     ctx.screen?.shake(0.32);
   };
 
+  // The strike lights its surroundings: a pool around the impact and a wash along the bolt.
+  const groundGlow = target.clone().setY(Math.max(target.y, ctx.groundY) + 1.6);
+  const boltTop = ctx.lightningStart ? ctx.lightningStart.clone() : target.clone().add(new THREE.Vector3(0, 5.1, 0));
+  const boltGlow = target.clone().lerp(boltTop, 0.4);
+  const worldLight = color.clone().lerp(WHITE, 0.55);
+
   // Brightness envelope: leader, a dark beat, the return stroke, a re-strike, then the fade.
   const pattern: Array<[number, number, number]> = [[0.15, 0, 1], [0.2, 0, 0.18], [0.3, 1, 1], [0.35, 1, 0.3], [0.44, 2, 1], [0.95, 2, -1]];
   return animate(group, duration, (_t, age) => {
@@ -437,6 +448,9 @@ function lightning(target: THREE.Vector3, color: THREE.Color, ctx: SpellContext)
       if (age < until) { variant = v; intensity = level < 0 ? clamp01(1 - (age - 0.44) / 0.51) : level; break; }
     }
     variants.forEach((v, i) => { v.group.visible = i === variant && intensity > 0.01; });
+    const leaderLight = age < impactAt ? 0.35 + 0.65 * (age / impactAt) : 1;
+    ctx.illuminate?.(0, groundGlow, worldLight, intensity * leaderLight * 1.7, 15);
+    ctx.illuminate?.(1, boltGlow, worldLight, intensity * leaderLight * 0.75, 22);
     const active = variants[variant];
     const leader = clamp01(age / impactAt);
     (active.main.geometry as THREE.BufferGeometry).setDrawRange(0, Math.ceil(active.mainSegments * leader) * 6);

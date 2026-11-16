@@ -108,13 +108,14 @@ function handle(out: EngineOutput, stats: TrackerStats): void {
   if (out.bow) {
     const spell = book.spellFor(out.bow.gestureId);
     if (spell) {
-      perHand[out.bow.drawSide] = { progress: out.bow.progress, color: spell.color };
+      // One spell, one cursor: the aiming hand's marker shows the draw.
+      perHand[out.bow.aimSide] = { progress: out.bow.progress, color: spell.color };
       charges.push({ spellId: spell.id, progress: out.bow.progress });
     }
   }
   world.setCursors(cursors);
-  // Both hands are the bow: the two aim markers would only clutter the shot.
-  if (out.bow) world.setMarkersHidden(true);
+  // Both hands make one spell: keep the aiming hand's marker, hide the drawing hand's.
+  if (out.bow) world.hideMarker(out.bow.drawSide);
 
   // A two-hand sign charges both wisps together; otherwise each hand charges on its own.
   const twin = out.hold?.side === 'both' ? out.hold : null;

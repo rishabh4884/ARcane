@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { makeGrassTile, grassLod, GRASS_TILE, type GrassLod, type GrassSite } from './grass-layout.ts';
 import { seededRandom, terrainHeight, type Obstacle } from './spatial.ts';
-import { createLanternUniform, LANTERN_GLSL, type LanternUniform } from './LanternLighting.ts';
+import { createLanternUniform, LANTERN_GLSL, SPELL_LIGHTS, type LanternUniform } from './LanternLighting.ts';
 
 /** Curved, tapered ribbons with a shallow ridge: actual blade silhouettes, never grass cards. */
 export function makeGrassClump(blades:number,segments:number):THREE.BufferGeometry {
@@ -44,7 +44,7 @@ export class GrassField {
 
   constructor(obstacles:readonly Obstacle[],private readonly lantern:LanternUniform=createLanternUniform()){
     this.group.name='Living geometry grass — curved individual blades';
-    this.material=new THREE.ShaderMaterial({side:THREE.DoubleSide,fog:true,uniforms:{...THREE.UniformsUtils.clone(THREE.UniformsLib.fog),grassTime:this.time,uLanterns:this.lantern},
+    this.material=new THREE.ShaderMaterial({side:THREE.DoubleSide,fog:true,uniforms:{...THREE.UniformsUtils.clone(THREE.UniformsLib.fog),grassTime:this.time,uLanterns:this.lantern,...SPELL_LIGHTS},
       vertexShader:`
         attribute vec3 rootOffset; attribute vec4 grassParams; attribute vec3 grassGround;
         attribute vec2 bladeRoot;
@@ -82,7 +82,7 @@ export class GrassField {
           float lamp=lanternIllumination(worldPoint);
           vec3 rootColor=mix(vec3(.012,.039,.026),vec3(.023,.068,.04),patchShade);
           vec3 tipColor=mix(vec3(.041,.104,.043),vec3(.078,.155,.061),patchShade);
-          vec3 color=mix(rootColor,tipColor,tip*.88)*diffuse+vec3(.98,.57,.24)*lamp*(.035+.12*tip);
+          vec3 color=mix(rootColor,tipColor,tip*.88)*diffuse+vec3(.98,.57,.24)*lamp*(.035+.12*tip)+spellIllumination(worldPoint)*(.08+.3*tip);
           gl_FragColor=vec4(color,1.0);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>

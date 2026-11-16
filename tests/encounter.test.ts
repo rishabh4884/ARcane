@@ -129,3 +129,20 @@ describe('adaptive resolution budget',()=>{
     for(let i=0;i<1500;i++)budget.sample(1/60);expect(budget.ratio).toBeGreaterThan(0.8);expect(budget.ratio).toBeLessThanOrEqual(1.5);
   });
 });
+
+describe('summoned gnome behaviour',()=>{
+  it('climbs out of the circle where it was cast and holds a firing position short of the target',()=>{
+    const summons=new GnomeSummons([],()=>null,()=>{}),circle=new THREE.Vector3(0,0,5),enemy=new THREE.Vector3(0,0,-20);
+    summons.summon(circle,enemy,1);
+    const roots=[...summons.group.children] as THREE.Group[];
+    for(const root of roots)expect(Math.hypot(root.position.x-circle.x,root.position.z-circle.z)).toBeLessThan(1);
+    const player=new THREE.Vector3(0,1.85,17);
+    for(let i=0;i<100;i++)summons.update(.05,true,player,[{id:1,position:enemy,height:2,alive:true}]);
+    for(const root of roots){
+      // Between the caster and the spirit, never past it.
+      expect(root.position.z).toBeGreaterThan(enemy.z);
+      expect(root.position.distanceTo(enemy)).toBeLessThan(13);
+    }
+    summons.dispose();
+  });
+});

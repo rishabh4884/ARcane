@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { CreatureArtwork } from './CreatureArtwork.ts';
 import { ArtResources } from './storybook.ts';
 import { glowTexture } from './vfx.ts';
+import { bindSpellLights, SPELL_LIGHT_GLSL } from './LanternLighting.ts';
 
 export type CreatureKind='goblin'|'root'|'hollow'|'wraith';
 export type CreaturePose='idle'|'walk'|'windup'|'strike'|'recover'|'stagger'|'frozen'|'dead';
@@ -131,17 +132,19 @@ export class Creature {
     const dissolve=this.dissolve,edge=this.edge;
     material.onBeforeCompile=(shader)=>{
       shader.uniforms.uBend=rig.bend;shader.uniforms.uCurl=rig.curl;shader.uniforms.uPartHeight=rig.height;
-      shader.uniforms.uDissolve=dissolve;shader.uniforms.uEdge=edge;
-      shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nuniform float uBend; uniform float uCurl; uniform float uPartHeight; varying vec2 vPartUv;')
+      shader.uniforms.uDissolve=dissolve;shader.uniforms.uEdge=edge;bindSpellLights(shader.uniforms);
+      shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nuniform float uBend; uniform float uCurl; uniform float uPartHeight; varying vec2 vPartUv; varying vec3 vPartWorld;')
         .replace('#include <begin_vertex>',`#include <begin_vertex>
           vPartUv = uv;
           // 0 at the shoulder, 1 at the claws: the lower limb bends more than the upper.
           float limb = 1.0 - uv.y;
           transformed.x += uBend * limb * limb * uPartHeight;
           transformed.z += uCurl * limb * limb * limb * uPartHeight * 0.55;
-          transformed.y += abs(uCurl) * limb * limb * uPartHeight * 0.08;`);
+          transformed.y += abs(uCurl) * limb * limb * uPartHeight * 0.08;
+          vPartWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;`);
       shader.fragmentShader=shader.fragmentShader.replace('#include <common>',`#include <common>
-          uniform float uDissolve; uniform vec3 uEdge; varying vec2 vPartUv;
+          uniform float uDissolve; uniform vec3 uEdge; varying vec2 vPartUv; varying vec3 vPartWorld;
+          ${SPELL_LIGHT_GLSL}
           float creatureHash(vec2 p){ return fract(sin(dot(p, vec2(41.3, 289.1))) * 45758.5453); }
           float creatureNoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
             return mix(mix(creatureHash(i), creatureHash(i + vec2(1.0, 0.0)), f.x), mix(creatureHash(i + vec2(0.0, 1.0)), creatureHash(i + vec2(1.0, 1.0)), f.x), f.y); }`)
@@ -152,9 +155,10 @@ export class Creature {
           float creatureCut = uDissolve * 1.08 - 0.04;
           if (uDissolve > 0.0 && creatureFront < creatureCut) discard;
           float creatureBurn = uDissolve > 0.0 ? 1.0 - smoothstep(0.0, 0.06, creatureFront - creatureCut) : 0.0;
-          diffuseColor.rgb = mix(diffuseColor.rgb, uEdge * 1.8, creatureBurn);`);
+          diffuseColor.rgb = mix(diffuseColor.rgb, uEdge * 1.8, creatureBurn);
+          diffuseColor.rgb *= 1.0 + spellIllumination(vPartWorld);`);
     };
-    material.customProgramCacheKey=()=>'creature-rig-v1';
+    material.customProgramCacheKey=()=>'creature-rig-v2';
     return new THREE.Mesh(this.art.geometry(new THREE.PlaneGeometry(width,height,1,rows)),material);
   }
 
