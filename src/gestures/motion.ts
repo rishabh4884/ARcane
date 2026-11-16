@@ -2,11 +2,15 @@ import type { PoseName } from './poses.ts';
 export interface Sample { t:number; x:number; y:number; pose:PoseName; scale?:number }
 export type SwipeDirection = 'left'|'right'|'up'|'down'|'horizontal'; export type SwipeHand = 'open'|'fist'|'point';
 export const SWIPE_DEFAULTS = { direction: 'horizontal' as SwipeDirection, minTravel: 1.45, minSpeed: 3.5, hand: 'open' as SwipeHand };
+const DIRECTION_DOMINANCE = 1.15;
 export interface SwipeOptions { direction: SwipeDirection; minTravel: number; minSpeed: number; hand: SwipeHand; straightness?: number }
 export function detectSwipe(samples: readonly Sample[], o: SwipeOptions): { direction: SwipeDirection } | null {
   if (samples.length < 3) return null;
   const end = samples[samples.length - 1];
-  if (end.pose !== o.hand) return null;
+  // A single motion-blurred newest frame (unknown shape) must not delay a stroke that was clearly
+  // made with the right hand shape up to the previous frame.
+  const blurredEnd = end.pose === 'unknown' && samples[samples.length - 2].pose === o.hand;
+  if (end.pose !== o.hand && !blurredEnd) return null;
   const scale = Math.max(end.scale ?? 1, 1e-6);
 
   // A stroke must still be moving. Otherwise an old sweep (or a filter settling after it)
@@ -21,7 +25,7 @@ export function detectSwipe(samples: readonly Sample[], o: SwipeOptions): { dire
   if (Math.hypot(vx, vy) < o.minSpeed) return null;
 
   let pathLength = 0;
-  let matching = 1;
+  let matching = blurredEnd ? 0.25 : 1;
   let matchingMs = 0;
   let movingMs = 0;
   let forwardTravel = 0;
@@ -40,6 +44,9 @@ export function detectSwipe(samples: readonly Sample[], o: SwipeOptions): { dire
     if (start.pose === o.hand) {
       matching++;
       matchingMs += next.t - start.t;
+    } else if (start.pose === 'unknown') {
+      // Blurred frames are weak evidence: a quarter vote, never a full mismatch.
+      matching += 0.25;
     }
     const stepX = (next.x - start.x) / scale;
     const stepY = (next.y - start.y) / scale;
@@ -72,6 +79,10 @@ export function detectSwipe(samples: readonly Sample[], o: SwipeOptions): { dire
       continue;
     }
 
+    // A diagonal stroke is ambiguous: require one axis to lead clearly so Gale cannot become Rise.
+    const major = Math.max(Math.abs(dx), Math.abs(dy));
+    const minor = Math.min(Math.abs(dx), Math.abs(dy));
+    if (major < minor * DIRECTION_DOMINANCE) continue;
     const direction = Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'right' : 'left') : (dy > 0 ? 'down' : 'up');
     return o.direction === 'horizontal'
       ? (direction === 'left' || direction === 'right' ? { direction } : null)
@@ -87,7 +98,8 @@ const FULL_TURN = Math.PI * 2;
 
 export function detectCircle(s: readonly Sample[], o: typeof CIRCLE_DEFAULTS): { clockwise: boolean } | null {
   const end = s.at(-1);
-  if (!end || end.pose !== 'point') return null;
+  if (!end) return null;
+  if (end.pose !== 'point' && !(end.pose === 'unknown' && s.at(-2)?.pose === 'point')) return null;
   const oldest = Math.max(0, s.findIndex((sample) => end.t - sample.t <= MAX_CIRCLE_MS));
 
   // Search by elapsed stroke time, not `slice(-31)`: the same circle must have the same
@@ -97,7 +109,7 @@ export function detectCircle(s: readonly Sample[], o: typeof CIRCLE_DEFAULTS): {
     const path = s.slice(startIndex);
     const duration = end.t - path[0].t;
     if (duration < MIN_CIRCLE_MS || duration > MAX_CIRCLE_MS) continue;
-    if (path.some((sample) => sample.pose !== 'point')) continue;
+    if (!pointingThroughout(path)) continue;
     if (path.some((sample, index) => index > 0 && sample.t - path[index - 1].t > MAX_CIRCLE_GAP_MS)) continue;
 
     const xs = path.map((point) => point.x);
@@ -141,4 +153,21 @@ export function detectCircle(s: readonly Sample[], o: typeof CIRCLE_DEFAULTS): {
     return o.direction === 'any' || (o.direction === 'cw') === clockwise ? { clockwise } : null;
   }
   return null;
+}
+
+/**
+ * Every sample points, except for a few motion-blurred `unknown` frames: at most 15% of the loop and
+ * never more than two in a row. Any other definite shape breaks the sigil.
+ */
+function pointingThroughout(path: readonly Sample[]): boolean {
+  let unknown = 0;
+  let run = 0;
+  for (const sample of path) {
+    if (sample.pose === 'point') { run = 0; continue; }
+    if (sample.pose !== 'unknown') return false;
+    unknown++;
+    run++;
+    if (run > 2) return false;
+  }
+  return unknown <= Math.floor(path.length * 0.15);
 }

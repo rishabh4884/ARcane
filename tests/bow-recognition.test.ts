@@ -96,13 +96,16 @@ describe('BowRecognizer', () => {
     expect(bow.process(draw(0.28, false), aim, 285, false).fired?.side).toBe('right');
   });
 
-  it('cancels without firing when either hand is lost', () => {
+  it('cancels without firing when either hand stays lost past the drop-out grace', () => {
     const bow = makeRecognizer();
     const aim = hand('left', 0.42, false);
     const draw = hand('right', 0.55, true);
     bow.process(aim, draw, 0, true);
-    expect(bow.process(aim, null, 33, false)).toEqual({ engaged: false, charge: null, fired: null });
-    expect(bow.process(aim, hand('right', 0.8, false), 300, false).fired).toBeNull();
+    // A one-frame drop-out is bridged (motion blur during a fast pull)…
+    expect(bow.process(aim, null, 33, false).engaged).toBe(true);
+    // …but a hand that stays gone cancels the shot rather than firing it.
+    expect(bow.process(aim, null, 300, false)).toEqual({ engaged: false, charge: null, fired: null });
+    expect(bow.process(aim, hand('right', 0.8, false), 333, false).fired).toBeNull();
   });
 
   it('requires release to persist, ignoring a one-frame pinch dropout', () => {

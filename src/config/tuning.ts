@@ -7,7 +7,7 @@ export const DEFAULT_TUNING: Tuning = {
   },
   fingers: { on: 0.68, off: 0.52 },
   poseHoldMs: 450,
-  cooldownMs: 600,
+  cooldownMs: 500,
   lostGraceMs: 180,
   cursorGain: 1.35,
   // 30 FPS leaves headroom for synchronous hand inference and scene rendering.

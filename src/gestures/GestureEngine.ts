@@ -42,6 +42,10 @@ export interface TrackedHand {
 export interface ProcessContext {
   /** Hand shapes whose single-hand gestures must not charge or fire this frame. */
   suppressPoses?: ReadonlySet<PoseName>;
+  /** Pointing strikes, sigils and pointing holds stand down (the hand is aiming a two-hand spell). */
+  suppressPointing?: boolean;
+  /** Every held sign on this hand stands down (the hand is busy with a two-hand spell). */
+  suppressHolds?: boolean;
 }
 
 export interface EngineOutput {
@@ -76,6 +80,24 @@ const CURSOR_CANDIDATE_MAX_AGE_MS = 100;
  */
 export const STILL_WINDOW_MS = 220;
 export const STILL_TRAVEL = 0.45;
+/** Tighter stillness for open-palm holds while an open-hand sweep is also live (pausing ≠ warding). */
+const STILL_TRAVEL_SHARED_OPEN = 0.3;
+/** A pointing path that turned this far recently is a sigil in progress, not a straight strike. */
+const CIRCLE_GUARD_MS = 650;
+const CIRCLE_GUARD_TURN = (150 * Math.PI) / 180;
+const CIRCLE_GUARD_STEP = 0.12;
+/**
+ * While a sigil is live, a pointing strike waits this long before casting. If the fingertip keeps
+ * curling by more than STRIKE_CURL in that time the player is drawing a circle, not striking.
+ */
+const STRIKE_CONFIRM_MS = 150;
+const STRIKE_CURL = (30 * Math.PI) / 180;
+const STRIKE_VETO_MS = 500;
+/** A single resampled step that turns more than this is a cusp (reversal), not curvature. */
+const CUSP = (100 * Math.PI) / 180;
+/** Crisp poses charge faster and borderline poses slower, bounded to keep holds predictable. */
+const CHARGE_RATE_MIN = 0.85;
+const CHARGE_RATE_MAX = 1.2;
 const NO_FINGERS = { index: 0, middle: 0, ring: 0, pinky: 0 };
 const NO_STATES = { index: false, middle: false, ring: false, pinky: false };
 
@@ -125,6 +147,10 @@ export class GestureEngine {
   private pendingSwipe: { gestureId: string; detail: string; since: number } | null = null;
   private cursorAnchor: { x: number; y: number; t: number } | null = null;
   private cursorCandidate: { x: number; y: number; t: number } | null = null;
+  /** Eased 0..1 confidence of the current held shape. */
+  private poseConfidence = 0.5;
+  private pendingStrike: { gestureId: string; detail: string; since: number } | null = null;
+  private strikeVetoUntil = -Infinity;
 
   constructor(gestures: readonly GestureDef[], tuning: Tuning) {
     this.gestures = gestures;
@@ -176,7 +202,9 @@ export class GestureEngine {
     if (pose !== this.pose) {
       this.pose = pose;
       this.poseSince = now;
+      this.poseConfidence = 0.5;
     }
+    this.poseConfidence += (shapeConfidence(ext, fingerStates, this.tuning.fingers) - this.poseConfidence) * 0.25;
     if (pose !== 'unknown' && pose !== this.latched) this.latched = null;
 
     const palm = palmCenter(lm);
@@ -197,28 +225,47 @@ export class GestureEngine {
       (g.kind === 'swipe' && (g.hand ?? SWIPE_DEFAULTS.hand) === pose) ||
       (g.kind === 'circle' && pose === 'point'),
     );
+    const sharedOpen = pose === 'open' && hasMatchingMotion;
     if (
-      this.palmMoved(now) ||
+      this.trailMoved(this.palm, now, sharedOpen ? STILL_TRAVEL_SHARED_OPEN : STILL_TRAVEL) ||
       (hasMatchingMotion && this.trailMoved(pose === 'point' ? this.strikeTip : this.palm, now, 0.12))
     ) this.stillSince = now;
+    const circleLive = this.gestures.some((g) => g.kind === 'circle');
+    // Never rush a hold whose shape also starts a live motion: that is how holds steal strikes.
+    const chargeRate = CHARGE_RATE_MIN + ((hasMatchingMotion ? 1 : CHARGE_RATE_MAX) - CHARGE_RATE_MIN) * this.poseConfidence;
 
     const fired: GestureFiring[] = [];
     let hold: EngineOutput['hold'] = null;
     const ready = now - this.lastFireAt >= this.tuning.cooldownMs;
 
+    if (this.pendingStrike) {
+      const pending = this.pendingStrike;
+      if (ctx?.suppressPointing || !ready || !this.gestures.some((g) => g.id === pending.gestureId)) {
+        this.pendingStrike = null;
+      } else if (Math.abs(this.turning(pending.since - 80)) > STRIKE_CURL || this.recentlyTurned(now)) {
+        // Still curling: this is a sigil being drawn. Stay quiet for the rest of the loop.
+        this.pendingStrike = null;
+        this.strikeVetoUntil = now + STRIKE_VETO_MS;
+      } else if (now - pending.since >= STRIKE_CONFIRM_MS) {
+        fired.push({ gestureId: pending.gestureId, detail: pending.detail });
+        this.pendingStrike = null;
+      }
+    }
+
     for (const [index, g] of this.gestures.entries()) {
       if (fired.length) break;
       if (g.kind === 'pose') {
         if (g.pose !== pose || this.latched === pose) continue;
-        if (ctx?.suppressPoses?.has(pose)) continue;
+        if (ctx?.suppressPoses?.has(pose) || ctx?.suppressHolds || (ctx?.suppressPointing && pose === 'point')) continue;
         const since = pose === 'open' || hasMatchingMotion ? Math.max(this.poseSince, this.stillSince) : this.poseSince;
-        const progress = clamp01((now - since) / (g.holdMs ?? this.tuning.poseHoldMs));
+        const progress = clamp01(((now - since) * chargeRate) / (g.holdMs ?? this.tuning.poseHoldMs));
         hold = { gestureId: g.id, progress };
         if (progress >= 1 && ready) {
           fired.push({ gestureId: g.id });
           this.latched = pose;
         }
       } else if (ready && g.kind === 'swipe') {
+        if (g.hand === 'point' && ctx?.suppressPointing) continue;
         const trail = g.hand === 'point' ? this.strikeTip : this.palm;
         const hit = detectSwipe(trail, {
           ...SWIPE_DEFAULTS,
@@ -229,6 +276,14 @@ export class GestureEngine {
           straightness: g.straightness,
         });
         const pending = this.pendingSwipe?.gestureId === g.id ? this.pendingSwipe : null;
+        // A sigil's descending (or rising) arc is not a straight strike. Confirm the stroke over a
+        // short window instead of casting on the first qualifying frame.
+        if (hit && g.hand === 'point' && circleLive) {
+          if (!this.pendingStrike && now >= this.strikeVetoUntil && !this.recentlyTurned(now)) {
+            this.pendingStrike = { gestureId: g.id, detail: hit.direction, since: now };
+          }
+          continue;
+        }
         if (hit || pending) {
           // A fast stroke reaches Rise's shorter distance before Phoenix's. Give an earlier,
           // longer gesture at the same speed up to 100 ms to finish, then keep the weaker cast.
@@ -253,6 +308,7 @@ export class GestureEngine {
           fired.push({ gestureId: g.id, detail });
         }
       } else if (ready && g.kind === 'circle') {
+        if (ctx?.suppressPointing) continue;
         const hit = detectCircle(this.tip, {
           ...CIRCLE_DEFAULTS,
           direction: g.direction,
@@ -264,6 +320,7 @@ export class GestureEngine {
 
     if (fired.length) {
       this.pendingSwipe = null;
+      this.pendingStrike = null;
       this.lastFireAt = now;
       this.palm = [];
       this.strikeTip = [];
@@ -328,6 +385,7 @@ export class GestureEngine {
   /** Clear motion buffers after a two-hand cast so leftover strokes cannot fire. */
   absorbCast(now: number, latch?: PoseName): void {
     this.pendingSwipe = null;
+    this.pendingStrike = null;
     this.lastFireAt = now;
     this.palm = [];
     this.strikeTip = [];
@@ -335,8 +393,24 @@ export class GestureEngine {
     if (latch) this.latched = latch;
   }
 
+  /**
+   * Another recogniser owns this hand for now: drop motion trails and restart hold timers, but do
+   * not start a cast pause. Nothing was cast, so the hand must be free to act the moment it is released.
+   */
+  suspend(now: number): void {
+    this.pendingSwipe = null;
+    this.pendingStrike = null;
+    this.palm = [];
+    this.strikeTip = [];
+    this.tip = [];
+    this.poseSince = now;
+    this.stillSince = now;
+  }
+
   reset(): void {
     this.pendingSwipe = null;
+    this.pendingStrike = null;
+    this.strikeVetoUntil = -Infinity;
     this.smoother.reset();
     this.fingers.reset();
     this.motionFingers.reset();
@@ -353,6 +427,33 @@ export class GestureEngine {
     this.last = IDLE;
     this.cursorAnchor = null;
     this.cursorCandidate = null;
+    this.poseConfidence = 0.5;
+  }
+
+  /**
+   * Total turning of the smoothed fingertip path over the recent window, resampled by arc length so
+   * that jitter while aiming adds nothing. A straight thrust turns little; a sigil arc turns a lot.
+   */
+  private recentlyTurned(now: number): boolean {
+    return Math.abs(this.turning(now - CIRCLE_GUARD_MS)) > CIRCLE_GUARD_TURN;
+  }
+
+  /** Signed turning (radians) of the fingertip path since `from`; reversals are cusps, not curvature. */
+  private turning(from: number): number {
+    const points: Array<{ x: number; y: number }> = [];
+    for (const s of this.tip) {
+      if (s.t < from) continue;
+      const last = points[points.length - 1];
+      if (!last || Math.hypot(s.x - last.x, s.y - last.y) >= CIRCLE_GUARD_STEP) points.push({ x: s.x, y: s.y });
+    }
+    let turn = 0;
+    for (let i = 2; i < points.length; i++) {
+      const ax = points[i - 1].x - points[i - 2].x, ay = points[i - 1].y - points[i - 2].y;
+      const bx = points[i].x - points[i - 1].x, by = points[i].y - points[i - 1].y;
+      const step = Math.atan2(ax * by - ay * bx, ax * bx + ay * by);
+      if (Math.abs(step) < CUSP) turn += step;
+    }
+    return turn;
   }
 
   private stabilizeCursor(
@@ -399,11 +500,6 @@ export class GestureEngine {
     return { x: anchor.x, y: anchor.y };
   }
 
-  /** True if the palm travelled more than STILL_TRAVEL palm-lengths within the last STILL_WINDOW_MS. */
-  private palmMoved(now: number): boolean {
-    return this.trailMoved(this.palm, now);
-  }
-
   private trailMoved(trail: readonly Sample[], now: number, minTravel = STILL_TRAVEL): boolean {
     const newest = trail[trail.length - 1];
     for (let i = trail.length - 2; i >= 0; i--) {
@@ -418,6 +514,24 @@ export class GestureEngine {
     buf.push(s);
     while (buf.length && now - buf[0].t > WINDOW_MS) buf.shift();
   }
+}
+
+/** 0 when any finger sits at its hysteresis edge, 1 when every finger is decisively up or down. */
+function shapeConfidence(
+  ext: Record<FingerName, number>,
+  states: FingerStates,
+  band: { on: number; off: number },
+): number {
+  let confidence = 1;
+  for (const finger of Object.keys(states) as FingerName[]) {
+    const value = ext[finger];
+    if (!Number.isFinite(value)) return 0;
+    const margin = states[finger]
+      ? (value - band.off) / Math.max(1 - band.off, 1e-6)
+      : (band.on - value) / Math.max(band.on, 1e-6);
+    confidence = Math.min(confidence, clamp01(margin));
+  }
+  return confidence;
 }
 
 function distance2d(a: { x: number; y: number }, b: { x: number; y: number }): number {

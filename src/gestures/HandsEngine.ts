@@ -2,7 +2,7 @@ import type { GestureDef } from '../config/gestures.ts';
 import type { Tuning } from '../config/tuning.ts';
 import { HandBinder } from '../tracking/HandBinder.ts';
 import type { HandFrame } from '../tracking/types.ts';
-import { BowRecognizer } from './BowRecognizer.ts';
+import { BowRecognizer, PINCH_INTENT, pinchGaps } from './BowRecognizer.ts';
 import {
   DUAL_MOTION_DEFAULTS,
   detectDualMotion,
@@ -54,6 +54,8 @@ export class HandsEngine {
   private dualStillSince = 0;
   private dualLatched: PoseName | null = null;
   private lastDualAt = -Infinity;
+  private lastPoses: { left: PoseName; right: PoseName } = { left: 'unknown', right: 'unknown' };
+  private bowWasEngaged = false;
 
   constructor(gestures: readonly GestureDef[], tuning: Tuning) {
     this.gestures = gestures;
@@ -86,6 +88,8 @@ export class HandsEngine {
     this.dualPose = 'unknown';
     this.dualStillSince = 0;
     this.dualLatched = null;
+    this.lastPoses = { left: 'unknown', right: 'unknown' };
+    this.bowWasEngaged = false;
   }
 
   process(frames: readonly HandFrame[], now: number): EngineOutput {
@@ -93,8 +97,21 @@ export class HandsEngine {
     // When both hands already hold the same shape and a two-hand sign wants it, the single-hand
     // gestures for that shape stand down so a double fist is one Blood Pact, not two fists + a pact.
     const suppress = this.suppressedPoses(!!bound.left && !!bound.right);
-    const L = this.left.process(bound.left, now, { suppressPoses: suppress });
-    const R = this.right.process(bound.right, now, { suppressPoses: suppress });
+    // Bow intent: one hand points while the other brings thumb to index. The aiming hand's strikes
+    // and the nocking hand's holds stand down so setting up a shot cannot cast something else.
+    const intent = this.bowIntent(bound.left, bound.right);
+    const L = this.left.process(bound.left, now, {
+      suppressPoses: suppress,
+      suppressPointing: intent === 'left-aims',
+      suppressHolds: intent === 'right-aims',
+    });
+    const R = this.right.process(bound.right, now, {
+      suppressPoses: suppress,
+      suppressPointing: intent === 'right-aims',
+      suppressHolds: intent === 'left-aims',
+    });
+    if (L.present) this.lastPoses.left = L.pose;
+    if (R.present) this.lastPoses.right = R.pose;
     const leftOn = !!bound.left && L.present;
     const rightOn = !!bound.right && R.present;
     const bowResult = this.bow.process(
@@ -104,15 +121,23 @@ export class HandsEngine {
       this.left.canFire(now) && this.right.canFire(now),
     );
     const bowEngaged = bowResult.engaged;
-    if (bowEngaged) {
-      // Bow intent owns both hands. Discard concurrent casts and clear motion trails so releasing
-      // the pinch cannot also complete a swipe or sigil.
+    if (bowResult.fired) {
+      // A shot was cast: the normal cast pause applies to both hands.
       this.left.absorbCast(now);
       this.right.absorbCast(now);
+    } else if (bowEngaged || this.bowWasEngaged) {
+      // Bow intent owns both hands. Discard concurrent casts and clear motion trails so releasing
+      // the pinch cannot also complete a swipe or sigil, but spend no cast pause: a cancelled draw
+      // cast nothing, and the player must be able to nock again immediately.
+      this.left.suspend(now);
+      this.right.suspend(now);
+    }
+    if (bowEngaged || this.bowWasEngaged) {
       this.dual = [];
       this.dualPose = 'unknown';
       this.dualLatched = null;
     }
+    this.bowWasEngaged = bowEngaged && !bowResult.fired;
 
     if (leftOn && rightOn && L.landmarks && R.landmarks && !bowEngaged) {
       this.lastDualAt = now;
@@ -238,6 +263,25 @@ export class HandsEngine {
       aspect: primary.aspect || L.aspect || R.aspect,
       hands,
     };
+  }
+
+  /** Which hand (if any) is aiming a bow that the other hand is about to nock. */
+  private bowIntent(left: HandFrame | null, right: HandFrame | null): 'left-aims' | 'right-aims' | null {
+    if (!this.bow.isEnabled || !left || !right) return null;
+    if (this.bow.active) return null;
+    const nocking = (frame: HandFrame) => {
+      const gaps = pinchGaps(frame.landmarks);
+      return Number.isFinite(gaps.gap3) && Math.min(gaps.gap3, gaps.gap2 * 1.3) < PINCH_INTENT;
+    };
+    if (this.lastPoses.left === 'point' && this.lastPoses.right !== 'point' && nocking(right)) return 'left-aims';
+    if (this.lastPoses.right === 'point' && this.lastPoses.left !== 'point' && nocking(left)) return 'right-aims';
+    if (this.lastPoses.left === 'point' && this.lastPoses.right === 'point') {
+      // Both read as pointing (a loose pinch often does): the hand whose thumb is closer nocks.
+      const l = pinchGaps(left.landmarks).gap3, r = pinchGaps(right.landmarks).gap3;
+      if (r < PINCH_INTENT && r < l) return 'left-aims';
+      if (l < PINCH_INTENT && l < r) return 'right-aims';
+    }
+    return null;
   }
 
   /** Shapes that a live two-hand sign is already claiming (both hands currently showing it). */
