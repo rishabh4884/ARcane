@@ -159,6 +159,8 @@ export class Creature {
   }
 
   hit():void{this.hitTime=0;}
+  /** 0 when solid, 1 when fully dissolved (dead or not yet risen). */
+  get fade():number{return this.group.visible?this.dissolve.value:1;}
 
   /** Restart presentation state and rise out of the forest floor when the wood awakens. */
   awaken():void{this.hitTime=1;this.pose='idle';this.awakenAge=0;this.dissolve.value=1;this.edge.value.copy(this.glow);}

@@ -91,10 +91,13 @@ const CIRCLE_GUARD_STEP = 0.12;
  * curling by more than STRIKE_CURL in that time the player is drawing a circle, not striking.
  */
 const STRIKE_CONFIRM_MS = 150;
-const STRIKE_CURL = (30 * Math.PI) / 180;
+const STRIKE_CURL = (35 * Math.PI) / 180;
 const STRIKE_VETO_MS = 500;
-/** A single resampled step that turns more than this is a cusp (reversal), not curvature. */
-const CUSP = (100 * Math.PI) / 180;
+/**
+ * A resampled step that turns more than this is a cusp (a raise-then-drop U-turn), not sigil
+ * curvature. Circles of the minimum sigil radius turn about 12° per step, so 40° separates them.
+ */
+const CUSP = (40 * Math.PI) / 180;
 /** Crisp poses charge faster and borderline poses slower, bounded to keep holds predictable. */
 const CHARGE_RATE_MIN = 0.85;
 const CHARGE_RATE_MAX = 1.2;
@@ -242,7 +245,7 @@ export class GestureEngine {
       const pending = this.pendingStrike;
       if (ctx?.suppressPointing || !ready || !this.gestures.some((g) => g.id === pending.gestureId)) {
         this.pendingStrike = null;
-      } else if (Math.abs(this.turning(pending.since - 80)) > STRIKE_CURL || this.recentlyTurned(now)) {
+      } else if (Math.abs(this.turning(pending.since)) > STRIKE_CURL || this.recentlyTurned(now)) {
         // Still curling: this is a sigil being drawn. Stay quiet for the rest of the loop.
         this.pendingStrike = null;
         this.strikeVetoUntil = now + STRIKE_VETO_MS;

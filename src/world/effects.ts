@@ -25,6 +25,8 @@ export interface SpellContext extends FxContext {
   depth?: number;
   hand?: 'left' | 'right' | 'both';
   light?: LightFlash;
+  /** Arrow only: called at impact with the point and the tip direction the arrow should stick at. */
+  onStick?: (point: THREE.Vector3, tipDirection: THREE.Vector3, scale: number) => void;
 }
 
 const UP = new THREE.Vector3(0, 1, 0);
@@ -93,7 +95,8 @@ function facingPlane(texture: THREE.Texture, color: THREE.ColorRepresentation, s
 
 /* ═══════════════════════════════ ARCANE ARROW ═══════════════════════════════ */
 
-function arrowMesh(color: THREE.Color): { root: THREE.Group; materials: THREE.MeshBasicMaterial[]; halo: THREE.Sprite } {
+/** The Arcane Arrow model: +Y is the tip direction, the head sits at the origin. */
+export function createArrowMesh(color: THREE.Color): { root: THREE.Group; materials: THREE.MeshBasicMaterial[]; halo: THREE.Sprite } {
   const root = new THREE.Group();
   const hot = color.clone().lerp(WHITE, 0.7);
   const materials: THREE.MeshBasicMaterial[] = [];
@@ -149,8 +152,9 @@ function arrow(origin: THREE.Vector3, target: THREE.Vector3, color: THREE.Color,
   const flight = THREE.MathUtils.clamp(distance / (36 + power * 34), 0.16, 0.85);
   const duration = flight + 0.85;
 
-  const { root, halo } = arrowMesh(color);
-  root.scale.setScalar(0.95 + power * 0.55);
+  const { root, halo } = createArrowMesh(color);
+  const arrowScale = 0.95 + power * 0.55;
+  root.scale.setScalar(arrowScale);
   group.add(root);
   const trail = new Trail(color, 0.12 * (0.7 + power * 0.7), 0.16 + power * 0.14, 40, 1.1);
   const filament = new Trail(WHITE, 0.03, 0.1, 24, 1);
@@ -175,6 +179,15 @@ function arrow(origin: THREE.Vector3, target: THREE.Vector3, color: THREE.Color,
   ctx.particles?.burst(launch, 14, { speed: 2.2, color: moteColor, size: 0.07, ttl: 0.35, drag: 3, style: 'spark' });
 
   const onImpact = () => {
+    if (ctx.onStick) {
+      // Stick at an angle back toward the bow hand so the embedded shaft reads from the caster's
+      // view instead of being seen end-on.
+      const right = new THREE.Vector3(1, 0, 0).applyQuaternion(ctx.cameraQuaternion);
+      const up = new THREE.Vector3(0, 1, 0).applyQuaternion(ctx.cameraQuaternion);
+      const side = ctx.hand === 'left' ? -1 : 1;
+      const tip = direction.clone().addScaledVector(right, -0.62 * side).addScaledVector(up, 0.28).normalize();
+      ctx.onStick(to.clone(), tip, arrowScale);
+    }
     const back = direction.clone().negate();
     ctx.particles?.burst(to, Math.round(28 + power * 34), { speed: 7 + power * 5, direction: back, spread: 1.1, color: sparkColor, size: 0.06, ttl: 0.55, gravity: 7, drag: 1.2, style: 'spark' });
     ctx.particles?.burst(to, 18, { speed: 2.4, color, size: 0.2, sizeEnd: 0.02, ttl: 0.6, drag: 2.5, style: 'glow' });
@@ -215,8 +228,9 @@ function arrow(origin: THREE.Vector3, target: THREE.Vector3, color: THREE.Color,
     } else {
       root.position.copy(to);
       const since = age - flight;
-      // The head embeds for a beat, then the bolt of light shatters.
-      root.visible = since < 0.07;
+      // When the world keeps a stuck arrow, it takes over at once; otherwise the head embeds for a
+      // beat, then the bolt of light shatters.
+      root.visible = !ctx.onStick && since < 0.07;
       halo.visible = root.visible;
     }
     const launchAge = age / 0.22;

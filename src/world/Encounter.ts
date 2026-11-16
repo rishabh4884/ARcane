@@ -182,6 +182,61 @@ export class Encounter {
   }
   hasEnemy(enemy:EnemyCombat):boolean{return this.actors.some(a=>a.reaction===enemy);}
 
+  /**
+   * Where a ray actually meets a spirit's body: its vertical artwork plane, clamped inside the
+   * silhouette. Aim assist makes the hit box generous; projectiles should still land on the body.
+   */
+  bodyPoint(enemy:EnemyCombat,ray:THREE.Ray,out:THREE.Vector3):THREE.Vector3|null {
+    const actor=this.actors.find(a=>a.reaction===enemy);if(!actor)return null;
+    const spec=CREATURE_SPECS[actor.puppet.kind],p=actor.group.position;
+    const normal=this.scratch.set(this.camera.position.x-p.x,0,this.camera.position.z-p.z);
+    if(normal.lengthSq()<1e-6)normal.set(0,0,1);normal.normalize();
+    const plane=new THREE.Plane().setFromNormalAndCoplanarPoint(normal,p);
+    if(!ray.intersectPlane(plane,out))out.copy(p).setY(p.y+spec.height*0.55);
+    const side=new THREE.Vector3(normal.z,0,-normal.x);
+    const lateral=THREE.MathUtils.clamp(out.clone().sub(p).dot(side),-spec.radius*0.85,spec.radius*0.85);
+    const y=THREE.MathUtils.clamp(out.y,p.y+spec.height*0.28,p.y+spec.height*0.82);
+    return out.copy(p).addScaledVector(side,lateral).setY(y).addScaledVector(normal,0.06);
+  }
+
+  /**
+   * Skyfall calls lightning down a column: the nearest living spirit beneath (or at) the aim point
+   * on screen, within a forgiving horizontal tolerance.
+   */
+  columnTarget(ndcX:number,ndcY:number):{enemy:EnemyCombat;point:THREE.Vector3}|null {
+    let best:{enemy:EnemyCombat;point:THREE.Vector3;score:number}|null=null;
+    const right=new THREE.Vector3(1,0,0).applyQuaternion(this.camera.quaternion);
+    for(const actor of this.actors){
+      if(!actor.state.alive)continue;
+      const spec=CREATURE_SPECS[actor.puppet.kind],p=actor.group.position;
+      const view=p.clone().applyMatrix4(this.camera.matrixWorldInverse);
+      if(view.z>-1)continue;
+      const base=p.clone().project(this.camera);
+      if(base.x<-1.2||base.x>1.2)continue;
+      const edge=p.clone().addScaledVector(right,spec.radius*1.6).project(this.camera);
+      const tolerance=Math.max(Math.abs(edge.x-base.x),0.07);
+      const dx=Math.abs(ndcX-base.x);
+      // The aim must be at or above the spirit's feet (screen NDC y grows upward).
+      if(dx>tolerance||ndcY<base.y-0.06)continue;
+      const score=dx/tolerance+(-view.z)*0.004;
+      if(!best||score<best.score)best={enemy:actor.reaction,point:p.clone().setY(p.y+spec.height*0.55),score};
+    }
+    return best?{enemy:best.enemy,point:best.point}:null;
+  }
+
+  /** Parent a decoration (a stuck arrow) to a spirit's body so it moves and recoils with it. */
+  attachToEnemy(enemy:EnemyCombat,object:THREE.Object3D):boolean {
+    const actor=this.actors.find(a=>a.reaction===enemy);
+    if(!actor||!actor.state.alive&&actor.puppet.fade>=1)return false;
+    actor.puppet.body.updateWorldMatrix(true,false);actor.puppet.body.attach(object);return true;
+  }
+
+  /** 0 = solid … 1 = gone: decorations fade with the spirit's dissolve. */
+  enemyFade(enemy:EnemyCombat):number {
+    const actor=this.actors.find(a=>a.reaction===enemy);
+    return actor?actor.puppet.fade:1;
+  }
+
   update(dt:number,paused:boolean,reducedMotion:boolean):void {
     this.root.dataset.paused=String(paused);
     if(paused){this.updateIndicators(0,true,reducedMotion);return;}

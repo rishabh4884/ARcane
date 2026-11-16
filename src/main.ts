@@ -113,6 +113,8 @@ function handle(out: EngineOutput, stats: TrackerStats): void {
     }
   }
   world.setCursors(cursors);
+  // Both hands are the bow: the two aim markers would only clutter the shot.
+  if (out.bow) world.setMarkersHidden(true);
 
   // A two-hand sign charges both wisps together; otherwise each hand charges on its own.
   const twin = out.hold?.side === 'both' ? out.hold : null;

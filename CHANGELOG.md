@@ -26,6 +26,9 @@ All notable changes to ARcane are recorded here. The format follows
 
 ### Changed
 
+- Skyfall casts from a short fingertip flick (0.72 palm-lengths, slower strokes accepted) and strikes the spirit in the column beneath the aim point, so pointing at or above an enemy is enough. A raise-then-drop U-turn is no longer mistaken for a sigil arc.
+- Hand markers are now a small fine ring and soft dot (no crosshair or particle trail). The charge arc remains. Both markers hide while a bow draw is in progress.
+- Arrows fly to the spirit's actual body rather than the edge of the aim-assist box, and stay stuck in it at a visible angle. They move and recoil with the spirit and fade when it dissolves; arrows that miss stick in the ground or trees for a few seconds.
 - Bow Draw measures the pull in depth as well as on screen, bridges hand drop-outs (240 ms) and aim misreads (260 ms), arms with hands up to six palm-lengths apart, uses the recent peak draw at release, and no longer spends the cast pause when a draw is cancelled.
 - Default pause between casts is 500 ms (was 600 ms). Crisp signs charge up to 1.2× faster when no live motion shares the shape.
 - The renderer no longer tone-maps the illustrated scene; the post grade rolls off only the highlights.

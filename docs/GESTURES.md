@@ -37,6 +37,7 @@ For **Bow Draw**, keep the pointing hand on the target. Pinch thumb and index fi
 - **Your hands can start far apart** (up to about six palm-lengths, shoulder width at arm's length).
 - **Small hiccups are forgiven.** If the tracker loses a hand for a moment during a fast pull, or briefly misreads your pointing finger, the draw carries on. A hand that stays gone for about a quarter of a second, or a pointing hand that clearly opens, cancels the shot instead of firing it.
 - **A cancelled draw costs nothing:** you can pinch and pull again immediately.
+- **Your aim markers step aside** while you draw, so they never sit over the target, and they return after the shot. Arrows that hit a spirit stay stuck in its body, glowing faintly, until it falls.
 - **Nocking is safe.** While one hand points and the other brings thumb to index, the pointing hand cannot fire Skyfall or a sigil and the other hand cannot charge a sign.
 - A short pull still cancels. The shot uses your strongest draw from the last moment before release, so the small forward flick as you let go does not weaken it.
 
@@ -77,7 +78,7 @@ Start with an open palm, pause for a beat so it is recognised, then make one str
 | Wrath | Make a tight fist and swing it sideways in one clean stroke. |
 | Wyrm Slash | Point with one index finger and cut sideways across the screen. |
 | Skybolt | Point with one index finger and thrust straight upward. |
-| Skyfall | Point above an enemy, then bring one index finger down to call lightning onto that spot. |
+| Skyfall | Point at or above an enemy and flick your index finger down. A short flick is enough, with no need to raise your hand first. Lightning strikes the spirit beneath your aim. |
 
 Pointing strikes follow your **index fingertip**, so a clear wrist flick can work without a large palm sweep. Keep the other three fingers flexed and make the fingertip path reasonably straight; rounded paths are reserved for sigils. When a sigil is also assigned (Mend is by default), a pointing strike waits about 150 ms to confirm your fingertip is not still curling into a circle, so drawing Mend never fires Skyfall halfway round. If Lance and a pointing strike are both assigned, hold still for Lance and move for the strike. A hold that already cast still applies the normal pause between casts.
 

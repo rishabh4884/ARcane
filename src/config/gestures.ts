@@ -274,11 +274,12 @@ export const GESTURES: readonly GestureDef[] = [
     kind: 'swipe',
     direction: 'down',
     hand: 'point',
-    minTravel: 1.05,
-    minSpeed: 3.1,
-    straightness: 0.82,
+    // A short, natural flick of the fingertip is enough; no need to wind up high first.
+    minTravel: 0.72,
+    minSpeed: 2.6,
+    straightness: 0.78,
     name: 'Skyfall',
-    hint: 'Point one finger above an enemy, then bring it down to call lightning onto that spot.',
+    hint: 'Point at or above an enemy and flick your finger down. Lightning strikes the enemy beneath your aim.',
     glyph: '🌩️',
   },
 

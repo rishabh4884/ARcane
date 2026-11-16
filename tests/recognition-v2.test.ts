@@ -210,3 +210,35 @@ describe('stroke disambiguation', () => {
     expect(fired).toEqual(['gale']);
   });
 });
+
+describe('easy Skyfall', () => {
+  const run = (frames: Array<[number, number]>) => {
+    const engine = new GestureEngine(liveGestures(), DEFAULT_TUNING);
+    let now = 1000;
+    const fired: string[] = [];
+    for (const [x, y] of frames) {
+      now += 1000 / 30;
+      fired.push(...engine.process({ time: now, landmarks: makeHand(x, y, POSES.point), aspect: ASPECT, confidence: 1 }, now).fired.map((f) => f.gestureId));
+    }
+    return fired;
+  };
+
+  it('casts from a short downward flick without raising the hand first', () => {
+    const frames: Array<[number, number]> = [];
+    for (let i = 0; i < 15; i++) frames.push([0.7, 0.45]);
+    // About 0.8 palm-lengths of fingertip travel in ~130 ms.
+    for (let i = 1; i <= 4; i++) frames.push([0.7, 0.45 + i * 0.03]);
+    for (let i = 0; i < 10; i++) frames.push([0.7, 0.57]);
+    expect(run(frames)).toEqual(['impale']);
+  });
+
+  it('casts when the player raises, turns and drops in one rounded motion', () => {
+    const frames: Array<[number, number]> = [];
+    for (let i = 0; i < 12; i++) frames.push([0.7, 0.5]);
+    for (let i = 1; i <= 5; i++) frames.push([0.7, 0.5 - i * 0.025]);
+    frames.push([0.705, 0.37], [0.71, 0.375]);
+    for (let i = 1; i <= 5; i++) frames.push([0.71, 0.375 + i * 0.045]);
+    for (let i = 0; i < 10; i++) frames.push([0.71, 0.6]);
+    expect(run(frames)).toEqual(['impale']);
+  });
+});

@@ -4,7 +4,7 @@ import type { HandSide } from '../tracking/types.ts';
 import { ScreenFX } from '../ui/ScreenFX.ts';
 import { Encounter } from './Encounter.ts';
 import { EnemyCombat } from './EnemyCombat.ts';
-import { createSpellAnimation, type SpellAnimation } from './effects.ts';
+import { createArrowMesh, createSpellAnimation, type SpellAnimation } from './effects.ts';
 import { GameEvents } from './events.ts';
 import { ParticleSystem } from './particles.ts';
 import { PostFX } from './PostFX.ts';
@@ -13,7 +13,7 @@ import { ForestEnvironment } from './ForestEnvironment.ts';
 import { FrameBudget } from './FrameBudget.ts';
 import { CasterView, worldInputBlocked } from './CasterView.ts';
 import { aimAssistRadius, SPELL_RANGE, chooseRayTarget, screenPointAtDepth, terrainHeight } from './spatial.ts';
-import type { ScreenFeedback } from './vfx.ts';
+import { disposeGroup, type ScreenFeedback } from './vfx.ts';
 
 interface FloatingLabel {
   sprite: THREE.Sprite;
@@ -24,7 +24,8 @@ interface Wisp {
   side: HandSide;
   /** A deliberately quiet aim marker, one per detected hand. */
   marker: THREE.Group;
-  material: THREE.LineBasicMaterial;
+  opacity: number;
+  color: THREE.Color;
   ring: THREE.ShaderMaterial;
   cursor: { x: number; y: number } | null;
   charge: number;
@@ -32,8 +33,14 @@ interface Wisp {
   /** Resting colour; the left wisp is a touch cooler so the two hands read apart. */
   baseTint: THREE.Color;
   target: THREE.Vector3;
-  idlePhase: number;
-  trailClock: number;
+}
+
+interface StuckArrow {
+  root: THREE.Group;
+  fades: Array<{ material: THREE.Material; base: number }>;
+  owner: EnemyCombat | null;
+  age: number;
+  life: number;
 }
 
 interface PooledLight { light: THREE.PointLight; age: number; duration: number; peak: number }
@@ -44,6 +51,8 @@ const SIDES: HandSide[] = ['left', 'right'];
 const LEFT_TINT = '#b9dcff';
 const RIGHT_TINT = '#d9ccff';
 const LIGHT_POOL = 3;
+const MAX_STUCK_ARROWS = 24;
+const MARKER_OPACITY = 0.7;
 
 /** A stationary gesture-controlled clearing with living scenery and approaching spirits. */
 export class World {
@@ -66,6 +75,9 @@ export class World {
   private readonly labels: FloatingLabel[] = [];
   private readonly spellAnimations: SpellAnimation[] = [];
   private readonly enemies: EnemyCombat[] = [];
+  private readonly stuckArrows: StuckArrow[] = [];
+  /** Hand markers stay hidden while both hands are busy drawing the bow (and briefly after). */
+  private markersHiddenFor = 0;
   private readonly container: HTMLElement;
   private readonly clock = new THREE.Clock();
   private readonly scratch = new THREE.Vector3();
@@ -133,6 +145,8 @@ export class World {
         this.shake(0.18);
       } else if (event.type === 'enemy-death') {
         this.releaseSpirit(event.position, event.height);
+      } else if (event.type === 'encounter' && event.mode === 'active') {
+        this.clearStuckArrows();
       }
     });
 
@@ -180,12 +194,12 @@ export class World {
     this.labels.length = 0;
     for (const side of SIDES) {
       this.wisps[side].marker.traverse((object) => {
-        if (object instanceof THREE.Line || object instanceof THREE.Mesh) object.geometry.dispose();
+        if (object instanceof THREE.Mesh) object.geometry.dispose();
       });
-      this.wisps[side].material.dispose();
       this.wisps[side].ring.dispose();
       this.scene.remove(this.wisps[side].marker);
     }
+    this.clearStuckArrows();
     this.particles.dispose();
     this.mist.dispose();
     for (const pooled of this.lights) pooled.light.dispose();
@@ -205,6 +219,11 @@ export class World {
   /** Palm positions on screen (0..1). Missing sides fade out in place so the marker never jumps. */
   setCursors(cursors: Partial<Record<HandSide, { x: number; y: number } | null>>): void {
     for (const side of SIDES) this.wisps[side].cursor = cursors[side] ?? null;
+  }
+
+  /** Hide both hand markers while a two-hand gesture (the bow) owns the hands. */
+  setMarkersHidden(hidden: boolean): void {
+    if (hidden) this.markersHiddenFor = 0.35;
   }
 
   /** 0..1 build-up while a hand shape is being held; tints the matching marker. */
@@ -243,7 +262,20 @@ export class World {
     this.scene.updateMatrixWorld(true);
     const color = new THREE.Color(spell.color);
     const origin = this.castOrigin(from).clone();
-    const { point: target, enemy } = this.selectSpellTarget(origin);
+    const selected = this.selectSpellTarget(origin);
+    const target = selected.point;
+    let enemy = selected.enemy;
+    if (spell.effect === 'lightning' && !enemy) {
+      // Lightning falls down a column: aiming at or above a spirit strikes the spirit below.
+      const aim = origin.clone().project(this.camera);
+      const column = this.encounter.columnTarget(aim.x, aim.y);
+      if (column) { enemy = column.enemy; target.copy(column.point); }
+    }
+    if (spell.effect === 'arrow' && enemy && this.encounter.hasEnemy(enemy)) {
+      // Fly to the spirit's actual body, not the edge of its generous aim-assist box.
+      const ray = new THREE.Ray(this.camera.position.clone(), origin.clone().sub(this.camera.position).normalize());
+      this.encounter.bodyPoint(enemy, ray, target);
+    }
     const effectTarget = spell.effect === 'summon' ? origin : target;
     const targetNdc = effectTarget.clone().project(this.camera);
     const cameraTarget = effectTarget.clone().applyMatrix4(this.camera.matrixWorldInverse);
@@ -262,6 +294,7 @@ export class World {
       mist: this.mist,
       screen: this.reducedMotion.matches ? { flash: (c, s, m) => this.feedback.flash(c, s * 0.4, m), shake: () => undefined } : this.feedback,
       light: (position, lightColor, intensity, duration, distance) => this.flashLight(position, lightColor, intensity, duration, distance),
+      onStick: spell.effect === 'arrow' ? (point, tip, scale) => this.stickArrow(point, tip, scale, color, enemy) : undefined,
     });
     if (spell.effect === 'summon') this.encounter.summon(origin, target, enemy);
     const impactPan = THREE.MathUtils.clamp(targetNdc.x, -1, 1);
@@ -295,6 +328,51 @@ export class World {
 
   /* ─────────────────────────────── internals ─────────────────────────────── */
 
+  /** Leave the arrow embedded where it hit: in a spirit's body (moving with it) or in the world. */
+  private stickArrow(point: THREE.Vector3, tip: THREE.Vector3, scale: number, color: THREE.Color, enemy: EnemyCombat | null): void {
+    const { root, halo } = createArrowMesh(color);
+    root.scale.setScalar(scale);
+    root.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tip);
+    // Bury the head: the tip goes in, the shaft and fletching stand out toward the caster.
+    root.position.copy(point).addScaledVector(tip, 0.14 * scale);
+    halo.scale.multiplyScalar(0.7);
+    this.scene.add(root);
+    root.updateMatrixWorld(true);
+    const owner = enemy && this.encounter.hasEnemy(enemy) && this.encounter.attachToEnemy(enemy, root) ? enemy : null;
+    const fades: StuckArrow['fades'] = [];
+    root.traverse((object) => {
+      if (object instanceof THREE.Mesh || object instanceof THREE.Sprite) {
+        const material = object.material as THREE.Material;
+        fades.push({ material, base: material.opacity });
+      }
+    });
+    this.stuckArrows.push({ root, fades, owner, age: 0, life: owner ? 14 : 7 });
+    while (this.stuckArrows.length > MAX_STUCK_ARROWS) this.removeStuckArrow(0);
+  }
+
+  private updateStuckArrows(dt: number): void {
+    for (let i = this.stuckArrows.length - 1; i >= 0; i--) {
+      const arrow = this.stuckArrows[i];
+      arrow.age += dt;
+      const dissolve = arrow.owner ? this.encounter.enemyFade(arrow.owner) : 0;
+      // Bright on impact, settling to a quiet ember glow, then fading out (or with the spirit).
+      const glow = 0.45 + 0.55 * Math.exp(-arrow.age * 1.6);
+      const fade = Math.min(1, (arrow.life - arrow.age) / 1.2) * (1 - dissolve);
+      if (fade <= 0) { this.removeStuckArrow(i); continue; }
+      for (const { material, base } of arrow.fades) material.opacity = base * glow * fade;
+    }
+  }
+
+  private removeStuckArrow(index: number): void {
+    const [arrow] = this.stuckArrows.splice(index, 1);
+    arrow.root.removeFromParent();
+    disposeGroup(arrow.root);
+  }
+
+  private clearStuckArrows(): void {
+    while (this.stuckArrows.length) this.removeStuckArrow(this.stuckArrows.length - 1);
+  }
+
   private flashLight(position: THREE.Vector3, color: THREE.Color, intensity: number, duration: number, distance = 10): void {
     // Reuse the dimmest (or oldest) pooled light.
     let pick = this.lights[0];
@@ -323,57 +401,42 @@ export class World {
 
   private makeWisp(side: HandSide): Wisp {
     const tint = side === 'left' ? LEFT_TINT : RIGHT_TINT;
-    const material = new THREE.LineBasicMaterial({ color: tint, transparent: true, opacity: 0, depthTest: false });
     const marker = new THREE.Group();
-    const crossGeometry = new THREE.BufferGeometry();
-    crossGeometry.setAttribute('position', new THREE.Float32BufferAttribute([
-      -0.62, 0, 0, -0.24, 0, 0,
-      0.24, 0, 0, 0.62, 0, 0,
-      0, -0.62, 0, 0, -0.24, 0,
-      0, 0.24, 0, 0, 0.62, 0,
-    ], 3));
-    const cross = new THREE.LineSegments(crossGeometry, material);
-    cross.renderOrder = 9;
-    marker.add(cross);
-    // A soft ring whose arc fills as a sign charges: the hold timer lives where the hand is.
+    // A small, quiet marker: a fine ring and a soft centre dot. The ring's arc fills while a sign
+    // charges, so the hold timer lives where the hand is without cluttering the view.
     const ring = new THREE.ShaderMaterial({
       transparent: true, depthWrite: false, depthTest: false, blending: THREE.AdditiveBlending,
-      uniforms: { uProgress: { value: 0 }, uOpacity: { value: 0 }, uBase: { value: new THREE.Color(tint) }, uCharge: { value: new THREE.Color('#ffffff') }, uTime: { value: 0 } },
+      uniforms: { uProgress: { value: 0 }, uOpacity: { value: 0 }, uBase: { value: new THREE.Color(tint) }, uCharge: { value: new THREE.Color('#ffffff') } },
       vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
       fragmentShader: `
-        uniform float uProgress; uniform float uOpacity; uniform vec3 uBase; uniform vec3 uCharge; uniform float uTime; varying vec2 vUv;
+        uniform float uProgress; uniform float uOpacity; uniform vec3 uBase; uniform vec3 uCharge; varying vec2 vUv;
         void main(){
           vec2 p = vUv * 2.0 - 1.0; float r = length(p);
           float angle = fract(atan(p.x, p.y) / 6.2831853 + 1.0);
-          float base = (1.0 - smoothstep(0.0, 0.035, abs(r - 0.62))) * 0.55;
-          float arcMask = step(angle, uProgress) * step(0.001, uProgress);
-          float arc = (1.0 - smoothstep(0.0, 0.07, abs(r - 0.62))) * arcMask;
-          float ringOffset = (r - 0.62) / 0.16;
-          float glow = exp(-ringOffset * ringOffset) * arcMask * 0.55;
-          float full = step(0.999, uProgress) * (0.5 + 0.5 * sin(uTime * 18.0));
-          float inner = exp(-r * r * 22.0) * 0.5;
-          vec3 c = mix(uBase, uCharge, step(0.001, uProgress));
-          float a = (base + arc * 1.2 + glow + full * glow + inner) * uOpacity;
-          gl_FragColor = vec4(c * (1.0 + arc * 0.6), a);
+          float ring = (1.0 - smoothstep(0.0, 0.03, abs(r - 0.62))) * 0.4;
+          float dotCore = 1.0 - smoothstep(0.06, 0.13, r);
+          float charging = step(0.001, uProgress);
+          float arc = (1.0 - smoothstep(0.0, 0.06, abs(r - 0.62))) * step(angle, uProgress) * charging;
+          vec3 c = mix(uBase, uCharge, charging);
+          gl_FragColor = vec4(c, (ring + dotCore * 0.7 + arc) * uOpacity);
         }`,
     });
-    const ringMesh = new THREE.Mesh(new THREE.PlaneGeometry(1.25, 1.25), ring);
+    const ringMesh = new THREE.Mesh(new THREE.PlaneGeometry(0.9, 0.9), ring);
     ringMesh.renderOrder = 9;
     marker.add(ringMesh);
-    marker.scale.setScalar(0.72);
+    marker.scale.setScalar(0.6);
     this.scene.add(marker);
     return {
       side,
       marker,
-      material,
+      opacity: 0,
+      color: new THREE.Color(tint),
       ring,
       cursor: null,
       charge: 0,
       chargeColor: new THREE.Color('#ffffff'),
       baseTint: new THREE.Color(tint),
       target: new THREE.Vector3(),
-      idlePhase: side === 'left' ? 1.7 : 0,
-      trailClock: 0,
     };
   }
 
@@ -446,14 +509,13 @@ export class World {
   }
 
   private frame(dt: number, render = true, renderDt = dt): void {
-    const t = this.clock.elapsedTime;
     this.idleTime += dt;
     this.environment.update(dt, this.camera, this.reducedMotion.matches);
     const paused = worldInputBlocked();
     this.encounter.update(dt, paused, this.reducedMotion.matches);
     const simulationDt = paused ? 0 : dt;
-    const anyHand = SIDES.some((side) => this.wisps[side].cursor !== null);
-    for (const side of SIDES) this.updateWisp(this.wisps[side], dt, t, anyHand);
+    this.markersHiddenFor = Math.max(0, this.markersHiddenFor - dt);
+    for (const side of SIDES) this.updateWisp(this.wisps[side], dt);
 
     for (let i = this.labels.length - 1; i >= 0; i--) {
       const l = this.labels[i];
@@ -487,6 +549,7 @@ export class World {
     this.particles.update(simulationDt || dt * 0.25);
     this.mist.update(simulationDt || dt * 0.25);
     for (const enemy of this.enemies) enemy.update(simulationDt);
+    this.updateStuckArrows(simulationDt);
     this.screenFx.setWard(this.encounter.player.shield / 45);
     if (render) this.render(renderDt);
   }
@@ -518,53 +581,24 @@ export class World {
   }
 
   /**
-   * One crosshair per hand. A tracked hand pulls its crosshair to the palm. When a hand drops
-   * out, its marker fades in place rather than drifting or jumping.
+   * One marker per hand. A tracked hand pulls its marker to the palm. When a hand drops out (or
+   * both hands are busy drawing the bow), its marker fades in place rather than drifting or jumping.
    */
-  private updateWisp(w: Wisp, dt: number, t: number, anyHand: boolean): void {
-    void anyHand;
+  private updateWisp(w: Wisp, dt: number): void {
     const has = w.cursor !== null;
-    if (has) {
-      this.cursorToWorld(w.cursor!, w.target);
-    }
+    if (has) this.cursorToWorld(w.cursor!, w.target);
     // LandmarkSmoother already filters the camera signal. Keep only a short render-side
     // interpolation so 30fps input looks fluid at 60fps without stacking another long lag.
-    const before = this.scratch.copy(w.marker.position);
     w.marker.position.lerp(w.target, 1 - Math.exp(-dt * (has ? 32 : 2)));
-    const speed = before.distanceTo(w.marker.position) / Math.max(dt, 1e-4);
-
     w.marker.quaternion.copy(this.camera.quaternion);
-    w.marker.scale.setScalar(0.72 + w.charge * 0.22);
-    const goal = has ? 0.95 : 0;
-    w.material.opacity += (goal - w.material.opacity) * (1 - Math.exp(-dt * 6));
-    w.material.color.copy(w.baseTint).lerp(w.chargeColor, w.charge);
-    w.ring.uniforms.uOpacity.value = w.material.opacity;
+    w.marker.scale.setScalar(0.6 + w.charge * 0.12);
+    const goal = has && this.markersHiddenFor <= 0 ? MARKER_OPACITY : 0;
+    w.opacity += (goal - w.opacity) * (1 - Math.exp(-dt * (goal === 0 ? 14 : 6)));
+    w.color.copy(w.baseTint).lerp(w.chargeColor, w.charge);
+    w.ring.uniforms.uOpacity.value = w.opacity;
     w.ring.uniforms.uProgress.value = w.charge;
     w.ring.uniforms.uCharge.value.copy(w.chargeColor);
-    w.ring.uniforms.uTime.value = t;
-
-    // A faint trail lets a moving marker read clearly without becoming a cloudy cursor.
-    if (w.material.opacity < 0.05) return;
-    w.trailClock += dt * (has ? 40 + Math.min(speed, 12) * 12 : 10) * (0.5 + w.charge);
-    const p = w.marker.position;
-    while (w.trailClock >= 1) {
-      w.trailClock -= 1;
-      this.particles.emit({
-        x: p.x + (Math.random() - 0.5) * 0.12,
-        y: p.y + (Math.random() - 0.5) * 0.12,
-        z: p.z,
-        vx: (Math.random() - 0.5) * 0.3,
-        vy: Math.random() * 0.35,
-        vz: (Math.random() - 0.5) * 0.3,
-        color: w.material.color,
-        size: 0.05 + w.charge * 0.07,
-        sizeEnd: 0.005,
-        alpha: 0.55 * w.material.opacity,
-        ttl: 0.55,
-        drag: 1.5,
-        style: w.charge > 0.05 ? 'glow' : 'spark',
-      });
-    }
+    w.marker.visible = w.opacity > 0.01;
   }
 
   private resize = (): void => {
