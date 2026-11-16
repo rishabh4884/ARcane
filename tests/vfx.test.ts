@@ -50,7 +50,7 @@ describe('lightning bolt shape', () => {
 import { createSpellAnimation } from '../src/world/effects.ts';
 
 describe('stuck arrows', () => {
-  it('reports one stick at the target, tilted back toward the bow hand so the shaft is visible', () => {
+  it('reports one stick at the target, along the arrow’s descending flight direction', () => {
     const sticks: Array<{ point: THREE.Vector3; tip: THREE.Vector3 }> = [];
     const camera = new THREE.Quaternion();
     const target = new THREE.Vector3(0, 1.5, -15);
@@ -61,9 +61,9 @@ describe('stuck arrows', () => {
     for (let i = 0; i < 80; i++) animation.update(0.02);
     expect(sticks).toHaveLength(1);
     expect(sticks[0].point.distanceTo(target)).toBeLessThan(1e-6);
-    // Mostly into the screen, but clearly angled (not end-on to the camera).
-    expect(sticks[0].tip.z).toBeLessThan(-0.6);
-    expect(Math.abs(sticks[0].tip.x)).toBeGreaterThan(0.3);
+    // Into the screen, and angled down as the lobbed arrow comes in to land.
+    expect(sticks[0].tip.z).toBeLessThan(-0.85);
+    expect(sticks[0].tip.y).toBeLessThan(-0.12);
     animation.dispose();
   });
 });

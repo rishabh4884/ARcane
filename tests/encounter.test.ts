@@ -146,3 +146,21 @@ describe('summoned gnome behaviour',()=>{
     summons.dispose();
   });
 });
+
+describe('gnome rig',()=>{
+  it('is an articulated six-part puppet that starts below the torn ground and climbs out',()=>{
+    const summons=new GnomeSummons([],()=>null,()=>{}),circle=new THREE.Vector3(0,0,0);
+    summons.summon(circle,new THREE.Vector3(0,0,-20));
+    const root=summons.group.children[0] as THREE.Group;
+    const partMeshes:THREE.Mesh[]=[];
+    root.traverse(o=>{if(o instanceof THREE.Mesh&&o.geometry instanceof THREE.PlaneGeometry)partMeshes.push(o);});
+    expect(partMeshes).toHaveLength(6);
+    const world=new THREE.Vector3(),player=new THREE.Vector3(0,1.85,12);
+    summons.update(.05,true,player,[]);
+    partMeshes[2].getWorldPosition(world);const buried=world.y;
+    for(let i=0;i<25;i++)summons.update(.05,true,player,[]);
+    partMeshes[2].getWorldPosition(world);
+    expect(world.y).toBeGreaterThan(buried+2);
+    summons.dispose();
+  });
+});

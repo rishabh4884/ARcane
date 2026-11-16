@@ -30,6 +30,8 @@ export interface SpellContext extends FxContext {
    * of the shared world lights; it fades within a few frames unless refreshed.
    */
   illuminate?: (slot: number, position: THREE.Vector3, color: THREE.Color, level: number, radius: number) => void;
+  /** Gale only: start a travelling gust from `origin` along `direction` (bows the grass). */
+  gust?: (origin: THREE.Vector3, direction: THREE.Vector3) => void;
   /** Arrow only: called at impact with the point and the tip direction the arrow should stick at. */
   onStick?: (point: THREE.Vector3, tipDirection: THREE.Vector3, scale: number) => void;
 }
@@ -152,10 +154,13 @@ function arrow(origin: THREE.Vector3, target: THREE.Vector3, color: THREE.Color,
   }
   const to = target.clone();
   const distance = Math.max(0.5, launch.distanceTo(to));
-  const lift = Math.min(2.4, distance * 0.05) * (1.15 - power * 0.55);
+  // A real arrow's lob: enough arc that its flight (and the angle it lands at) reads on screen.
+  const lift = Math.min(3.4, distance * 0.09) * (1.1 - power * 0.4);
   const pathPoint = (u: number, out: THREE.Vector3) => out.copy(launch).lerp(to, u).addScaledVector(UP, 4 * lift * u * (1 - u));
-  const flight = THREE.MathUtils.clamp(distance / (36 + power * 34), 0.16, 0.85);
-  const duration = flight + 0.85;
+  const flight = THREE.MathUtils.clamp(distance / (24 + power * 22), 0.22, 1);
+  const duration = flight + 0.9;
+  const streak = arrowStreak(pathPoint, color, ctx.cameraPosition, power);
+  group.add(streak.mesh);
 
   const { root, halo } = createArrowMesh(color);
   const arrowScale = 0.95 + power * 0.55;
@@ -185,12 +190,8 @@ function arrow(origin: THREE.Vector3, target: THREE.Vector3, color: THREE.Color,
 
   const onImpact = () => {
     if (ctx.onStick) {
-      // Stick at an angle back toward the bow hand so the embedded shaft reads from the caster's
-      // view instead of being seen end-on.
-      const right = new THREE.Vector3(1, 0, 0).applyQuaternion(ctx.cameraQuaternion);
-      const up = new THREE.Vector3(0, 1, 0).applyQuaternion(ctx.cameraQuaternion);
-      const side = ctx.hand === 'left' ? -1 : 1;
-      const tip = direction.clone().addScaledVector(right, -0.62 * side).addScaledVector(up, 0.28).normalize();
+      // Stick along the arrow's actual flight direction at the moment it lands.
+      const tip = pathPoint(1, new THREE.Vector3()).sub(pathPoint(0.985, new THREE.Vector3())).normalize();
       ctx.onStick(to.clone(), tip, arrowScale);
     }
     const back = direction.clone().negate();
@@ -204,8 +205,10 @@ function arrow(origin: THREE.Vector3, target: THREE.Vector3, color: THREE.Color,
 
   return animate(group, duration, (_t, age, dt) => {
     const cam = ctx.cameraPosition;
+    const headU = age < flight ? 1 - Math.pow(1 - age / flight, 1.25) : 1;
+    streak.update(headU, clamp01(1 - Math.max(0, age - flight) / 0.75));
     if (age < flight) {
-      const u = 1 - Math.pow(1 - age / flight, 1.25);
+      const u = headU;
       pathPoint(u, head);
       pathPoint(Math.min(1, u + 0.02), ahead);
       tangent.subVectors(ahead, head);
@@ -257,6 +260,68 @@ function arrow(origin: THREE.Vector3, target: THREE.Vector3, color: THREE.Color,
     trail.update(dt, cam);
     filament.update(dt, cam);
   }, flight, onImpact, () => { trail.dispose(); filament.dispose(); });
+}
+
+/**
+ * A glowing streak along the arrow's whole flight path, revealed behind the arrow head and lingering
+ * a moment after it lands. Width tracks distance from the camera, so the streak keeps a steady
+ * on-screen thickness even where the path runs into the screen.
+ */
+function arrowStreak(pathPoint: (u: number, out: THREE.Vector3) => THREE.Vector3, color: THREE.Color, camera: THREE.Vector3 | undefined, power: number) {
+  const samples = 72;
+  const positions = new Float32Array(samples * 2 * 3);
+  const uv = new Float32Array(samples * 2 * 2);
+  const index: number[] = [];
+  const p = new THREE.Vector3(), q = new THREE.Vector3(), tangent = new THREE.Vector3(), side = new THREE.Vector3(), view = new THREE.Vector3();
+  const eye = camera ?? new THREE.Vector3(0, 1.8, 10);
+  for (let i = 0; i < samples; i++) {
+    const u = i / (samples - 1);
+    pathPoint(u, p);
+    pathPoint(Math.min(1, u + 0.01), q);
+    tangent.subVectors(q, p);
+    if (i === samples - 1) tangent.subVectors(p, pathPoint(0.99, q));
+    view.subVectors(eye, p);
+    side.crossVectors(tangent, view);
+    if (side.lengthSq() < 1e-10) side.set(1, 0, 0);
+    const half = Math.max(0.02, view.length() * 0.0055) * (0.8 + power * 0.5);
+    side.normalize().multiplyScalar(half);
+    positions.set([p.x + side.x, p.y + side.y, p.z + side.z, p.x - side.x, p.y - side.y, p.z - side.z], i * 6);
+    uv.set([u, 0, u, 1], i * 4);
+    if (i < samples - 1) { const a = i * 2; index.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute('uv', new THREE.BufferAttribute(uv, 2));
+  geometry.setIndex(index);
+  const material = new THREE.ShaderMaterial({
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
+    uniforms: { uColor: { value: color.clone() }, uHead: { value: 0 }, uFade: { value: 1 }, uLength: { value: 0.55 } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    fragmentShader: `
+      uniform vec3 uColor; uniform float uHead; uniform float uFade; uniform float uLength; varying vec2 vUv;
+      void main(){
+        if (vUv.x > uHead) discard;
+        float across = abs(vUv.y * 2.0 - 1.0);
+        float core = 1.0 - smoothstep(0.0, 0.35, across);
+        float body = 1.0 - smoothstep(0.1, 1.0, across);
+        // Brightest just behind the head, tapering back along the path; a faint line lingers.
+        float behind = clamp((uHead - vUv.x) / uLength, 0.0, 1.0);
+        float trail = pow(1.0 - behind, 1.6);
+        float alpha = (trail * (core + body * 0.5) + body * 0.12) * uFade;
+        vec3 c = mix(uColor * 1.5, vec3(1.2), core * trail * 0.7);
+        gl_FragColor = vec4(c, alpha);
+      }`,
+  });
+  const mesh = new THREE.Mesh(geometry, material);
+  mesh.frustumCulled = false;
+  mesh.renderOrder = 6;
+  return {
+    mesh,
+    update(head: number, fade: number) {
+      material.uniforms.uHead.value = head;
+      material.uniforms.uFade.value = fade;
+    },
+  };
 }
 
 /* ═══════════════════════════════ LIGHTNING ═══════════════════════════════ */
@@ -618,65 +683,119 @@ function frost(target: THREE.Vector3, color: THREE.Color, ctx: SpellContext): Sp
 
 /* ═══════════════════════════════ GALE ═══════════════════════════════ */
 
+/**
+ * Gale: a real gust. Streams of wind lines pour across from the side the hand swept from, a few
+ * curling into eddies, carrying tumbling leaves and kicking dust off the floor. The grass bows as
+ * the wavefront passes, and the gust bursts against the target.
+ */
 function gale(origin: THREE.Vector3, target: THREE.Vector3, color: THREE.Color, detail: string | undefined, ctx: SpellContext): SpellAnimation {
   const group = new THREE.Group();
   const sign = detail === 'left' ? -1 : 1;
-  const direction = target.clone().sub(origin);
-  if (direction.lengthSq() < 0.01) direction.set(0, 0, -1);
-  direction.normalize();
-  const right = new THREE.Vector3().crossVectors(direction, UP);
+  const forward = target.clone().sub(origin);
+  if (forward.lengthSq() < 0.01) forward.set(0, 0, -1);
+  forward.normalize();
+  const right = new THREE.Vector3().crossVectors(forward, UP);
   if (right.lengthSq() < 1e-6) right.set(1, 0, 0);
   right.normalize();
-  const up = new THREE.Vector3().crossVectors(right, direction).normalize();
-  const from = origin.clone().addScaledVector(right, -sign * 2.2);
-  const to = target.clone();
+  // The wind enters from the side the hand swept away from and blows through and past the target.
+  const from = origin.clone().addScaledVector(right, -sign * 3.2).addScaledVector(UP, -0.4);
+  const to = target.clone().addScaledVector(right, sign * 2.2);
+  const travel = to.clone().sub(from);
+  const along = travel.clone().normalize();
+  const lift = new THREE.Vector3().crossVectors(right, along).normalize();
+  const across = new THREE.Vector3().crossVectors(along, lift).normalize();
   const random = rng(Math.floor(Math.abs(origin.x * 13 + target.z * 7)) + 3);
-  interface Streak { trail: Trail; phase: number; radius: number; delay: number; turns: number }
-  const pale = color.clone().lerp(WHITE, 0.4);
-  const streaks: Streak[] = Array.from({ length: 7 }, (_, i) => {
-    const trail = new Trail(i % 3 === 0 ? pale : color, 0.05 + random() * 0.07, 0.3, 40, i % 3 === 0 ? 1 : 0.4);
+  const air = color.clone().lerp(WHITE, 0.72);
+
+  interface Lane { trail: Trail; delay: number; up: number; side: number; wave: number; phase: number; curl: number; speed: number }
+  const lanes: Lane[] = Array.from({ length: 16 }, (_, i) => {
+    const bright = i % 4 === 0;
+    const trail = new Trail(bright ? WHITE : air, bright ? 0.07 : 0.035 + random() * 0.035, 0.2 + random() * 0.12, 36, bright ? 0.9 : 0.35);
+    trail.opacity = 0;
     group.add(trail.mesh);
-    return { trail, phase: random() * Math.PI * 2, radius: 0.25 + random() * 0.55, delay: i * 0.035 + random() * 0.04, turns: (1.1 + random() * 0.8) * (i % 2 ? 1 : -1) };
+    return {
+      trail,
+      delay: random() * 0.28,
+      up: (random() - 0.35) * 2.2,
+      side: (random() - 0.5) * 1.6,
+      wave: 0.08 + random() * 0.18,
+      phase: random() * 6.28,
+      // A few lanes loop into a small eddy partway along.
+      curl: i % 5 === 2 ? 0.25 + random() * 0.25 : 0,
+      speed: 0.85 + random() * 0.35,
+    };
   });
-  const vortex = facingPlane(ringTexture(), pale, 1, ctx.cameraQuaternion);
-  vortex.position.copy(to);
-  group.add(vortex);
-  const leafColors = [new THREE.Color('#9fb86f'), new THREE.Color('#c9b26a'), new THREE.Color('#6f9a6a')];
+
+  const burst = facingPlane(ringTexture(), air, 1, ctx.cameraQuaternion);
+  burst.position.copy(target);
+  group.add(burst);
+  const leafColors = [new THREE.Color('#a9c46a'), new THREE.Color('#d6b55e'), new THREE.Color('#7fa86a'), new THREE.Color('#c98f4a')];
+  const dust = new THREE.Color('#8d8a73');
   const head = new THREE.Vector3();
-  const flightTime = 0.62;
+  const flight = 0.5;
+  const arrive = flight * 0.62;
+  ctx.gust?.(from, along);
+
   const onImpact = () => {
-    ctx.particles?.burst(to, 26, { speed: 3.4, color: pale, size: 0.1, sizeEnd: 0.02, ttl: 0.8, drag: 2, style: 'glow' });
-    ctx.mist?.burst(to, 10, { speed: 2.2, color: new THREE.Color('#9fb0a6'), size: 0.8, sizeEnd: 2.4, alpha: 0.28, ttl: 1.1, drag: 2, style: 'mist' });
-    ctx.light?.(to, color, 6, 0.4, 8);
-    ctx.screen?.shake(0.07);
+    ctx.particles?.burst(target, 22, { speed: 3.8, color: air, size: 0.08, sizeEnd: 0.01, ttl: 0.6, drag: 2.2, style: 'spark' });
+    ctx.mist?.burst(target, 14, { speed: 3.2, direction: along, spread: 1.3, color: new THREE.Color('#a7b3aa'), size: 0.9, sizeEnd: 2.6, alpha: 0.26, ttl: 1.1, drag: 2.2, style: 'mist' });
+    for (let i = 0; i < 14; i++) {
+      const c = leafColors[i % leafColors.length];
+      ctx.mist?.emit({
+        x: target.x, y: target.y + (Math.random() - 0.3), z: target.z,
+        vx: along.x * 6 + (Math.random() - 0.5) * 3, vy: 1 + Math.random() * 2.5, vz: along.z * 6 + (Math.random() - 0.5) * 3,
+        color: c, size: 0.09, sizeEnd: 0.07, alpha: 0.95, ttl: 1.3, drag: 1.1, gravity: 2.2, style: 'spark',
+      });
+    }
+    ctx.screen?.shake(0.1);
   };
-  return animate(group, 1.35, (_t, age, dt) => {
-    for (const s of streaks) {
-      const u = (age - s.delay) / flightTime;
-      if (u >= 0 && u <= 1) {
-        const e = easeInOut(u);
-        const a = s.phase + e * s.turns * Math.PI * 2;
-        const r = s.radius * (1 - e * 0.55);
-        head.copy(from).lerp(to, e).addScaledVector(right, Math.cos(a) * r).addScaledVector(up, Math.sin(a) * r * 0.7);
-        s.trail.push(head);
-        if (Math.random() < 0.55) {
-          // Leaves and grit caught in the wind.
+
+  return animate(group, 1.4, (_t, age, dt) => {
+    for (const lane of lanes) {
+      const u = ((age - lane.delay) * lane.speed) / flight;
+      if (u >= 0 && u <= 1.05) {
+        const e = Math.min(1, u);
+        const spread = 0.55 + e * 0.6; // the gust fans out as it travels
+        head.copy(from).addScaledVector(travel, e)
+          .addScaledVector(lift, lane.up * spread + Math.sin(e * 9 + lane.phase) * lane.wave)
+          .addScaledVector(across, lane.side * spread);
+        if (lane.curl > 0) {
+          const k = THREE.MathUtils.smoothstep(e, 0.35, 0.55) * (1 - THREE.MathUtils.smoothstep(e, 0.55, 0.75));
+          const a = (e - 0.35) / 0.4 * Math.PI * 2;
+          head.addScaledVector(lift, Math.sin(a) * lane.curl * k * 2).addScaledVector(along, (Math.cos(a) - 1) * -lane.curl * k);
+        }
+        lane.trail.push(head);
+        lane.trail.opacity = Math.min(1, u * 6);
+        if (Math.random() < 0.35) {
+          const leaf = Math.random() < 0.6;
           ctx.mist?.emit({
             x: head.x, y: head.y, z: head.z,
-            vx: direction.x * 3 + (Math.random() - 0.5) * 1.5, vy: (Math.random() - 0.3) * 1.2, vz: direction.z * 3 + (Math.random() - 0.5) * 1.5,
-            color: leafColors[Math.floor(Math.random() * 3)], size: 0.06 + Math.random() * 0.05, sizeEnd: 0.05, alpha: 0.9, ttl: 0.9, drag: 1.4, gravity: 1.2, style: 'spark',
+            vx: along.x * 7 + (Math.random() - 0.5) * 1.6, vy: (Math.random() - 0.4) * 1.4, vz: along.z * 7 + (Math.random() - 0.5) * 1.6,
+            color: leaf ? leafColors[Math.floor(Math.random() * leafColors.length)] : air,
+            size: leaf ? 0.07 + Math.random() * 0.05 : 0.03, sizeEnd: leaf ? 0.06 : 0.01, alpha: leaf ? 0.95 : 0.6,
+            ttl: 0.7 + Math.random() * 0.5, drag: 1.3, gravity: leaf ? 1.6 : 0, style: 'spark',
           });
         }
+      } else if (u > 1.05) {
+        lane.trail.opacity = Math.max(0, 1 - (u - 1.05) * 3);
       }
-      s.trail.opacity = clamp01(1 - Math.max(0, age - 0.9) / 0.45);
-      s.trail.update(dt, ctx.cameraPosition);
+      lane.trail.update(dt, ctx.cameraPosition);
     }
-    const v = (age - flightTime * 0.85) / 0.5;
-    vortex.visible = v >= 0 && v <= 1;
-    vortex.scale.setScalar(0.4 + easeOutCubic(v) * 3);
-    vortex.material.opacity = clamp01(1 - v) * 0.7;
-    vortex.rotation.z += dt * 6;
-  }, flightTime, onImpact, () => streaks.forEach((s) => s.trail.dispose()));
+    // Dust skims off the floor under the advancing front.
+    const front = Math.min(1, age / flight);
+    if (front < 1 && Math.random() < dt * 40) {
+      head.copy(from).addScaledVector(travel, front).addScaledVector(across, (Math.random() - 0.5) * 3);
+      head.y = ctx.groundY + 0.15;
+      ctx.mist?.emit({
+        x: head.x, y: head.y, z: head.z, vx: along.x * 4, vy: 0.4 + Math.random() * 0.5, vz: along.z * 4,
+        color: dust, size: 0.7, sizeEnd: 1.8, alpha: 0.2, ttl: 1.1, drag: 1.8, style: 'mist',
+      });
+    }
+    const b = (age - arrive) / 0.45;
+    burst.visible = b >= 0 && b <= 1;
+    burst.scale.setScalar(0.4 + easeOutCubic(b) * 3.4);
+    burst.material.opacity = clamp01(1 - b) * 0.55;
+  }, arrive, onImpact, () => lanes.forEach((lane) => lane.trail.dispose()));
 }
 
 /* ═══════════════════════════════ RUNE SIGILS ═══════════════════════════════ */
@@ -810,69 +929,131 @@ function rise(target: THREE.Vector3, color: THREE.Color, ctx: SpellContext): Spe
 
 /* ═══════════════════════════════ AEGIS ═══════════════════════════════ */
 
+let glyphCache: THREE.Texture[] | null = null;
+
+/** Six hand-inked runes (straight staves and branches, like old carved futhark), drawn once. */
+function runeGlyphs(): THREE.Texture[] {
+  if (glyphCache) return glyphCache;
+  const shapes: Array<Array<[number, number, number, number]>> = [
+    [[0.5, 0.1, 0.5, 0.9], [0.5, 0.25, 0.8, 0.45], [0.5, 0.45, 0.8, 0.65]],
+    [[0.5, 0.1, 0.5, 0.9], [0.5, 0.45, 0.2, 0.15], [0.5, 0.45, 0.8, 0.15]],
+    [[0.3, 0.1, 0.3, 0.9], [0.3, 0.1, 0.75, 0.35], [0.75, 0.35, 0.3, 0.55], [0.3, 0.55, 0.75, 0.9]],
+    [[0.5, 0.1, 0.2, 0.5], [0.2, 0.5, 0.5, 0.9], [0.5, 0.9, 0.8, 0.5], [0.8, 0.5, 0.5, 0.1]],
+    [[0.25, 0.1, 0.25, 0.9], [0.75, 0.1, 0.75, 0.9], [0.25, 0.3, 0.75, 0.7], [0.75, 0.3, 0.25, 0.7]],
+    [[0.5, 0.1, 0.5, 0.9], [0.2, 0.3, 0.8, 0.3], [0.2, 0.3, 0.35, 0.1], [0.8, 0.3, 0.65, 0.1]],
+  ];
+  glyphCache = shapes.map((strokes) => {
+    if (typeof document === 'undefined') return new THREE.Texture();
+    const canvas = document.createElement('canvas');
+    canvas.width = canvas.height = 128;
+    const g = canvas.getContext('2d');
+    if (g) {
+      g.lineCap = 'round';
+      g.lineJoin = 'round';
+      for (const [width, alpha] of [[22, 0.18], [12, 0.45], [5, 1]] as const) {
+        g.strokeStyle = `rgba(255,255,255,${alpha})`;
+        g.lineWidth = width;
+        g.beginPath();
+        for (const [x1, y1, x2, y2] of strokes) { g.moveTo(x1 * 128, y1 * 128); g.lineTo(x2 * 128, y2 * 128); }
+        g.stroke();
+      }
+    }
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.userData.shared = true;
+    return texture;
+  });
+  return glyphCache;
+}
+
+/**
+ * Aegis: an old-world ward. A golden magic circle of turning runes unfolds before the caster, a
+ * soft veil of pearly light hangs behind it, and six carved runes orbit and pulse as it holds.
+ */
 function aegis(origin: THREE.Vector3, color: THREE.Color, ctx: SpellContext): SpellAnimation {
   const group = new THREE.Group();
   group.position.copy(origin);
   group.quaternion.copy(ctx.cameraQuaternion);
-  // A curved ward: a plane bent so its rim wraps toward the caster.
-  const geometry = new THREE.PlaneGeometry(3.4, 3.6, 32, 32);
+  const gold = new THREE.Color('#ffd98a');
+  const ward = color.clone().lerp(gold, 0.45);
+  const pale = color.clone().lerp(WHITE, 0.5);
+
+  // The veil: a gently curved sheet of flowing, pearly light with a bright, soft rim. No grid.
+  const geometry = new THREE.CircleGeometry(1.7, 64);
   const p = geometry.getAttribute('position');
-  for (let i = 0; i < p.count; i++) {
-    const x = p.getX(i), y = p.getY(i);
-    p.setZ(i, (x * x + y * y) * 0.12);
-  }
-  geometry.computeVertexNormals();
-  const wardMat = new THREE.ShaderMaterial({
+  for (let i = 0; i < p.count; i++) { const x = p.getX(i), y = p.getY(i); p.setZ(i, (x * x + y * y) * 0.11); }
+  const veilMat = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
-    uniforms: { uColor: { value: color.clone() }, uTime: { value: 0 }, uReveal: { value: 0 }, uOpacity: { value: 1 } },
-    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+    uniforms: { uColor: { value: pale.clone() }, uGold: { value: gold.clone() }, uTime: { value: 0 }, uReveal: { value: 0 }, uOpacity: { value: 1 } },
+    vertexShader: 'varying vec2 vP; void main(){ vP = position.xy / 1.7; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
     fragmentShader: `
-      uniform vec3 uColor; uniform float uTime; uniform float uReveal; uniform float uOpacity; varying vec2 vUv;
-      float hexDist(vec2 p){
-        const vec2 s = vec2(1.0, 1.7320508);
-        vec4 hC = floor(vec4(p, p - vec2(0.5, 1.0)) / s.xyxy) + 0.5;
-        vec4 h = vec4(p - hC.xy * s, p - (hC.zw + 0.5) * s);
-        vec2 g = dot(h.xy, h.xy) < dot(h.zw, h.zw) ? h.xy : h.zw;
-        g = abs(g);
-        return 0.5 - max(dot(g, s * 0.5), g.x);
-      }
+      uniform vec3 uColor; uniform vec3 uGold; uniform float uTime; uniform float uReveal; uniform float uOpacity; varying vec2 vP;
+      float h(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float n(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(h(i), h(i + vec2(1.0, 0.0)), f.x), mix(h(i + vec2(0.0, 1.0)), h(i + vec2(1.0, 1.0)), f.x), f.y); }
       void main(){
-        vec2 p = (vUv - 0.5) * vec2(1.0, 1.06) * 2.0;
-        // Heater-shield outline: rounded top, tapering to a point at the bottom.
-        float taper = mix(1.0, 0.18, (1.0 - smoothstep(-1.0, 0.0, p.y)));
-        float shield = length(vec2(p.x / max(taper, 0.05), max(p.y, 0.0) * 1.05));
-        float outside = max(shield, -p.y * 1.0);
-        if (outside > 1.0) discard;
-        float r = length(p);
-        float reveal = (1.0 - smoothstep(uReveal - 0.12, uReveal, r));
-        float rim = smoothstep(0.78, 1.0, outside);
-        float hexes = (1.0 - smoothstep(0.0, 0.07, hexDist(p * 6.5 + vec2(0.0, uTime * 0.12))));
-        float ripple = (1.0 - smoothstep(0.0, 0.08, abs(r - fract(uTime * 0.7) * 1.4))) * (1.0 - r);
-        float shimmer = 0.6 + 0.4 * sin(uTime * 4.0 + p.y * 9.0 + p.x * 4.0);
-        float alpha = (0.07 + hexes * 0.32 * shimmer + rim * 0.9 + ripple * 0.5) * reveal * uOpacity;
-        float front = smoothstep(uReveal - 0.12, uReveal, r) * step(r, uReveal) * 1.5;
-        vec3 c = mix(uColor * 1.4, vec3(1.15), rim * 0.6 + front);
-        gl_FragColor = vec4(c, alpha + front * uOpacity * 0.6);
+        float r = length(vP);
+        float reveal = 1.0 - smoothstep(uReveal - 0.15, uReveal, r);
+        // Slow ribbons of light drifting upward through the veil, like aurora behind glass.
+        vec2 q = vec2(vP.x * 2.2, vP.y * 1.4 - uTime * 0.25);
+        float flow = n(q + vec2(n(q * 1.7 + uTime * 0.2) * 1.5, 0.0));
+        float ribbons = smoothstep(0.45, 0.9, flow) * 0.55;
+        float rim = smoothstep(0.78, 0.97, r) * (1.0 - smoothstep(0.97, 1.0, r));
+        float body = 0.08 + ribbons * 0.35;
+        vec3 c = mix(uColor, uGold, rim * 0.5 + ribbons * 0.25);
+        gl_FragColor = vec4(c * 1.2, (body + rim * 0.75) * reveal * uOpacity);
       }`,
   });
-  const ward = new THREE.Mesh(geometry, wardMat);
-  ward.renderOrder = 6;
-  group.add(ward);
-  const core = glowSprite(color, 3.2, undefined, 0);
-  group.add(core);
-  const pale = color.clone().lerp(WHITE, 0.4);
+  const veil = new THREE.Mesh(geometry, veilMat);
+  veil.position.z = -0.05;
+  veil.renderOrder = 5;
+  group.add(veil);
+
+  const circleMat = runeMaterial(ward, 5.3);
+  const circle = new THREE.Mesh(new THREE.PlaneGeometry(3, 3), circleMat);
+  circle.renderOrder = 6;
+  group.add(circle);
+
+  const glyphs = runeGlyphs().map((texture, i) => {
+    const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, color: gold, transparent: true, opacity: 0, blending: THREE.AdditiveBlending, depthWrite: false, toneMapped: false }));
+    sprite.scale.setScalar(0.42);
+    sprite.renderOrder = 7;
+    sprite.userData.phase = (i / 6) * Math.PI * 2;
+    group.add(sprite);
+    return sprite;
+  });
+  const bloom = glowSprite(gold, 3.4, undefined, 0);
+  group.add(bloom);
+  const mote = new THREE.Vector3();
   const onImpact = () => {
-    ctx.particles?.burst(origin, 28, { speed: 2.6, color: pale, size: 0.08, sizeEnd: 0.01, ttl: 0.7, drag: 2.5, style: 'spark' });
-    ctx.screen?.flash(color, 0.18, 'edge');
-    ctx.light?.(origin, color, 8, 1.2, 10);
+    ctx.particles?.burst(origin, 26, { speed: 2.2, color: gold, size: 0.08, sizeEnd: 0.01, ttl: 0.9, drag: 2.2, style: 'glow' });
+    ctx.screen?.flash(ward, 0.18, 'edge');
+    ctx.light?.(origin, ward, 8, 1.2, 10);
   };
-  return animate(group, 2.1, (t, age) => {
-    wardMat.uniforms.uTime.value = age;
-    wardMat.uniforms.uReveal.value = easeOutCubic(age / 0.38) * 1.6;
+  return animate(group, 2.2, (t, age, dt) => {
+    const open = easeOutBack(age / 0.45);
     const fade = t > 0.72 ? clamp01((1 - t) / 0.28) : 1;
-    wardMat.uniforms.uOpacity.value = fade * (0.85 + 0.15 * Math.sin(age * 9));
-    const breathe = 1 + Math.sin(age * 2.4) * 0.015;
-    ward.scale.set(breathe, breathe, 1);
-    core.material.opacity = clamp01(1 - age / 0.4) * 0.6;
+    circle.scale.setScalar(0.25 + open * 0.75);
+    circle.rotation.z = age * 0.35;
+    circleMat.uniforms.uTime.value = age;
+    circleMat.uniforms.uReveal.value = clamp01(age / 0.4);
+    circleMat.uniforms.uOpacity.value = fade * (0.9 + 0.1 * Math.sin(age * 5));
+    veilMat.uniforms.uTime.value = age;
+    veilMat.uniforms.uReveal.value = easeOutCubic(age / 0.5) * 1.15;
+    veilMat.uniforms.uOpacity.value = fade;
+    bloom.material.opacity = clamp01(1 - age / 0.5) * 0.45;
+    glyphs.forEach((sprite, i) => {
+      const a = sprite.userData.phase + age * 0.7;
+      const radius = 1.15 * open;
+      sprite.position.set(Math.cos(a) * radius, Math.sin(a) * radius, 0.05);
+      const appear = clamp01((age - 0.2 - i * 0.06) / 0.25);
+      sprite.material.opacity = appear * fade * (0.65 + 0.35 * Math.sin(age * 4 + i));
+    });
+    // Motes of warding light drift up from the circle's rim.
+    if (t < 0.85 && Math.random() < dt * 35) {
+      const a = Math.random() * Math.PI * 2;
+      mote.set(Math.cos(a) * 1.4, Math.sin(a) * 1.4, 0).applyQuaternion(ctx.cameraQuaternion).add(origin);
+      ctx.particles?.emit({ x: mote.x, y: mote.y, z: mote.z, vx: 0, vy: 0.6 + Math.random() * 0.6, vz: 0, color: Math.random() < 0.5 ? gold : pale, size: 0.07, sizeEnd: 0.01, ttl: 1, drag: 0.5, style: 'glow', fadeIn: 0.15 });
+    }
   }, 0.2, onImpact);
 }

@@ -9,7 +9,9 @@ export function detectSwipe(samples: readonly Sample[], o: SwipeOptions): { dire
   const end = samples[samples.length - 1];
   // A single motion-blurred newest frame (unknown shape) must not delay a stroke that was clearly
   // made with the right hand shape up to the previous frame.
-  const blurredEnd = end.pose === 'unknown' && samples[samples.length - 2].pose === o.hand;
+  const recentExact = samples.slice(-4, -1).some((sample) => sample.pose === o.hand);
+  const blurredEnd = (end.pose === 'unknown' && samples[samples.length - 2].pose === o.hand) ||
+    (nearShape(end.pose, o.hand) && recentExact);
   if (end.pose !== o.hand && !blurredEnd) return null;
   const scale = Math.max(end.scale ?? 1, 1e-6);
 
@@ -39,7 +41,7 @@ export function detectSwipe(samples: readonly Sample[], o: SwipeOptions): { dire
     // The new shape can arrive on the first moving camera frame. Allow the preceding frame
     // to anchor its onset only after 50ms of newer samples agree on the requested shape.
     // This keeps the confirmation delay stable at both 30 and 60 camera FPS.
-    const onset = start.pose !== o.hand && start.pose !== 'unknown';
+    const onset = start.pose !== o.hand && start.pose !== 'unknown' && !nearShape(start.pose, o.hand);
     if (onset && (matchingMs < 50 || matching !== samples.length - i - 1)) break;
     if (start.pose === o.hand) {
       matching++;
@@ -47,6 +49,9 @@ export function detectSwipe(samples: readonly Sample[], o: SwipeOptions): { dire
     } else if (start.pose === 'unknown') {
       // Blurred frames are weak evidence: a quarter vote, never a full mismatch.
       matching += 0.25;
+    } else if (nearShape(start.pose, o.hand)) {
+      // An open palm turning edge-on mid-sweep often reads as three fingers.
+      matching += 0.75;
     }
     const stepX = (next.x - start.x) / scale;
     const stepY = (next.y - start.y) / scale;
@@ -170,4 +175,9 @@ function pointingThroughout(path: readonly Sample[]): boolean {
     if (run > 2) return false;
   }
   return unknown <= Math.floor(path.length * 0.15);
+}
+
+/** A pose that is a plausible misreading of `hand` during fast motion (never a different sign). */
+function nearShape(pose: PoseName, hand: SwipeHand): boolean {
+  return hand === 'open' && pose === 'trident';
 }

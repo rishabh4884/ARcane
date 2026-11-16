@@ -115,8 +115,8 @@ describe('GestureEngine (end to end on synthetic hands)', () => {
       d.step(0.3 + i * 0.015, 0.5, POSES.open).fired.forEach((f) => fired.push(f.gestureId));
     }
     expect(fired).toEqual([]);
-    // the same hand, held still, does
-    expect(d.hold(0.6, 0.5, POSES.open, 1200)).toEqual(['aegis']);
+    // the same hand, held still, does (after a short commit delay, because Gale also uses an open palm)
+    expect(d.hold(0.6, 0.5, POSES.open, 1500)).toEqual(['aegis']);
   });
 
   it('prefers a stricter sweep when two overlapping ones are bound', () => {

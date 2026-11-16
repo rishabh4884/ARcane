@@ -98,6 +98,13 @@ const STRIKE_VETO_MS = 500;
  * curvature. Circles of the minimum sigil radius turn about 12° per step, so 40° separates them.
  */
 const CUSP = (40 * Math.PI) / 180;
+/**
+ * A hold whose shape also starts a live motion (an open palm while Gale is bound) only begins
+ * charging after this much stillness: the pause before a sweep must not become a ward.
+ */
+const HOLD_COMMIT_MS = 300;
+/** After a motion casts, a hold of the same shape cannot start for this long (or until the shape changes). */
+const MOTION_LATCH_MS = 900;
 /** Crisp poses charge faster and borderline poses slower, bounded to keep holds predictable. */
 const CHARGE_RATE_MIN = 0.85;
 const CHARGE_RATE_MAX = 1.2;
@@ -153,6 +160,9 @@ export class GestureEngine {
   /** Eased 0..1 confidence of the current held shape. */
   private poseConfidence = 0.5;
   private pendingStrike: { gestureId: string; detail: string; since: number } | null = null;
+  private motionLatch: { pose: PoseName; until: number } | null = null;
+  /** After a motion latch expires, a hold of that shape counts its charge only from that moment. */
+  private holdFloor: { pose: PoseName; at: number } | null = null;
   private strikeVetoUntil = -Infinity;
 
   constructor(gestures: readonly GestureDef[], tuning: Tuning) {
@@ -209,6 +219,8 @@ export class GestureEngine {
     }
     this.poseConfidence += (shapeConfidence(ext, fingerStates, this.tuning.fingers) - this.poseConfidence) * 0.25;
     if (pose !== 'unknown' && pose !== this.latched) this.latched = null;
+    if (this.motionLatch && ((pose !== 'unknown' && pose !== this.motionLatch.pose) || now >= this.motionLatch.until)) this.motionLatch = null;
+    if (this.holdFloor && pose !== 'unknown' && pose !== this.holdFloor.pose) this.holdFloor = null;
 
     const palm = palmCenter(lm);
     const tip = lm[LM.INDEX_TIP];
@@ -260,7 +272,14 @@ export class GestureEngine {
       if (g.kind === 'pose') {
         if (g.pose !== pose || this.latched === pose) continue;
         if (ctx?.suppressPoses?.has(pose) || ctx?.suppressHolds || (ctx?.suppressPointing && pose === 'point')) continue;
-        const since = pose === 'open' || hasMatchingMotion ? Math.max(this.poseSince, this.stillSince) : this.poseSince;
+        if (this.motionLatch?.pose === pose) continue;
+        let since = pose === 'open' || hasMatchingMotion ? Math.max(this.poseSince, this.stillSince) : this.poseSince;
+        if (this.holdFloor?.pose === pose) since = Math.max(since, this.holdFloor.at);
+        if (hasMatchingMotion) {
+          since += HOLD_COMMIT_MS;
+          // Not committed yet: show no charge, so a sweep's wind-up never looks like a ward filling.
+          if (now < since) continue;
+        }
         const progress = clamp01(((now - since) * chargeRate) / (g.holdMs ?? this.tuning.poseHoldMs));
         hold = { gestureId: g.id, progress };
         if (progress >= 1 && ready) {
@@ -322,6 +341,13 @@ export class GestureEngine {
     }
 
     if (fired.length) {
+      // A sweep or sigil ends with the hand still in its shape; that must not charge a hold next.
+      const firedMotion = this.gestures.find((g) => g.id === fired[0].gestureId);
+      if (firedMotion && firedMotion.kind !== 'pose') {
+        const shape = firedMotion.kind === 'swipe' ? firedMotion.hand ?? SWIPE_DEFAULTS.hand : 'point';
+        this.motionLatch = { pose: shape, until: now + MOTION_LATCH_MS };
+        this.holdFloor = { pose: shape, at: now + MOTION_LATCH_MS };
+      }
       this.pendingSwipe = null;
       this.pendingStrike = null;
       this.lastFireAt = now;
@@ -414,6 +440,8 @@ export class GestureEngine {
     this.pendingSwipe = null;
     this.pendingStrike = null;
     this.strikeVetoUntil = -Infinity;
+    this.motionLatch = null;
+    this.holdFloor = null;
     this.smoother.reset();
     this.fingers.reset();
     this.motionFingers.reset();

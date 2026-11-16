@@ -26,6 +26,11 @@ All notable changes to ARcane are recorded here. The format follows
 
 ### Changed
 
+- Arrows stick along their real flight direction at impact, and every shot leaves a glowing streak revealed along its whole (now visibly lobbed) path, lingering briefly after it lands.
+- Gale redesigned as a real gust: streams of wind lines (some curling into eddies), tumbling leaves, dust skimming the floor, grass bowing as the wavefront passes, and a pressure burst at the target. Detection tolerates an edge-on palm and needs a slightly shorter stroke.
+- Gale and Aegis no longer interfere: Aegis only starts charging after a short stillness commit while Gale is bound, and cannot start right after a sweep casts.
+- Aegis redesigned in the forest's fantasy style: a golden rune circle unfolding before the caster, a pearly veil of flowing light, and six carved runes orbiting and pulsing (the hex-lattice force field is gone).
+- Rise gnomes are now articulated cut-paper puppets (legs, coat, arms, crossbow, head) built from their own artwork. They tear the ground open and burst out arms-first, run with striding legs and pumping arms, raise and sight the crossbow, recoil, dip to reload, glance about at rest, and sink back into the earth when their time is up.
 - Lightning sounds like lightning: a clipped double crack, a burst of electrical crackle, a sub boom and thunder that rolls away in uneven swells across the stereo field.
 - A lightning strike lights its surroundings. Ground, trees, rocks, grass, fog, mist and nearby spirits brighten with the bolt and flicker with it, through a shared world-light uniform (most of the forest is unlit artwork that ordinary three.js lights cannot reach).
 - During Bow Draw only the drawing hand's marker hides; the aiming hand keeps one marker, whose ring fills with the draw. Markers are fully opaque with a soft dark outline, so they read clearly over fog and spells.

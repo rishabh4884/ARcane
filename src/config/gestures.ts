@@ -182,6 +182,8 @@ export const GESTURES: readonly GestureDef[] = [
     group: 'sweep',
     kind: 'swipe',
     direction: 'left',
+    minTravel: 1.25,
+    minSpeed: 3,
     name: 'Gale',
     hint: 'Open hand, one quick sweep to your left, like parting a curtain of wind.',
     glyph: '🌬️',

@@ -122,7 +122,7 @@ export function disposeGroup(group: THREE.Object3D): void {
       for (const material of materials) material.dispose();
     } else if (object instanceof THREE.Sprite) {
       const map = object.material.map;
-      if (map && !shared.has(map)) map.dispose();
+      if (map && !shared.has(map) && !map.userData.shared) map.dispose();
       object.material.dispose();
     }
   });

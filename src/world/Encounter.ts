@@ -71,7 +71,7 @@ export class Encounter {
       const spawn=this.findSpawn(x,z,CREATURE_SPECS[kind].radius);
       this.actors.push({id:this.actors.length,group,puppet,state:new CreatureState(kind),reaction,warning,spawn,generation:0,phase:this.actors.length*2.4,look:0,lastPose:'idle'});group.position.copy(spawn);
     }
-    this.summons=new GnomeSummons(this.obstacles,this.intersectEnvironment,(id,point)=>this.summonHit(id,point),fx.particles);
+    this.summons=new GnomeSummons(this.obstacles,this.intersectEnvironment,(id,point)=>this.summonHit(id,point),fx.particles,fx.mist);
     this.group.add(this.summons.group);this.buildHud();this.refreshHud();
   }
   private findSpawn(x:number,z:number,radius:number):THREE.Vector3 {

@@ -242,3 +242,40 @@ describe('easy Skyfall', () => {
     expect(run(frames)).toEqual(['impale']);
   });
 });
+
+describe('Gale and Aegis do not get in each other’s way', () => {
+  const engineWith = () => new GestureEngine(liveGestures(), DEFAULT_TUNING);
+  const step = (engine: GestureEngine, t: { now: number }, x: number, ext = POSES.open, fired: string[] = []) => {
+    t.now += 1000 / 30;
+    fired.push(...engine.process({ time: t.now, landmarks: makeHand(x, 0.5, ext), aspect: ASPECT, confidence: 1 }, t.now).fired.map((f) => f.gestureId));
+    return fired;
+  };
+
+  it('does not cast Aegis while the open palm pauses for most of a second before a Gale', () => {
+    const engine = engineWith(), t = { now: 1000 }, fired: string[] = [];
+    for (let i = 0; i < 26; i++) step(engine, t, 0.9, POSES.open, fired); // ~870 ms pause
+    for (let i = 1; i <= 6; i++) step(engine, t, 0.9 - i * 0.055, POSES.open, fired);
+    expect(fired).toEqual(['gale']);
+  });
+
+  it('does not cast Aegis right after a Gale when the hand stops open', () => {
+    const engine = engineWith(), t = { now: 1000 }, fired: string[] = [];
+    for (let i = 0; i < 8; i++) step(engine, t, 0.9, POSES.open, fired);
+    for (let i = 1; i <= 6; i++) step(engine, t, 0.9 - i * 0.055, POSES.open, fired);
+    for (let i = 0; i < 40; i++) step(engine, t, 0.57, POSES.open, fired); // 1.3 s resting open
+    expect(fired).toEqual(['gale']);
+  });
+
+  it('still casts a deliberately held Aegis', () => {
+    const engine = engineWith(), t = { now: 1000 }, fired: string[] = [];
+    for (let i = 0; i < 45; i++) step(engine, t, 0.6, POSES.open, fired);
+    expect(fired).toEqual(['aegis']);
+  });
+
+  it('keeps a Gale sweep whose palm turns edge-on (reads as three fingers) mid-stroke', () => {
+    const engine = engineWith(), t = { now: 1000 }, fired: string[] = [];
+    for (let i = 0; i < 8; i++) step(engine, t, 0.9, POSES.open, fired);
+    for (let i = 1; i <= 6; i++) step(engine, t, 0.9 - i * 0.055, i >= 4 ? POSES.trident : POSES.open, fired);
+    expect(fired).toEqual(['gale']);
+  });
+});
