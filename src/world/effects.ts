@@ -299,7 +299,7 @@ function boltMaterial(color: THREE.Color, core: number, glow: number): THREE.Sha
       uniform vec3 uColor; uniform float uIntensity; uniform float uCore; uniform float uGlow; varying vec2 vUv;
       void main(){
         float x = abs(vUv.y * 2.0 - 1.0);
-        float core = smoothstep(0.42, 0.0, x) * uCore;
+        float core = (1.0 - smoothstep(0.0, 0.42, x)) * uCore;
         float glow = exp(-x * x * 3.5) * uGlow;
         vec3 c = mix(uColor * 1.6, vec3(1.25), core);
         gl_FragColor = vec4(c, (core + glow * 0.55) * uIntensity);
@@ -660,7 +660,7 @@ function runeMaterial(color: THREE.Color, seed: number): THREE.ShaderMaterial {
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
     fragmentShader: `
       uniform vec3 uColor; uniform float uTime; uniform float uOpacity; uniform float uReveal; uniform float uSeed; varying vec2 vUv;
-      float ring(float r, float c, float w){ return smoothstep(w, 0.0, abs(r - c)); }
+      float ring(float r, float c, float w){ return (1.0 - smoothstep(0.0, w, abs(r - c))); }
       void main(){
         vec2 p = vUv * 2.0 - 1.0; float r = length(p); if (r > 1.0) discard;
         float a = atan(p.y, p.x);
@@ -670,7 +670,7 @@ function runeMaterial(color: THREE.Color, seed: number): THREE.ShaderMaterial {
         float cell = floor(fract((a + rot) / 6.2831853) * cells);
         float within = fract(fract((a + rot) / 6.2831853) * cells);
         float glyph = step(0.42, fract(sin(cell * 12.9898 + uSeed) * 43758.5453));
-        float strokeA = smoothstep(0.1, 0.0, abs(within - 0.5)) * step(0.82, r) * step(r, 0.91);
+        float strokeA = (1.0 - smoothstep(0.0, 0.1, abs(within - 0.5))) * step(0.82, r) * step(r, 0.91);
         float strokeB = step(0.25, within) * step(within, 0.75) * ring(r, 0.865, 0.008);
         float runes = (strokeA * glyph + strokeB * (1.0 - glyph)) * 0.95;
         // Inner hexagram that turns against the outer ring.
@@ -678,7 +678,7 @@ function runeMaterial(color: THREE.Color, seed: number): THREE.ShaderMaterial {
         float hexA = ring(r * hexR, 0.62, 0.012);
         float hexB = 0.0;
         { float a2 = a + counter + 3.14159 / 6.0; float h2 = cos(3.14159 / 6.0) / cos(mod(a2, 3.14159 / 3.0) - 3.14159 / 6.0); hexB = ring(r * h2, 0.62, 0.012); }
-        float spokes = smoothstep(0.012, 0.0, abs(sin(3.0 * (a + counter))) * r) * step(0.2, r) * step(r, 0.44);
+        float spokes = (1.0 - smoothstep(0.0, 0.012, abs(sin(3.0 * (a + counter))) * r)) * step(0.2, r) * step(r, 0.44);
         float sweep = step(fract((a + 3.14159) / 6.2831853), uReveal);
         float shape = (m + runes + (hexA + hexB) * 0.75 + spokes * 0.6) * sweep;
         float glow = exp(-r * r * 3.0) * 0.12;
@@ -811,15 +811,15 @@ function aegis(origin: THREE.Vector3, color: THREE.Color, ctx: SpellContext): Sp
       void main(){
         vec2 p = (vUv - 0.5) * vec2(1.0, 1.06) * 2.0;
         // Heater-shield outline: rounded top, tapering to a point at the bottom.
-        float taper = mix(1.0, 0.18, smoothstep(0.0, -1.0, p.y));
+        float taper = mix(1.0, 0.18, (1.0 - smoothstep(-1.0, 0.0, p.y)));
         float shield = length(vec2(p.x / max(taper, 0.05), max(p.y, 0.0) * 1.05));
         float outside = max(shield, -p.y * 1.0);
         if (outside > 1.0) discard;
         float r = length(p);
-        float reveal = smoothstep(uReveal, uReveal - 0.12, r);
+        float reveal = (1.0 - smoothstep(uReveal - 0.12, uReveal, r));
         float rim = smoothstep(0.78, 1.0, outside);
-        float hexes = smoothstep(0.07, 0.0, hexDist(p * 6.5 + vec2(0.0, uTime * 0.12)));
-        float ripple = smoothstep(0.08, 0.0, abs(r - fract(uTime * 0.7) * 1.4)) * (1.0 - r);
+        float hexes = (1.0 - smoothstep(0.0, 0.07, hexDist(p * 6.5 + vec2(0.0, uTime * 0.12))));
+        float ripple = (1.0 - smoothstep(0.0, 0.08, abs(r - fract(uTime * 0.7) * 1.4))) * (1.0 - r);
         float shimmer = 0.6 + 0.4 * sin(uTime * 4.0 + p.y * 9.0 + p.x * 4.0);
         float alpha = (0.07 + hexes * 0.32 * shimmer + rim * 0.9 + ripple * 0.5) * reveal * uOpacity;
         float front = smoothstep(uReveal - 0.12, uReveal, r) * step(r, uReveal) * 1.5;

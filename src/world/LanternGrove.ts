@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import { ArtResources, sweptShape, vectors } from './storybook.ts';
+import { glowSprite } from './vfx.ts';
 import { pathX, seededRandom, terrainHeight } from './spatial.ts';
 import { createLanternUniform, type LanternUniform, LANTERN_COUNT } from './LanternLighting.ts';
 
-interface Lamp { root: THREE.Group; light: THREE.PointLight | null; x:number; z:number; height:number; strength:number; phase:number }
+interface Lamp { root: THREE.Group; light: THREE.PointLight | null; halo: THREE.Sprite; x:number; z:number; height:number; strength:number; phase:number }
 
 /** Warm, staggered pools of light; their exact positions drive every surface shader. */
 export class LanternGrove {
@@ -75,17 +76,23 @@ export class LanternGrove {
     }
     const light=index<2?new THREE.PointLight('#eaba6e',index===0?5:2.8,index===0?9.5:8.2,2.2):null;
     if(light){light.position.set(ox,3.29,0);light.castShadow=false;root.add(light);}
-    this.lamps.push({root,light,x,z,height:3.29*scale,strength,phase:index*.71});
+    // A soft halo around the flame; bloom and the flicker below make it breathe.
+    const halo=glowSprite('#f5b25e',2.2,undefined,.45);halo.position.set(ox,3.29,0);halo.renderOrder=3;root.add(halo);
+    this.lamps.push({root,light,halo,x,z,height:3.29*scale,strength,phase:index*.71});
   }
 
   update(dt:number,reducedMotion:boolean):void {
     if(!reducedMotion)this.time.value+=dt;
     this.motes.material.uniforms.motion.value=reducedMotion?0:1;
     this.lamps.forEach((lamp,index)=>{
-      const flicker=reducedMotion?1:.97+.025*Math.sin(this.time.value*2.2+lamp.phase)+.012*Math.sin(this.time.value*5.3+index);
+      const t=this.time.value;
+      // Layered flicker: a slow breath, a quicker waver, and an occasional gutter.
+      const gutter=Math.max(0,Math.sin(t*.37+lamp.phase*3.1))**24*.18;
+      const flicker=reducedMotion?1:.95+.035*Math.sin(t*2.2+lamp.phase)+.02*Math.sin(t*5.3+index)+.012*Math.sin(t*11.7+lamp.phase*2)-gutter;
+      lamp.halo.material.opacity=.38*flicker*lamp.strength;lamp.halo.scale.setScalar(2.1+flicker*.25);
       const uniform=this.lanterns.value[index];uniform.set(lamp.x+.92*lamp.root.scale.x,terrainHeight(lamp.x,lamp.z)+lamp.height,lamp.z,lamp.strength*flicker);
       if(lamp.light)lamp.light.intensity=(index===0?5:2.8)*flicker;
     });
   }
-  dispose():void{if(this.disposed)return;this.disposed=true;this.group.removeFromParent();this.art.dispose();for(const lamp of this.lamps)lamp.light?.dispose();}
+  dispose():void{if(this.disposed)return;this.disposed=true;this.group.removeFromParent();this.art.dispose();for(const lamp of this.lamps){lamp.light?.dispose();lamp.halo.material.dispose();}}
 }

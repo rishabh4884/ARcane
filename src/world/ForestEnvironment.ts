@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { Illustration, billboardMaterial } from './Illustration.ts';
 import { VolumetricFog } from './VolumetricFog.ts';
+import { FogWisps, GroundMist, MOON_DIRECTION, MoonShafts, Watchers } from './Atmosphere.ts';
 import { LanternGrove } from './LanternGrove.ts';
 import { illuminateIllustration } from './LanternLighting.ts';
 import { GrassField } from './GrassField.ts';
@@ -24,6 +25,10 @@ export class ForestEnvironment {
   private readonly grass:GrassField;
   private readonly fog:VolumetricFog;
   private readonly lantern:LanternGrove;
+  private readonly mist:GroundMist;
+  private readonly wisps:FogWisps;
+  private readonly shafts:MoonShafts;
+  private readonly watchers:Watchers;
   private disposed = false;
 
   constructor(private readonly scene: THREE.Scene) {
@@ -39,6 +44,10 @@ export class ForestEnvironment {
     this.makeCarpet(); this.makeTrees(); this.makeRocks(); this.makeLandmarks(); this.makeAtmosphere();
     this.fog=new VolumetricFog(this.lantern.lanterns);this.group.add(this.fog.group);
     this.grass=new GrassField(this.obstacles,this.lantern.lanterns);this.group.add(this.grass.group);
+    this.mist=new GroundMist(this.lantern.lanterns,this.time,this.motion);this.group.add(this.mist.group);
+    this.wisps=new FogWisps(this.time,this.motion);this.group.add(this.wisps.group);
+    this.shafts=new MoonShafts(this.time,this.motion);this.group.add(this.shafts.group);
+    this.watchers=new Watchers(this.time);this.group.add(this.watchers.group);
   }
 
   private cutout(map: THREE.Texture, sites: Cutout['sites'], tint = '#ffffff', sway = 0.035): THREE.InstancedMesh {
@@ -72,18 +81,38 @@ export class ForestEnvironment {
   private makeSky(): THREE.Mesh {
     const material = this.art.material(new THREE.ShaderMaterial({
       side:THREE.BackSide,depthWrite:false,
+      uniforms:{uTime:this.time,uMoon:{value:MOON_DIRECTION.clone()}},
       vertexShader:'varying vec3 direction;void main(){direction=position;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',
-      fragmentShader:`varying vec3 direction;void main(){vec3 d=normalize(direction);
+      fragmentShader:`uniform float uTime;uniform vec3 uMoon;varying vec3 direction;
+        float h(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453);}
+        float n(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.-2.*f);return mix(mix(h(i),h(i+vec2(1,0)),f.x),mix(h(i+vec2(0,1)),h(i+vec2(1,1)),f.x),f.y);}
+        float fbm(vec2 p){float v=0.,a=.5;for(int i=0;i<4;i++){v+=n(p)*a;p=p*2.03+vec2(1.7,9.2);a*=.5;}return v;}
+        void main(){vec3 d=normalize(direction);
         float opening=pow(max(0.0,dot(d,normalize(vec3(-0.25,0.035,-0.96)))),9.0);
-        vec3 c=mix(vec3(.105,.145,.15),vec3(.025,.041,.05),smoothstep(-.08,.85,d.y));
+        vec3 c=mix(vec3(.105,.145,.15),vec3(.025,.041,.055),smoothstep(-.08,.85,d.y));
         c=mix(c,vec3(.15,.15,.12),opening*.07);
-        c*=mix(.72,1.0,smoothstep(-.12,.42,d.y));
-        gl_FragColor=vec4(c,1.0);
+        // Moon: a pale disc with a soft halo and a wide wash of cold light around it.
+        float m=dot(d,uMoon);
+        float disc=smoothstep(.99935,.99965,m);
+        float halo=pow(max(0.,m),280.)*.55+pow(max(0.,m),26.)*.16+pow(max(0.,m),5.)*.05;
+        vec2 moonUv=(d.xy-uMoon.xy)*90.;
+        float maria=.82+.18*n(moonUv*1.3+3.)*n(moonUv*2.7);
+        // Stars only in the open sky above, twinkling.
+        vec2 sp=d.xz/max(d.y,.08)*60.;vec2 cell=floor(sp);float star=step(.985,h(cell))*(1.0 - smoothstep(.0, .12, length(fract(sp)-.5-.3*(vec2(h(cell+1.),h(cell+2.))-.5))));
+        star*=(.5+.5*sin(uTime*(1.5+h(cell+3.)*3.)+h(cell)*30.))*smoothstep(.12,.45,d.y);
+        // Thin clouds drifting across, silvered where they pass the moon.
+        vec2 cp=d.xz/max(d.y+.12,.05)*1.6+vec2(uTime*.012,uTime*.004);
+        float cloud=smoothstep(.45,.85,fbm(cp))*smoothstep(-.02,.25,d.y);
+        vec3 sky=c*mix(.72,1.0,smoothstep(-.12,.42,d.y));
+        sky+=vec3(.55,.66,.78)*halo+vec3(.08,.1,.12)*star*(1.-cloud);
+        sky=mix(sky,vec3(.92,.95,.98)*maria,disc*(1.-cloud*.7));
+        sky=mix(sky,mix(vec3(.05,.07,.08),vec3(.32,.38,.44),clamp(halo*3.,0.,1.)),cloud*.65);
+        gl_FragColor=vec4(sky,1.0);
         #include <tonemapping_fragment>
         #include <colorspace_fragment>
       }`,
     }));
-    const sky=new THREE.Mesh(this.art.geometry(new THREE.SphereGeometry(170,32,20)),material);
+    const sky=new THREE.Mesh(this.art.geometry(new THREE.SphereGeometry(170,48,24)),material);
     sky.frustumCulled=false;sky.renderOrder=-10;this.group.add(sky);return sky;
   }
 
@@ -187,5 +216,5 @@ export class ForestEnvironment {
     for(const obstacle of this.obstacles){const d=intersectObstacle(ray,obstacle,nearest??range);if(d!==null&&(nearest===null||d<nearest))nearest=d;}return nearest;
   }
   update(dt:number,camera:THREE.Camera,reducedMotion:boolean):void {this.motion.value=reducedMotion?0:1;if(!reducedMotion)this.time.value+=dt;this.sky.position.copy(camera.position);this.lantern.update(dt,reducedMotion);this.grass.update(dt,camera,reducedMotion);this.fog.update(dt,camera,reducedMotion);}
-  dispose():void {if(this.disposed)return;this.disposed=true;this.lantern.dispose();this.fog.dispose();this.grass.dispose();this.scene.remove(this.group);this.art.dispose();this.illustration.dispose();}
+  dispose():void {if(this.disposed)return;this.disposed=true;this.lantern.dispose();this.fog.dispose();this.grass.dispose();this.mist.dispose();this.wisps.dispose();this.shafts.dispose();this.watchers.dispose();this.scene.remove(this.group);this.art.dispose();this.illustration.dispose();}
 }

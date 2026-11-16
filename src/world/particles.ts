@@ -73,10 +73,10 @@ export class ParticleSystem {
           vColor = color; vAlpha = look.y; vStyle = look.z; vSeed = look.w;
           vec4 mv = modelViewMatrix * vec4(position, 1.0);
           float depth = max(0.05, -mv.z);
-          gl_PointSize = clamp(look.x * uProjScale / depth, 0.0, 96.0);
+          float size = clamp(look.x * uProjScale / depth, 0.0, 96.0);
           // Sub-pixel points flicker; fade them instead of rendering a shimmering pixel.
-          vAlpha *= smoothstep(0.0, 1.5, gl_PointSize);
-          gl_PointSize = max(gl_PointSize, 1.5);
+          vAlpha *= smoothstep(0.0, 1.5, size);
+          gl_PointSize = max(size, 1.5);
           gl_Position = projectionMatrix * mv;
         }`,
       fragmentShader: `

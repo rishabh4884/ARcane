@@ -345,10 +345,11 @@ export class World {
         void main(){
           vec2 p = vUv * 2.0 - 1.0; float r = length(p);
           float angle = fract(atan(p.x, p.y) / 6.2831853 + 1.0);
-          float base = smoothstep(0.035, 0.0, abs(r - 0.62)) * 0.55;
+          float base = (1.0 - smoothstep(0.0, 0.035, abs(r - 0.62))) * 0.55;
           float arcMask = step(angle, uProgress) * step(0.001, uProgress);
-          float arc = smoothstep(0.07, 0.0, abs(r - 0.62)) * arcMask;
-          float glow = exp(-pow((r - 0.62) / 0.16, 2.0)) * arcMask * 0.55;
+          float arc = (1.0 - smoothstep(0.0, 0.07, abs(r - 0.62))) * arcMask;
+          float ringOffset = (r - 0.62) / 0.16;
+          float glow = exp(-ringOffset * ringOffset) * arcMask * 0.55;
           float full = step(0.999, uProgress) * (0.5 + 0.5 * sin(uTime * 18.0));
           float inner = exp(-r * r * 22.0) * 0.5;
           vec3 c = mix(uBase, uCharge, step(0.001, uProgress));

@@ -49,40 +49,43 @@ export class VolumetricFog {
       vertexShader:`attribute vec4 fogOrigin;attribute vec2 fogSize;attribute float fogShade;uniform float uTime;uniform float uMotion;
         varying vec2 vUv;varying vec3 vWorld;varying float vDepth;varying float vShade;
         void main(){vUv=uv;vShade=fogShade;
-          float swell=sin(uv.x*8.0+uTime*.08+fogOrigin.w)+sin(uv.x*17.0-uTime*.055+fogOrigin.w*1.7)*.4;
-          float lift=swell*.13*uv.y*uMotion;
+          // The bank's crest rolls like a slow wave; its whole body breathes and drifts with the wind.
+          float swell=sin(uv.x*8.0+uTime*.32+fogOrigin.w)+sin(uv.x*17.0-uTime*.21+fogOrigin.w*1.7)*.45;
+          float lift=swell*.22*uv.y*uMotion;
           vec3 p=vec3(position.x*fogSize.x,position.y*fogSize.y+lift,position.z);
           vec3 world=fogOrigin.xyz+vec3(p.x, p.y, 0.0);
-          world.y+=sin(uTime*.037+fogOrigin.w)*.32*uMotion;
-          world.x+=cos(uTime*.035+fogOrigin.w)*.8*uMotion;
+          world.y+=sin(uTime*.11+fogOrigin.w)*.45*uMotion;
+          world.x+=sin(uTime*.07+fogOrigin.w)*2.2*uMotion;
           vWorld=world;vec4 mv=viewMatrix*vec4(world,1.0);vDepth=-mv.z;gl_Position=projectionMatrix*mv;
         }`,
        fragmentShader:`varying vec2 vUv;varying vec3 vWorld;varying float vDepth;varying float vShade;uniform float uTime;
          ${LANTERN_GLSL}
         float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453123);}
         float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(hash(i),hash(i+vec2(1.,0.)),f.x),mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),f.x),f.y);}
-        float fbm(vec2 p){float n=0.0,a=.65;for(int i=0;i<2;i++){n+=noise(p)*a;p=p*2.03+vec2(7.1,3.7);a*=.5;}return n;}
+        float fbm(vec2 p){float n=0.0,a=.55;for(int i=0;i<3;i++){n+=noise(p)*a;p=mat2(1.6,1.2,-1.2,1.6)*p+vec2(7.1,3.7);a*=.5;}return n;}
          void main(){
            // Reject fragments outside the visible depth band before evaluating layered noise.
            if(vDepth>78.0||vDepth<2.0)discard;
            float lowFog=pow(1.0-vUv.y,.85);
            float envelope=pow(max(0.,sin(vUv.x*3.14159)),.55)*smoothstep(0.,.18,vUv.y)*lowFog;
            if(envelope<.012)discard;
-           vec2 drift=vec2(uTime*.012,-uTime*.008);
-          // Stretch the noise along the wind so banks read as long, sheared wisps; add a slow large-scale
-          // pocket mask so clear breaks open and close between the banks.
-          vec2 flow=vec2(vWorld.x*.052,vWorld.z*.09)+drift;
-          float billow=fbm(flow)+.36*fbm(flow*2.1+vec2(2.7,8.1));
-          float pocket=smoothstep(.28,.72,fbm(vWorld.xz*.021+vec2(11.3,4.7)+drift*.4));
-           float density=smoothstep(.3,.82,billow)*envelope*mix(.12,1.15,pocket);
+           // Wind carries the fog left to right; a domain warp makes it curl and fold as it goes.
+           vec2 wind=vec2(uTime*.045,-uTime*.012);
+           vec2 flow=vec2(vWorld.x*.05,vWorld.z*.085+vUv.y*.6)-wind;
+           vec2 warp=vec2(noise(flow*1.3+vec2(uTime*.05,0.)),noise(flow*1.3+vec2(4.2,uTime*.04)))-.5;
+           float billow=fbm(flow+warp*1.4)+.3*noise(flow*3.1-wind*1.7+warp);
+           float pocket=smoothstep(.25,.7,noise(vWorld.xz*.03+vec2(11.3,4.7)-wind*.35));
+           float density=smoothstep(.28,.8,billow)*envelope*mix(.15,1.15,pocket);
           float depth=1.0-smoothstep(44.,78.,vDepth);
           float reveal=smoothstep(2.,8.,vDepth);
-          float alpha=density*depth*mix(.14,.34,smoothstep(12.,56.,vDepth))*reveal*mix(.5,1.25,vShade);
+          float alpha=density*depth*mix(.15,.36,smoothstep(12.,56.,vDepth))*reveal*mix(.5,1.25,vShade);
           if(alpha<.009)discard;
-          vec3 shadowFog=vec3(.12,.18,.19),litFog=vec3(.22,.29,.27);
-          float innerLight=vUv.y*.16+pow(max(0.,sin(vWorld.x*.035+uTime*.03)),3.0)*.06;
+          vec3 shadowFog=vec3(.11,.17,.19),litFog=vec3(.24,.31,.31),moonFog=vec3(.30,.37,.42);
+          float innerLight=vUv.y*.16+pow(max(0.,sin(vWorld.x*.035+uTime*.05)),3.0)*.07;
            float lantern=lanternIllumination(vWorld);
-           vec3 color=mix(shadowFog,litFog,clamp(innerLight*vShade+.08,0.,.38))+vec3(.42,.22,.08)*lantern;
+           vec3 color=mix(shadowFog,litFog,clamp(innerLight*vShade+.08,0.,.38));
+           // Moonlight silvers the upper edges of each bank; lanterns warm what is near them.
+           color=mix(color,moonFog,smoothstep(.45,1.0,vUv.y)*.5*(1.0-density*.5))+vec3(.46,.24,.09)*lantern;
           gl_FragColor=vec4(color,alpha);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
