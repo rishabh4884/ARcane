@@ -17,7 +17,6 @@ All notable changes to ARcane are recorded here. The format follows
 - Hand markers show a charge ring that fills while a sign is held. Spell dock slots show a recovery sweep, a ready shimmer and a refusal shake.
 - `GameEvents` bus, `GestureEngine.suspend()`, and `ProcessContext.suppressPointing` / `suppressHolds`.
 
-- The supplied Balrog sculpt is exported as a textured, upright GLB with a hand-painted-style garnet hide, ember-red wings, antique-gold torso marks and bone-toned horns, plus an ember plinth, drifting cinders, gently flexing wing tips and spell-color flashes. Camera tracking stays independent if the model fails to load.
 - Selectable 30/60fps camera caps, capture-time timestamps and inference-age reporting. Direct MediaPipe inference remains the default; the experimental worker can be compared using `?tracking=worker`.
 - Two-hand tracking: both hands are read at once, each with its own cursor, wisp, charge bar and debug skeleton, and each can cast its own spell at the same moment.
 - Two-hand gestures: matching signs held together (Blood Pact, Eclipse, Twin Fangs, Crossfire, Wyrm’s Maw, Leviathan) and two-hand motions (Rift, Bind, Skywake, Cataclysm).
@@ -48,6 +47,10 @@ All notable changes to ARcane are recorded here. The format follows
 - Open-palm holds (Aegis, Eclipse) only charge while the palm is still.
 - When both hands show the same sign and a two-hand version is assigned, the two-hand gesture wins over the single-hand ones.
 
+### Removed
+
+- The Balrog boss model, its Mystic rig, the Blender export and inspection scripts, `Boss.ts` and its tests. The model was no longer loaded by the game.
+
 ### Fixed
 
 - Bow Draw could fail intermittently: one dropped frame of either hand reset the draw, and the reset spent a 600 ms pause that blocked re-arming from the right place.
@@ -67,7 +70,6 @@ All notable changes to ARcane are recorded here. The format follows
 - Stopped strokes, tracking jumps and wrong hand shapes no longer trigger single-hand sweeps. A fast upward stroke can complete Phoenix Ascent before the shorter Rise gesture consumes it.
 - Overlapping MediaPipe hypotheses for the same palm are collapsed; a newly appearing second track must persist across consecutive frames, and a dropped slot is no longer published as a live hand during the dropout grace period. The debug overlay now shows raw detections beside live tracks.
 - Established hand identities now survive brief one-hand dropouts without repeated second-hand confirmation. Solo-hand continuity accounts for palm size, stale slots expire independently, and camera stalls cannot complete a held sign using unobserved time. The debug overlay also shows inference time.
-- Corrected the Balrog export's swapped height/depth axes rather than compensating with a runtime tilt. Perspective-aware framing keeps the full wingspan and plinth clear of screen edges and the spell dock.
 - The app failed to start: `World` still used its single-wisp fields, which threw on the first frame and stopped `main.ts` before the Begin button was wired. `main.ts` also still used the single-hand engine.
 - MediaPipe’s Left/Right labels were used backwards (it assumes a mirrored image). Hand slots could end up reversed, so Rift and Bind never fired. Two-hand pairing now follows the on-screen layout and the two-hand motions no longer depend on the labels at all.
 - A fault in a frame handler can no longer stop the camera loop.

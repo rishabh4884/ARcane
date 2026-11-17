@@ -69,7 +69,7 @@ The bow arms when one hand points and the other pinches (thumb–index gap in pa
 The engine reports **gesture ids** such as `"fist"`. The `SpellBook` maps gestures to spells (one gesture, one spell, always) and persists the player's choices. Gestures and spells are declared as data in `src/config/gestures.ts` and `spells.ts`.
 
 ### 8. World and UI (`src/world/`, `src/ui/`)
-`World` renders a Three.js scene, turns the cursor into a wisp in 3D space, and paints a particle effect plus a floating label for each spell. It also loads `public/assets/boss/balrog.glb` as optional scenery: `scripts/export-boss.py` preserves the source's Z-up standing pose (the glTF exporter converts that to Y-up) and writes the authored vertex palette as the first color attribute. `Boss.ts` fits projected stage corners inside the camera view with room for the spell dock, adds an ember plinth/cinders, and applies a restrained standing breath and shader-driven wing-tip flex. Cast spells briefly illuminate it. Asset failure is non-blocking for camera tracking. The world renders at the display's frame rate, independent of the camera's, and eases the wisp toward the latest cursor so motion stays fluid even at 30 camera frames per second. The HUD, Spellbook panel and debug overlay are small DOM modules.
+`World` renders a Three.js scene, turns the cursor into a wisp in 3D space, and paints a particle effect plus a floating label for each spell. The world renders at the display's frame rate, independent of the camera's, and eases the wisp toward the latest cursor so motion stays fluid even at 30 camera frames per second. The HUD, Spellbook panel and debug overlay are small DOM modules.
 
 ### 9. Presentation pipeline (`src/world/`, `src/audio/`, `src/ui/ScreenFX.ts`)
 

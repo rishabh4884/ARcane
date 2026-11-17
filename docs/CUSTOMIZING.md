@@ -85,29 +85,3 @@ For example, a two-finger pinch or a wave. The pattern:
 ## Self-hosting
 
 `npm run build` produces a static site in `dist/`; host it anywhere that serves files over **https** (browsers only share the camera on secure pages, with `localhost` as the exception). The build uses relative paths, so it also works from a sub-folder.
-
-## Mystic enemy model and animation
-
-The game loads `public/assets/boss/balrog-mystic.glb`. The editable, texture-packed rig is
-`balrog_mystic_game.blend`. The original `lowpoly+balrog.blend` and painted `balrog.glb`
-remain unchanged.
-
-Rebuild with Blender 4.2 LTS from the repository root:
-
-```sh
-blender --background --factory-startup --python balrog_mystic.py -- --game
-```
-
-This uses `scripts/export-mystic.py`: it skins the existing sculpt, preserves its texture
-maps and exports eight named bone clips (`Idle`, `Hit_Left`, `Hit_Right`, `Shock`, `Gust`,
-`Stagger`, `Freeze`, `Break_Free`). The initial weights and restrained poses are calibrated
-to this particular sculpt; refine them in Blender for more expressive movement.
-
-`CharacterAnimator` handles blending and frozen holds independently of the model's bone
-names. Replacement models can provide compatible clips or a `CharacterClips` name map.
-`EnemyCombat` owns surface frost and impact flashes; `Boss` connects the current character
-to those events. A model with no clips uses the existing procedural fallback.
-
-Running `balrog_mystic.py` without `--game` is a separate **Blender viewport concept** pass.
-Its toon nodes, compositor glow and drivers are not exported as game materials. Duplicate
-wings and guessed face geometry are disabled by default, preserving the original sculpt.
