@@ -13,11 +13,15 @@ Through your webcam, ARcane transforms your movements into magic, bringing spell
 
 ## 🌲 Enter the World of Hushwood
 
-A forest suspended between the familiar and the otherworldly. Where shadows seem to breathe, ancient magic stirs, and the world feels alive with secrets. 
+You wake on the floor of a dark wood with no memory of the way in. Something is coming through the trees.
 
-Hushwood is ARcane's liminal fantasy realm — a world of ethereal light, drifting particles, and magic waiting to be discovered. 
+Hushwood was bright once. Its lights were taken, and the creatures that remain have grown strange. Fight your way from the Hushed Edge to the Unlit Throne, learn what silenced the wood, and give it back its colours.
 
-**Just you, your hands, and Hushwood.**
+- **A journey of 40 levels** across four chapters, each level three waves that grow harder.
+- **Eight bosses.** A sub-boss comes alone after the last wave of each chapter's ninth level; a ruler waits at the tenth, introduced by its own cutscene.
+- **Nineteen spells.** Eleven from the first night, and eight legendary spells taken from the bosses who rule the wood.
+- **A story told in scenes,** played live in the forest itself, never on video.
+- **Creatures with real bodies** that walk, side-step, turn, charge, fly and coil, each with attacks you learn to read.
 
 ## 🪄 Play Arcane
 
