@@ -403,6 +403,44 @@ export class CreatureArtwork {
     for(const x of [190,256,322])for(const y of [176,410]){ellipse(ctx,x,y,4,4,'#3a4636');ellipse(ctx,x-1,y-1,1.6,1.6,'#e0d6a8');}
   }
 
+  /**
+   * One finger and its talon, drawn hanging from the knuckle (top of the frame) so the rig can
+   * splay, hook and clench each one on its own.
+   */
+  claw(kind:CreatureKind):THREE.Texture {
+    const palette:Record<CreatureKind,{skin:[string,string];nail:[string,string];hook:number}>={
+      goblin:{skin:['#86a072','#3f5f4c'],nail:['#efe6c4','#8a7a58'],hook:1},
+      root:{skin:['#97a07c','#36594a'],nail:['#d2b27a','#3a2c1c'],hook:.6},
+      hollow:{skin:['#3c605a','#12363a'],nail:['#e2e5cf','#7e8a78'],hook:.35},
+      wraith:{skin:['#aec2c0','#4a757c'],nail:['#f2fdfd','#7fb8c0'],hook:.8},
+    };
+    const {skin,nail,hook}=palette[kind];
+    return this.art.texture(`creature-claw-${kind}`,64,192,ctx=>{
+      const outline='#152f32';
+      const finger=ctx.createLinearGradient(14,0,50,90);finger.addColorStop(0,skin[0]);finger.addColorStop(1,skin[1]);
+      ink(ctx,'M 14 0 L 50 0 Q 52 46 46 92 Q 32 100 18 92 Q 12 46 14 0 Z',finger,outline,4);
+      // Knuckle creases.
+      line(ctx,'rgba(10,26,24,.55)',2,20,34,32,38,44,34);line(ctx,'rgba(10,26,24,.45)',2,21,66,32,70,43,66);
+      line(ctx,'rgba(255,255,255,.25)',2,18,8,17,50,20,86);
+      const talon=ctx.createLinearGradient(20,80,40,190);talon.addColorStop(0,nail[0]);talon.addColorStop(1,nail[1]);
+      const tip=32+hook*20;
+      ink(ctx,`M 17 84 Q 34 78 48 86 Q ${50+hook*4} 140 ${tip} 188 Q ${tip-4} 150 ${17+hook*4} 120 Q 14 100 17 84 Z`,talon,outline,3);
+      line(ctx,'rgba(255,255,255,.45)',1.6,24,92,26+hook*6,130,tip-6,176);
+      ellipse(ctx,32,86,13,5,'rgba(20,30,24,.45)');
+    });
+  }
+  /** A curved streak of light left behind by a raking swing, brightest in the middle. */
+  smear():THREE.Texture {
+    return this.art.texture('creature-smear',256,256,ctx=>{
+      const steps=48;
+      for(let i=0;i<steps;i++){
+        const t=i/(steps-1),a0=Math.PI/2-.95+t*1.9,a1=a0+1.9/steps+.01,fade=Math.sin(t*Math.PI)**1.4;
+        const band=ctx.createRadialGradient(128,128,92,128,128,128);
+        band.addColorStop(0,'rgba(255,255,255,0)');band.addColorStop(.55,`rgba(255,255,255,${.55*fade})`);band.addColorStop(.85,`rgba(255,255,255,${.95*fade})`);band.addColorStop(1,'rgba(255,255,255,0)');
+        ctx.fillStyle=band;ctx.beginPath();ctx.moveTo(128,128);ctx.arc(128,128,128,a0,a1);ctx.closePath();ctx.fill();
+      }
+    });
+  }
   /** Glowing iris: a bright pinpoint, a ring and fibres. White, so each creature tints it. */
   iris():THREE.Texture {
     return this.art.texture('creature-iris',128,128,ctx=>{

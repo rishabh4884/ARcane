@@ -260,13 +260,16 @@ export class Encounter {
         }
         for(const other of this.actors){if(other===actor||!other.state.alive)continue;const ox=p.x-other.group.position.x,oz=p.z-other.group.position.z,d=Math.hypot(ox,oz),safe=spec.radius+CREATURE_SPECS[other.puppet.kind].radius+0.8;if(d<safe&&d>0.01){vx+=ox/d*(safe-d);vz+=oz/d*(safe-d);}}
         const length=Math.hypot(vx,vz)||1;
-        moveOnGround(p,vx/length*spec.speed*dt,vz/length*spec.speed*dt,this.obstacles);p.y-=EYE_HEIGHT;
+        // The puppet's creeping gait sets the pace: when it stops dead mid-step, so does its body.
+        const pace=spec.speed*dt*(0.08+0.92*actor.puppet.gait);
+        moveOnGround(p,vx/length*pace,vz/length*pace,this.obstacles);p.y-=EYE_HEIGHT;
       }
       if(strike&&this.player.alive){
         this.fx.events?.emit({type:'enemy-strike',kind:actor.puppet.kind,position:p.clone(),pan:this.pan(p)});
         if(actor.puppet.kind==='wraith'&&los){
           const group=this.createWispProjectile(this.time+actor.phase);
-          group.position.copy(p);group.position.y+=1.55;this.group.add(group);
+          // The ember leaves from the palm where it gathered through the wind-up.
+          actor.puppet.castPoint(group.position);this.group.add(group);
           const velocity=this.camera.position.clone().sub(group.position).normalize().multiplyScalar(3.5);
           const trail=new Trail(EMBER,0.22,0.55,48,0.7);this.group.add(trail.mesh);
           this.fx.particles?.burst(group.position,16,{speed:1.6,color:EMBER_HOT,size:0.1,sizeEnd:0.01,ttl:0.6,drag:2,style:'glow'});
