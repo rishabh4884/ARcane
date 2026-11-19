@@ -68,7 +68,14 @@ function paint(shape: Shape, seed: number): HTMLCanvasElement | null {
     }
   }
   finish(ctx, { feather: 3, rim: [70, 92, 92], rimWidth: 6, rimStrength: 0.35, edgeShade: 0, grain: 0.02, mottle: 0.05, seed });
-  return canvas;
+  // The near frame is out of focus by design: its softness is painted in, so the playing ground
+  // never passes through a blur.
+  const soft = document.createElement('canvas');
+  soft.width = soft.height = 512;
+  const softCtx = soft.getContext('2d')!;
+  softCtx.filter = 'blur(7px)';
+  softCtx.drawImage(canvas, 0, 0);
+  return soft;
 }
 
 interface Piece { mesh: THREE.Mesh; corner: [number, number]; size: [number, number]; depth: number; inset: [number, number] }

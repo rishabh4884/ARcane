@@ -95,22 +95,46 @@ export function detectSwipe(samples: readonly Sample[], o: SwipeOptions): { dire
   }
   return null;
 }
-export const CIRCLE_DEFAULTS = { direction: 'any' as 'any'|'cw'|'ccw', minRadius: .55 };
-const MIN_CIRCLE_MS = 260;
-const MAX_CIRCLE_MS = 1500;
-const MAX_CIRCLE_GAP_MS = 180;
+export const CIRCLE_DEFAULTS = { direction: 'any' as 'any'|'cw'|'ccw', minRadius: .45 };
+const MIN_CIRCLE_MS = 220;
+/** Slow, careful loops count too: players drawing Mend for the first time take their time. */
+const MAX_CIRCLE_MS = 2400;
+const MAX_CIRCLE_GAP_MS = 200;
 const FULL_TURN = Math.PI * 2;
+/** A loop needs about 290° of sweep: enough to read as a circle, never a three-quarter arc. */
+const MIN_CIRCLE_TURN = FULL_TURN * 0.8;
+
+/**
+ * Least-squares (Kåsa) circle centre. A hand-drawn loop is lopsided and rarely closes exactly, so the
+ * bounding-box centre drifts toward whichever side was drawn wider; the fitted centre does not.
+ */
+function fitCentre(path: readonly Sample[]): { x: number; y: number } | null {
+  let mx = 0, my = 0;
+  for (const p of path) { mx += p.x; my += p.y; }
+  mx /= path.length; my /= path.length;
+  let suu = 0, svv = 0, suv = 0, suuu = 0, svvv = 0, suvv = 0, svuu = 0;
+  for (const p of path) {
+    const u = p.x - mx, v = p.y - my;
+    suu += u * u; svv += v * v; suv += u * v;
+    suuu += u * u * u; svvv += v * v * v; suvv += u * v * v; svuu += v * u * u;
+  }
+  const det = suu * svv - suv * suv;
+  if (Math.abs(det) < 1e-9) return null;
+  const a = 0.5 * (suuu + suvv), b = 0.5 * (svvv + svuu);
+  return { x: mx + (a * svv - b * suv) / det, y: my + (b * suu - a * suv) / det };
+}
 
 export function detectCircle(s: readonly Sample[], o: typeof CIRCLE_DEFAULTS): { clockwise: boolean } | null {
   const end = s.at(-1);
   if (!end) return null;
-  if (end.pose !== 'point' && !(end.pose === 'unknown' && s.at(-2)?.pose === 'point')) return null;
+  // A fast fingertip blurs: the newest frame may be unreadable as long as the hand was just pointing.
+  if (end.pose !== 'point' && !(end.pose === 'unknown' && s.slice(-4, -1).some((sample) => sample.pose === 'point'))) return null;
   const oldest = Math.max(0, s.findIndex((sample) => end.t - sample.t <= MAX_CIRCLE_MS));
 
   // Search by elapsed stroke time, not `slice(-31)`: the same circle must have the same
   // geometry at 24, 30, and 60 camera FPS. Trying the shortest complete loop first also
   // ignores a stationary aiming pause before the player starts drawing.
-  for (let startIndex = s.length - 8; startIndex >= oldest; startIndex -= 1) {
+  for (let startIndex = s.length - 7; startIndex >= oldest; startIndex -= 1) {
     const path = s.slice(startIndex);
     const duration = end.t - path[0].t;
     if (duration < MIN_CIRCLE_MS || duration > MAX_CIRCLE_MS) continue;
@@ -124,17 +148,23 @@ export function detectCircle(s: readonly Sample[], o: typeof CIRCLE_DEFAULTS): {
     const width = maxX - minX;
     const height = maxY - minY;
     const aspect = width / Math.max(height, 1e-6);
-    const center = { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
+    const box = { x: (minX + maxX) / 2, y: (minY + maxY) / 2 };
+    const fitted = fitCentre(path);
+    // Blend the fit with the box: the fit handles lopsided loops, the box keeps a stray sample honest.
+    const center = fitted && Math.hypot(fitted.x - box.x, fitted.y - box.y) < Math.max(width, height) * 0.5
+      ? { x: fitted.x * 0.7 + box.x * 0.3, y: fitted.y * 0.7 + box.y * 0.3 }
+      : box;
     const radii = path.map((point) => Math.hypot(point.x - center.x, point.y - center.y));
     const radius = radii.reduce((sum, value) => sum + value, 0) / radii.length;
-    if (radius < o.minRadius || aspect < 0.55 || aspect > 1.8) continue;
-    if (width < radius * 1.35 || height < radius * 1.35) continue;
-    if (Math.hypot(end.x - path[0].x, end.y - path[0].y) > radius * 0.48) continue;
+    if (radius < o.minRadius || aspect < 0.45 || aspect > 2.2) continue;
+    if (width < radius * 1.2 || height < radius * 1.2) continue;
+    if (Math.hypot(end.x - path[0].x, end.y - path[0].y) > radius * 1.3) continue;
 
     const radialError = Math.sqrt(radii.reduce((sum, value) => sum + (value - radius) ** 2, 0) / radii.length) / radius;
-    if (radialError > 0.38) continue;
+    if (radialError > 0.45) continue;
 
     let turn = 0;
+    let backward = 0;
     let arcLength = 0;
     const sectors = new Set<number>();
     for (let i = 0; i < path.length; i += 1) {
@@ -149,10 +179,20 @@ export function detectCircle(s: readonly Sample[], o: typeof CIRCLE_DEFAULTS): {
       turn += delta;
       arcLength += Math.hypot(path[i].x - path[i - 1].x, path[i].y - path[i - 1].y);
     }
+    // Rotation that went against the loop: a scribble turns both ways, a circle (mostly) one.
+    for (let i = 1; i < path.length; i += 1) {
+      const a0 = Math.atan2(path[i - 1].y - center.y, path[i - 1].x - center.x);
+      const a1 = Math.atan2(path[i].y - center.y, path[i].x - center.x);
+      let delta = a1 - a0;
+      if (delta > Math.PI) delta -= FULL_TURN;
+      if (delta < -Math.PI) delta += FULL_TURN;
+      if (Math.sign(delta) !== Math.sign(turn)) backward += Math.abs(delta);
+    }
     const absoluteTurn = Math.abs(turn);
     const arcRatio = arcLength / Math.max(FULL_TURN * radius, 1e-6);
-    if (absoluteTurn < FULL_TURN * 0.9 || absoluteTurn > FULL_TURN * 1.3) continue;
-    if (sectors.size < 7 || arcRatio < 0.68 || arcRatio > 1.5) continue;
+    if (absoluteTurn < MIN_CIRCLE_TURN || absoluteTurn > FULL_TURN * 1.6) continue;
+    if (backward > absoluteTurn * 0.18) continue;
+    if (sectors.size < 7 || arcRatio < 0.6 || arcRatio > 1.9) continue;
 
     const clockwise = turn > 0; // Camera y increases downward, so this sign is visually clockwise.
     return o.direction === 'any' || (o.direction === 'cw') === clockwise ? { clockwise } : null;
@@ -169,12 +209,14 @@ function pointingThroughout(path: readonly Sample[]): boolean {
   let run = 0;
   for (const sample of path) {
     if (sample.pose === 'point') { run = 0; continue; }
-    if (sample.pose !== 'unknown') return false;
+    // A moving index finger is often misread for a frame or two: unreadable, or with the middle
+    // finger flickering up into a V. Those count as blur, never as a different sign.
+    if (sample.pose !== 'unknown' && sample.pose !== 'victory') return false;
     unknown++;
     run++;
-    if (run > 2) return false;
+    if (run > 3) return false;
   }
-  return unknown <= Math.floor(path.length * 0.15);
+  return unknown <= Math.floor(path.length * 0.25);
 }
 
 /** A pose that is a plausible misreading of `hand` during fast motion (never a different sign). */

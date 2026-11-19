@@ -24,6 +24,8 @@ export interface SpellContext extends FxContext {
   /** Camera-space depth of the target: bolt widths scale with it to keep a constant on-screen thickness. */
   depth?: number;
   hand?: 'left' | 'right' | 'both';
+  /** Vertical field of view of the casting camera (degrees). */
+  fov?: number;
   light?: LightFlash;
   /**
    * Light the surrounding world (ground, trees, grass, fog, creatures) this frame. `slot` picks one
@@ -99,91 +101,194 @@ function facingPlane(texture: THREE.Texture, color: THREE.ColorRepresentation, s
 
 /* ═══════════════════════════════ ARCANE ARROW ═══════════════════════════════ */
 
-/** The Arcane Arrow model: +Y is the tip direction, the head sits at the origin. */
-export function createArrowMesh(color: THREE.Color): { root: THREE.Group; materials: THREE.MeshBasicMaterial[]; halo: THREE.Sprite } {
-  const root = new THREE.Group();
-  const hot = color.clone().lerp(WHITE, 0.7);
-  const materials: THREE.MeshBasicMaterial[] = [];
-  const add = (geometry: THREE.BufferGeometry, material: THREE.MeshBasicMaterial, y: number) => {
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.y = y;
-    materials.push(material);
-    root.add(mesh);
-    return mesh;
-  };
-  // A faceted energy head: an octahedron drawn out into a long diamond.
-  const head = add(new THREE.OctahedronGeometry(1, 0), energy(hot, 1), 0.02);
-  head.scale.set(0.07, 0.2, 0.07);
-  const headGlow = add(new THREE.OctahedronGeometry(1, 0), energy(color, 0.45), 0.02);
-  headGlow.scale.set(0.13, 0.3, 0.13);
-  // Bright core shaft and a fainter sheath.
-  add(new THREE.CylinderGeometry(0.011, 0.016, 0.95, 6), energy(hot, 0.95), -0.5);
-  add(new THREE.CylinderGeometry(0.03, 0.026, 0.95, 8), energy(color, 0.28), -0.5);
-  // Three vanes of light at the tail.
-  const vane = new THREE.Shape();
-  vane.moveTo(0, 0);
-  vane.quadraticCurveTo(0.075, -0.05, 0.085, -0.2);
-  vane.lineTo(0, -0.16);
+let featherTextureCache: THREE.Texture | null = null;
+/** A barred hawk feather painted once at high resolution: vane, rachis, barbs and a notched edge. */
+function featherTexture(): THREE.Texture {
+  if (featherTextureCache) return featherTextureCache;
+  if (typeof document === 'undefined') return (featherTextureCache = new THREE.Texture());
+  const w = 128, h = 512;
+  const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+  const g = canvas.getContext('2d')!;
+  const random = rng(7);
+  // The vane: rounded at the top, cut straight along the shaft side (x = 0), trimmed low at the back.
+  const vane = new Path2D();
+  vane.moveTo(4, 8);
+  vane.bezierCurveTo(70, 10, 122, 90, 120, 210);
+  vane.bezierCurveTo(118, 330, 96, 420, 60, 500);
+  vane.lineTo(4, 504);
   vane.closePath();
-  for (let i = 0; i < 3; i++) {
-    const fletch = add(new THREE.ShapeGeometry(vane), energy(color, 0.7), -0.8);
-    fletch.rotation.y = (i / 3) * Math.PI * 2;
+  g.save(); g.clip(vane);
+  const base = g.createLinearGradient(0, 0, 0, h);
+  base.addColorStop(0, '#ece3cf'); base.addColorStop(0.35, '#c9b48e'); base.addColorStop(1, '#5b4632');
+  g.fillStyle = base; g.fillRect(0, 0, w, h);
+  // Dark bars like a hawk's flight feather.
+  for (let y = 40; y < h; y += 46 + random() * 10) {
+    g.fillStyle = `rgba(48,32,22,${0.45 + random() * 0.25})`;
+    g.beginPath(); g.moveTo(0, y); g.bezierCurveTo(50, y - 10, 90, y + 6, 128, y - 14); g.lineTo(128, y + 8); g.bezierCurveTo(90, y + 26, 50, y + 12, 0, y + 20); g.fill();
   }
-  const halo = glowSprite(color, 0.75, undefined, 0.85);
-  halo.position.y = 0.02;
+  // Barbs: fine lines sweeping back from the shaft.
+  g.lineWidth = 1;
+  for (let y = 0; y < h + 40; y += 3) {
+    g.strokeStyle = `rgba(${random() < 0.5 ? '255,248,230' : '30,22,16'},${0.08 + random() * 0.12})`;
+    g.beginPath(); g.moveTo(6, y); g.quadraticCurveTo(60, y - 18, 128, y - 46); g.stroke();
+  }
+  g.restore();
+  // Notches where the barbs have separated.
+  g.globalCompositeOperation = 'destination-out';
+  for (const y of [120, 260, 380]) { g.beginPath(); g.moveTo(130, y); g.lineTo(78 + random() * 14, y + 6); g.lineTo(130, y + 14); g.fill(); }
+  g.globalCompositeOperation = 'source-over';
+  // The rachis.
+  g.strokeStyle = '#efe6d2'; g.lineWidth = 5; g.beginPath(); g.moveTo(3, 0); g.lineTo(3, h); g.stroke();
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 8;
+  return (featherTextureCache = texture);
+}
+
+/** A leaf-shaped broadhead blade with swept-back barbs, centred on its axis, tip at +Y. */
+function bladeShape(): THREE.Shape {
+  const s = new THREE.Shape();
+  s.moveTo(0, 0.13);
+  s.bezierCurveTo(0.018, 0.09, 0.034, 0.045, 0.036, 0.0);
+  s.lineTo(0.046, -0.04);
+  s.lineTo(0.016, -0.018);
+  s.lineTo(0.009, -0.03);
+  s.lineTo(-0.009, -0.03);
+  s.lineTo(-0.016, -0.018);
+  s.lineTo(-0.046, -0.04);
+  s.lineTo(-0.036, 0.0);
+  s.bezierCurveTo(-0.034, 0.045, -0.018, 0.09, 0, 0.13);
+  return s;
+}
+
+/**
+ * The Arcane Arrow: a dark ash shaft wound with a faint rune spiral, a forged cross broadhead whose
+ * edges carry the spell's light, barred feather fletching set at a slight helical angle, and a
+ * glowing nock. +Y is the tip direction and the point sits at the origin.
+ */
+export function createArrowMesh(color: THREE.Color): { root: THREE.Group; materials: THREE.Material[]; halo: THREE.Sprite } {
+  const root = new THREE.Group();
+  root.name = 'Arcane arrow';
+  const materials: THREE.Material[] = [];
+  const hot = color.clone().lerp(WHITE, 0.6);
+  const keep = <M extends THREE.Material>(m: M): M => { m.transparent = true; materials.push(m); return m; };
+  const L = 0.86;
+  // Shaft: ash wood, lit by the scene so it reads as an object, not a glow.
+  const wood = keep(new THREE.MeshStandardMaterial({ color: '#6b4a2f', roughness: 0.62, metalness: 0.0, emissive: '#1b120b' }));
+  const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.0105, 0.0125, L, 10, 1), wood);
+  shaft.position.y = -0.16 - L / 2;
+  root.add(shaft);
+  // A rune band spirals down the first half of the shaft.
+  const helix: THREE.Vector3[] = [];
+  for (let i = 0; i <= 64; i++) { const u = i / 64; const a = u * Math.PI * 7; helix.push(new THREE.Vector3(Math.cos(a) * 0.0128, -0.17 - u * 0.42, Math.sin(a) * 0.0128)); }
+  const runeMaterial = keep(new THREE.MeshBasicMaterial({ color: hot, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.45 }));
+  root.add(new THREE.Mesh(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(helix), 96, 0.0014, 4), runeMaterial));
+  // Ferrule binding the head.
+  const brass = keep(new THREE.MeshStandardMaterial({ color: '#a07a3c', roughness: 0.35, metalness: 0.85, emissive: '#2a1a08' }));
+  const ferrule = new THREE.Mesh(new THREE.CylinderGeometry(0.0135, 0.0115, 0.05, 10), brass);
+  ferrule.position.y = -0.145;
+  root.add(ferrule);
+  // Cross broadhead: two forged blades, dark steel with a bright honed edge.
+  const steel = keep(new THREE.MeshStandardMaterial({ color: '#9aa3ad', roughness: 0.32, metalness: 0.45, emissive: color.clone().multiplyScalar(0.12) }));
+  const bladeGeometry = new THREE.ExtrudeGeometry(bladeShape(), { depth: 0.004, bevelEnabled: true, bevelThickness: 0.0025, bevelSize: 0.003, bevelSegments: 1, curveSegments: 10 });
+  bladeGeometry.translate(0, -0.13, -0.002);
+  const edgeMaterial = keep(new THREE.MeshBasicMaterial({ color: hot, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0.32, side: THREE.DoubleSide }));
+  const edgeGeometry = new THREE.ShapeGeometry(bladeShape(), 10);
+  edgeGeometry.translate(0, -0.13, 0);
+  for (let i = 0; i < 2; i++) {
+    const blade = new THREE.Mesh(bladeGeometry, steel);
+    blade.rotation.y = i * Math.PI / 2;
+    root.add(blade);
+    const edge = new THREE.Mesh(edgeGeometry, edgeMaterial);
+    edge.rotation.y = i * Math.PI / 2;
+    edge.scale.set(1.09, 1.03, 1);
+    edge.position.y = 0.004;
+    root.add(edge);
+  }
+  // Fletching: three barred feathers, each with a slight helical set so the arrow spins true.
+  const feather = keep(new THREE.MeshStandardMaterial({ map: featherTexture(), alphaTest: 0.35, side: THREE.DoubleSide, roughness: 0.9, metalness: 0 }));
+  const vaneGeometry = new THREE.PlaneGeometry(0.05, 0.2, 1, 6);
+  vaneGeometry.translate(0.025 + 0.011, 0, 0);
+  // A gentle curl: the vane bows out along its length.
+  const vp = vaneGeometry.attributes.position as THREE.BufferAttribute;
+  for (let i = 0; i < vp.count; i++) { const y = vp.getY(i); vp.setZ(i, Math.sin((y / 0.2 + 0.5) * Math.PI) * 0.006); }
+  vaneGeometry.computeVertexNormals();
+  for (let i = 0; i < 3; i++) {
+    const holder = new THREE.Object3D();
+    holder.rotation.y = (i / 3) * Math.PI * 2;
+    holder.position.y = -0.16 - L + 0.15;
+    const vane = new THREE.Mesh(vaneGeometry, feather);
+    vane.rotation.y = 0.08;
+    holder.add(vane);
+    root.add(holder);
+  }
+  // Nock: a dark horn notch holding a small ember of the spell.
+  const horn = keep(new THREE.MeshStandardMaterial({ color: '#241b17', roughness: 0.4, metalness: 0.1 }));
+  const nock = new THREE.Mesh(new THREE.CylinderGeometry(0.0135, 0.011, 0.03, 10), horn);
+  nock.position.y = -0.16 - L - 0.005;
+  root.add(nock);
+  const ember = glowSprite(color, 0.07, undefined, 0.9);
+  ember.position.y = -0.16 - L - 0.02;
+  materials.push(ember.material);
+  root.add(ember);
+  const halo = glowSprite(color, 0.26, undefined, 0.55);
+  halo.position.y = -0.03;
+  materials.push(halo.material);
   root.add(halo);
   return { root, materials, halo };
+}
+
+/** The point just under the bottom edge of the view at `depth` metres, toward the casting hand. */
+function belowView(ctx: SpellContext, depth: number, side: number, out: THREE.Vector3): THREE.Vector3 {
+  const cam = ctx.cameraPosition!;
+  const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(ctx.cameraQuaternion);
+  const up = new THREE.Vector3(0, 1, 0).applyQuaternion(ctx.cameraQuaternion);
+  const right = new THREE.Vector3(1, 0, 0).applyQuaternion(ctx.cameraQuaternion);
+  const half = Math.tan(THREE.MathUtils.degToRad((ctx.fov ?? 64) / 2)) * depth;
+  return out.copy(cam).addScaledVector(forward, depth).addScaledVector(up, -half * 1.12).addScaledVector(right, side * half * 0.35);
 }
 
 function arrow(origin: THREE.Vector3, target: THREE.Vector3, color: THREE.Color, detail: string | undefined, ctx: SpellContext): SpellAnimation {
   const group = new THREE.Group();
   const power = clamp01((Number(detail?.match(/(\d+)%/)?.[1]) || 65) / 100);
-  // Release from the bow hand: just below and beside the aim point, close to the player, so the
-  // flight is seen in three-quarter view instead of as a dot shrinking along the aim ray.
+  const side = ctx.hand === 'left' ? -1 : 1;
+  // Loosed from the bow below the frame: the shot rises out of the bottom edge of the screen and
+  // its trail begins there, the way an arrow leaves an archer's hands, never from mid-field.
   const launch = origin.clone();
-  if (ctx.cameraPosition) {
-    const forward = origin.clone().sub(ctx.cameraPosition).normalize();
-    const right = new THREE.Vector3(1, 0, 0).applyQuaternion(ctx.cameraQuaternion);
-    const down = new THREE.Vector3(0, -1, 0).applyQuaternion(ctx.cameraQuaternion);
-    launch.copy(ctx.cameraPosition).addScaledVector(forward, 2.4)
-      .addScaledVector(down, 0.32)
-      .addScaledVector(right, ctx.hand === 'left' ? -0.3 : 0.3);
-  }
+  if (ctx.cameraPosition) belowView(ctx, 0.9, side, launch);
   const to = target.clone();
   const distance = Math.max(0.5, launch.distanceTo(to));
   // A real arrow's lob: enough arc that its flight (and the angle it lands at) reads on screen.
-  const lift = Math.min(3.4, distance * 0.09) * (1.1 - power * 0.4);
+  const lift = Math.min(2.6, distance * 0.06) * (1.15 - power * 0.45);
   const pathPoint = (u: number, out: THREE.Vector3) => out.copy(launch).lerp(to, u).addScaledVector(UP, 4 * lift * u * (1 - u));
-  const flight = THREE.MathUtils.clamp(distance / (24 + power * 22), 0.22, 1);
-  const duration = flight + 0.9;
+  const flight = THREE.MathUtils.clamp(distance / (26 + power * 24), 0.24, 1);
+  const duration = flight + 1.0;
   const streak = arrowStreak(pathPoint, color, ctx.cameraPosition, power);
   group.add(streak.mesh);
 
   const { root, halo } = createArrowMesh(color);
-  const arrowScale = 0.95 + power * 0.55;
+  const arrowScale = 1.25 + power * 0.35;
   root.scale.setScalar(arrowScale);
   group.add(root);
-  const trail = new Trail(color, 0.12 * (0.7 + power * 0.7), 0.16 + power * 0.14, 40, 1.1);
-  const filament = new Trail(WHITE, 0.03, 0.1, 24, 1);
-  group.add(trail.mesh, filament.mesh);
+  // A fine core of light and two filaments winding around the flight line.
+  const trail = new Trail(color.clone().lerp(WHITE, 0.25), 0.035 * (0.8 + power * 0.5), 0.2 + power * 0.12, 40, 1.4);
+  const twinA = new Trail(color, 0.016, 0.34, 46, 1);
+  const twinB = new Trail(color.clone().lerp(WHITE, 0.4), 0.012, 0.3, 46, 1);
+  group.add(trail.mesh, twinA.mesh, twinB.mesh);
 
-  const launchFlare = facingPlane(flareTexture(), color.clone().lerp(WHITE, 0.35), 1.4, ctx.cameraQuaternion);
-  const launchRing = facingPlane(ringTexture(), color, 1, ctx.cameraQuaternion);
-  launchFlare.position.copy(launch);
-  launchRing.position.copy(launch);
-  const impactFlare = facingPlane(flareTexture(), color.clone().lerp(WHITE, 0.45), 2.6, ctx.cameraQuaternion);
+  const impactFlare = facingPlane(flareTexture(), color.clone().lerp(WHITE, 0.45), 2.2, ctx.cameraQuaternion);
   const impactRing = facingPlane(ringTexture(), color, 1, ctx.cameraQuaternion);
   impactFlare.position.copy(to);
   impactRing.position.copy(to);
-  group.add(launchFlare, launchRing, impactFlare, impactRing);
+  group.add(impactFlare, impactRing);
 
   const head = new THREE.Vector3(), ahead = new THREE.Vector3(), tangent = new THREE.Vector3();
-  const sideA = new THREE.Vector3(), sideB = new THREE.Vector3(), mote = new THREE.Vector3();
+  const sideA = new THREE.Vector3(), sideB = new THREE.Vector3(), wind = new THREE.Vector3();
+  const spin = new THREE.Quaternion();
   const direction = to.clone().sub(launch).normalize();
   const moteColor = color.clone().lerp(WHITE, 0.25);
   const sparkColor = color.clone().lerp(WHITE, 0.55);
-
-  ctx.particles?.burst(launch, 14, { speed: 2.2, color: moteColor, size: 0.07, ttl: 0.35, drag: 3, style: 'spark' });
+  let roll = Math.random() * Math.PI * 2;
 
   const onImpact = () => {
     if (ctx.onStick) {
@@ -192,18 +297,19 @@ function arrow(origin: THREE.Vector3, target: THREE.Vector3, color: THREE.Color,
       ctx.onStick(to.clone(), tip, arrowScale);
     }
     const back = direction.clone().negate();
-    ctx.particles?.burst(to, Math.round(28 + power * 34), { speed: 7 + power * 5, direction: back, spread: 1.1, color: sparkColor, size: 0.06, ttl: 0.55, gravity: 7, drag: 1.2, style: 'spark' });
-    ctx.particles?.burst(to, 18, { speed: 2.4, color, size: 0.2, sizeEnd: 0.02, ttl: 0.6, drag: 2.5, style: 'glow' });
-    ctx.particles?.burst(to, 10, { speed: 4.5, color: WHITE, size: 0.05, ttl: 0.35, gravity: 9, style: 'spark' });
-    ctx.mist?.burst(to, 6, { speed: 0.9, color: new THREE.Color('#5d6b63'), size: 0.9, sizeEnd: 1.8, alpha: 0.32, ttl: 1.1, drag: 1.5, style: 'mist' });
-    ctx.light?.(to, color, 9 + power * 6, 0.45, 9);
-    ctx.screen?.shake(0.06 + power * 0.1);
+    ctx.particles?.burst(to, Math.round(24 + power * 30), { speed: 6 + power * 5, direction: back, spread: 1.0, color: sparkColor, size: 0.05, ttl: 0.5, gravity: 7, drag: 1.2, style: 'spark' });
+    ctx.particles?.burst(to, 12, { speed: 1.8, color, size: 0.16, sizeEnd: 0.02, ttl: 0.55, drag: 2.5, style: 'glow' });
+    // Splinters of wood and feather down.
+    ctx.particles?.burst(to, 8, { speed: 2.6, direction: back, spread: 1.4, color: new THREE.Color('#d8c7a4'), size: 0.035, ttl: 0.9, gravity: 5, drag: 1.4, style: 'spark' });
+    ctx.mist?.burst(to, 5, { speed: 0.8, color: new THREE.Color('#5d6b63'), size: 0.8, sizeEnd: 1.6, alpha: 0.28, ttl: 1.0, drag: 1.5, style: 'mist' });
+    ctx.light?.(to, color, 8 + power * 6, 0.4, 8);
+    ctx.screen?.shake(0.05 + power * 0.08);
   };
 
   return animate(group, duration, (_t, age, dt) => {
     const cam = ctx.cameraPosition;
-    const headU = age < flight ? 1 - Math.pow(1 - age / flight, 1.25) : 1;
-    streak.update(headU, clamp01(1 - Math.max(0, age - flight) / 0.75));
+    const headU = age < flight ? 1 - Math.pow(1 - age / flight, 1.18) : 1;
+    streak.update(headU, clamp01(1 - Math.max(0, age - flight) / 0.7));
     if (age < flight) {
       const u = headU;
       pathPoint(u, head);
@@ -212,60 +318,65 @@ function arrow(origin: THREE.Vector3, target: THREE.Vector3, color: THREE.Color,
       if (tangent.lengthSq() < 1e-8) tangent.copy(direction);
       tangent.normalize();
       root.position.copy(head);
-      root.quaternion.setFromUnitVectors(UP, tangent);
+      // Feathers set on a helix spin the arrow about its own axis as it flies.
+      roll += dt * (16 + power * 10);
+      root.quaternion.setFromUnitVectors(UP, tangent).multiply(spin.setFromAxisAngle(UP, roll));
+      // Right under the eye the arrow would fill the frame; it reaches full size a few metres out.
+      const near = cam ? THREE.MathUtils.clamp(head.distanceTo(cam) / 3.2, 0.35, 1) : 1;
+      root.scale.setScalar(arrowScale * near);
       trail.push(head);
-      filament.push(head);
-      // Motes spiral off the shaft and hang in the air behind it.
       sideA.set(tangent.y, -tangent.x, 0);
       if (sideA.lengthSq() < 1e-6) sideA.set(1, 0, 0);
       sideA.normalize();
       sideB.crossVectors(tangent, sideA);
-      for (let k = 0; k < 3; k++) {
-        const a = age * 38 + k * 2.094;
-        mote.copy(head).addScaledVector(tangent, -0.3 - Math.random() * 0.4)
-          .addScaledVector(sideA, Math.cos(a) * 0.07).addScaledVector(sideB, Math.sin(a) * 0.07);
+      const a = roll * 0.9;
+      const r = 0.045 * near;
+      wind.copy(head).addScaledVector(sideA, Math.cos(a) * r).addScaledVector(sideB, Math.sin(a) * r);
+      twinA.push(wind);
+      wind.copy(head).addScaledVector(sideA, Math.cos(a + Math.PI) * r).addScaledVector(sideB, Math.sin(a + Math.PI) * r);
+      twinB.push(wind);
+      // A few motes shed from the fletching hang in the air behind it.
+      if (Math.random() < 0.75) {
+        wind.copy(head).addScaledVector(tangent, -0.8 * arrowScale * near);
         ctx.particles?.emit({
-          x: mote.x, y: mote.y, z: mote.z,
-          vx: (Math.random() - 0.5) * 0.4, vy: Math.random() * 0.3, vz: (Math.random() - 0.5) * 0.4,
-          color: moteColor, size: 0.06 + power * 0.04, ttl: 0.4 + Math.random() * 0.25, drag: 2, style: 'glow',
+          x: wind.x, y: wind.y, z: wind.z,
+          vx: (Math.random() - 0.5) * 0.3, vy: Math.random() * 0.25, vz: (Math.random() - 0.5) * 0.3,
+          color: moteColor, size: 0.035 + power * 0.03, ttl: 0.35 + Math.random() * 0.3, drag: 2, style: 'glow',
         });
       }
     } else {
       root.position.copy(to);
       const since = age - flight;
       // When the world keeps a stuck arrow, it takes over at once; otherwise the head embeds for a
-      // beat, then the bolt of light shatters.
+      // beat before the shot burns out.
       root.visible = !ctx.onStick && since < 0.07;
       halo.visible = root.visible;
     }
-    const launchAge = age / 0.22;
-    launchFlare.scale.setScalar(0.4 + easeOutCubic(launchAge) * 1.1);
-    launchFlare.material.opacity = clamp01(1 - launchAge) * 0.9;
-    launchRing.scale.setScalar(0.25 + easeOutCubic(age / 0.3) * 1.3);
-    launchRing.material.opacity = clamp01(1 - age / 0.3) * 0.8;
     const impactAge = (age - flight) / 0.45;
     impactFlare.visible = impactRing.visible = impactAge >= 0;
     if (impactAge >= 0) {
-      impactFlare.scale.setScalar(0.3 + easeOutCubic(impactAge * 2.5) * (0.8 + power * 0.6));
-      impactFlare.material.opacity = clamp01(1 - impactAge * 2) * 1;
-      impactRing.scale.setScalar(0.2 + easeOutCubic(impactAge) * (2.2 + power * 1.6));
-      impactRing.material.opacity = clamp01(1 - impactAge) * 0.85;
+      impactFlare.scale.setScalar(0.25 + easeOutCubic(impactAge * 2.5) * (0.6 + power * 0.5));
+      impactFlare.material.opacity = clamp01(1 - impactAge * 2) * 0.9;
+      impactRing.scale.setScalar(0.2 + easeOutCubic(impactAge) * (1.6 + power * 1.2));
+      impactRing.material.opacity = clamp01(1 - impactAge) * 0.7;
     }
     const fade = clamp01(1 - Math.max(0, age - flight) / 0.6);
     trail.opacity = fade;
-    filament.opacity = fade;
+    twinA.opacity = twinB.opacity = fade * 0.8;
     trail.update(dt, cam);
-    filament.update(dt, cam);
-  }, flight, onImpact, () => { trail.dispose(); filament.dispose(); });
+    twinA.update(dt, cam);
+    twinB.update(dt, cam);
+  }, flight, onImpact, () => { trail.dispose(); twinA.dispose(); twinB.dispose(); });
 }
 
 /**
- * A glowing streak along the arrow's whole flight path, revealed behind the arrow head and lingering
- * a moment after it lands. Width tracks distance from the camera, so the streak keeps a steady
- * on-screen thickness even where the path runs into the screen.
+ * A fine thread of light along the arrow's whole flight path, revealed behind the head and
+ * lingering a moment after it lands. It rises from below the frame, is brightest just behind the
+ * arrow and frays into flickering beads further back. Width tracks distance from the camera, so the
+ * thread keeps a steady on-screen thickness even where the path runs into the screen.
  */
 function arrowStreak(pathPoint: (u: number, out: THREE.Vector3) => THREE.Vector3, color: THREE.Color, camera: THREE.Vector3 | undefined, power: number) {
-  const samples = 72;
+  const samples = 96;
   const positions = new Float32Array(samples * 2 * 3);
   const uv = new Float32Array(samples * 2 * 2);
   const index: number[] = [];
@@ -280,7 +391,7 @@ function arrowStreak(pathPoint: (u: number, out: THREE.Vector3) => THREE.Vector3
     view.subVectors(eye, p);
     side.crossVectors(tangent, view);
     if (side.lengthSq() < 1e-10) side.set(1, 0, 0);
-    const half = Math.max(0.02, view.length() * 0.0055) * (0.8 + power * 0.5);
+    const half = Math.max(0.006, view.length() * 0.0026) * (0.8 + power * 0.4);
     side.normalize().multiplyScalar(half);
     positions.set([p.x + side.x, p.y + side.y, p.z + side.z, p.x - side.x, p.y - side.y, p.z - side.z], i * 6);
     uv.set([u, 0, u, 1], i * 4);
@@ -292,20 +403,21 @@ function arrowStreak(pathPoint: (u: number, out: THREE.Vector3) => THREE.Vector3
   geometry.setIndex(index);
   const material = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
-    uniforms: { uColor: { value: color.clone() }, uHead: { value: 0 }, uFade: { value: 1 }, uLength: { value: 0.55 } },
+    uniforms: { uColor: { value: color.clone() }, uHead: { value: 0 }, uFade: { value: 1 }, uLength: { value: 0.4 }, uTime: { value: 0 } },
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
     fragmentShader: `
-      uniform vec3 uColor; uniform float uHead; uniform float uFade; uniform float uLength; varying vec2 vUv;
+      uniform vec3 uColor; uniform float uHead; uniform float uFade; uniform float uLength; uniform float uTime; varying vec2 vUv;
       void main(){
         if (vUv.x > uHead) discard;
         float across = abs(vUv.y * 2.0 - 1.0);
-        float core = 1.0 - smoothstep(0.0, 0.35, across);
-        float body = 1.0 - smoothstep(0.1, 1.0, across);
-        // Brightest just behind the head, tapering back along the path; a faint line lingers.
+        float core = 1.0 - smoothstep(0.0, 0.45, across);
+        float body = 1.0 - smoothstep(0.2, 1.0, across);
         float behind = clamp((uHead - vUv.x) / uLength, 0.0, 1.0);
-        float trail = pow(1.0 - behind, 1.6);
-        float alpha = (trail * (core + body * 0.5) + body * 0.12) * uFade;
-        vec3 c = mix(uColor * 1.5, vec3(1.2), core * trail * 0.7);
+        float near = pow(1.0 - behind, 2.2);
+        // Further back the thread frays into drifting beads of light.
+        float beads = smoothstep(0.55, 1.0, sin(vUv.x * 260.0 - uTime * 9.0) * 0.5 + 0.5) * (1.0 - near) * 0.45;
+        float alpha = (near * (core + body * 0.35) + core * (0.06 + beads)) * uFade;
+        vec3 c = mix(uColor * 1.3, vec3(1.15), core * near * 0.75);
         gl_FragColor = vec4(c, alpha);
       }`,
   });
@@ -317,6 +429,7 @@ function arrowStreak(pathPoint: (u: number, out: THREE.Vector3) => THREE.Vector3
     update(head: number, fade: number) {
       material.uniforms.uHead.value = head;
       material.uniforms.uFade.value = fade;
+      material.uniforms.uTime.value += 1 / 60;
     },
   };
 }

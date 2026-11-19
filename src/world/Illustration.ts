@@ -29,7 +29,7 @@ export class Illustration {
     const canvas = document.createElement('canvas'); canvas.width = width; canvas.height = height;
     const ctx = canvas.getContext('2d')!; draw(ctx);
     const texture = new THREE.CanvasTexture(canvas); texture.colorSpace = THREE.SRGBColorSpace;texture.name=name;
-    texture.anisotropy = 2; this.textures.push(texture); this.cache.set(name, texture); return texture;
+    texture.anisotropy = 8; this.textures.push(texture); this.cache.set(name, texture); return texture;
   }
 
   tree(variant: number): THREE.Texture {

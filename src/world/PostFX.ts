@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
@@ -28,7 +29,7 @@ const DepthOfFieldShader = {
     float viewDepth(vec2 uv){ return -perspectiveDepthToViewZ(texture2D(tDepth, uv).x, uNear, uFar); }
     // 0 = sharp, 1 = fully soft. Near: only the foreground frame (a spirit at striking distance stays
     // crisp). Far: the deep wood.
-    float blurAmount(float d){ return max(1.0 - smoothstep(0.7, 1.6, d), smoothstep(26.0, 75.0, d) * 0.75); }
+    float blurAmount(float d){ return max(1.0 - smoothstep(0.7, 1.6, d), smoothstep(70.0, 140.0, d) * 0.35); }
     void main(){
       vec4 base = texture2D(tDiffuse, vUv);
       float coc = blurAmount(viewDepth(vUv));
@@ -109,16 +110,19 @@ export class PostFX {
   constructor(private readonly renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.PerspectiveCamera, enabled = true) {
     // The scene renders into a target that keeps its depth, so the depth of field can read it.
     const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
-    target.depthTexture = new THREE.DepthTexture(1, 1);
     this.composer = new EffectComposer(renderer, target);
     this.composer.addPass(new RenderPass(scene, camera));
+    // No depth of field: the playing ground and every figure on it stay crisp at any distance.
+    // The near frame carries its own softness, painted into its textures.
     this.depthOfField = new ShaderPass(DepthOfFieldShader);
     this.depthOfField.uniforms.uNear.value = camera.near;
     this.depthOfField.uniforms.uFar.value = camera.far;
-    this.composer.addPass(this.depthOfField);
     this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.62, 0.5, 0.8);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
+    // Edge anti-aliasing in display space: the post path bypasses the canvas's own MSAA, and SMAA
+    // keeps silhouettes clean without softening the painting inside them.
+    this.composer.addPass(new SMAAPass());
     this.grade = new ShaderPass(GradeShader);
     this.composer.addPass(this.grade);
     this.enabledFlag = enabled;
@@ -149,8 +153,6 @@ export class PostFX {
     }
     this.time += dt;
     this.grade.uniforms.uTime.value = this.time;
-    // The depth comes from whichever target the scene was just rendered into.
-    this.depthOfField.uniforms.tDepth.value = this.composer.readBuffer.depthTexture;
     this.composer.render(dt);
   }
 

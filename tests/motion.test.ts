@@ -89,6 +89,30 @@ describe('detectCircle across capture rates', () => {
     expect(detectCircle(samples, CIRCLE_DEFAULTS)).toBeNull();
   });
 
+  it('accepts a slow, lopsided, not-quite-closed loop with blurred frames (Mend for real hands)', () => {
+    const samples: Sample[] = [];
+    const duration = 1900;
+    const fps = 30;
+    for (let i = 0; i <= Math.ceil(duration * fps / 1000); i++) {
+      const p = Math.min(i * 1000 / fps / duration, 1);
+      const angle = p * Math.PI * 2 * 0.86;
+      // An egg, wider on one side, with a wobble and the occasional unreadable frame.
+      const r = 0.8 + Math.sin(angle * 3) * 0.08;
+      const pose = i % 9 === 4 ? 'unknown' : i % 13 === 6 ? 'victory' : 'point';
+      samples.push(sample(1000 + p * duration, Math.cos(angle) * r * 1.25 + 0.1, Math.sin(angle) * r * 0.85, pose));
+    }
+    expect(detectCircle(samples, CIRCLE_DEFAULTS)).not.toBeNull();
+  });
+
+  it('rejects a back-and-forth scribble that sweeps the same ground', () => {
+    const samples: Sample[] = [];
+    for (let i = 0; i < 40; i++) {
+      const angle = Math.sin(i / 39 * Math.PI * 3) * Math.PI * 1.1;
+      samples.push(sample(1000 + i * 33, Math.cos(angle) * 0.9, Math.sin(angle) * 0.9, 'point'));
+    }
+    expect(detectCircle(samples, CIRCLE_DEFAULTS)).toBeNull();
+  });
+
   it('ignores the idle pointing hold when finding the latest closed loop', () => {
     const drawing = makeCircle(30);
     expect(detectCircle(drawing, CIRCLE_DEFAULTS)).toEqual({ clockwise: true });

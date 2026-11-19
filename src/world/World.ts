@@ -68,7 +68,7 @@ export class World {
   private readonly environment: ForestEnvironment;
   private readonly controls: CasterView;
   private readonly reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-  private readonly budget = new FrameBudget(Math.min(window.devicePixelRatio || 1, 1.5), 1.5);
+  private readonly budget = new FrameBudget(Math.min(window.devicePixelRatio || 1, 2), 2);
   private readonly particles: ParticleSystem;
   private readonly mist: ParticleSystem;
   private readonly post: PostFX;
@@ -184,7 +184,7 @@ export class World {
         this.renderer.setPixelRatio(ratio);
         this.resize();
         // Still slow at the lowest resolution: drop bloom before dropping frames.
-        if (ratio <= 0.56 && this.post.enabled && ++this.slowSamples >= 2) this.post.setEnabled(false);
+        if (ratio <= 0.76 && this.post.enabled && ++this.slowSamples >= 2) this.post.setEnabled(false);
       }
       // Bounded substeps preserve seconds of gameplay at variable render rates.
       const time = Math.min(elapsed, 0.15);
@@ -311,6 +311,7 @@ export class World {
       lightningStart: spell.effect === 'lightning' ? lightningStart : undefined,
       depth: Math.max(0.5, -cameraTarget.z),
       hand: from,
+      fov: this.camera.fov,
       particles: this.particles,
       mist: this.mist,
       screen: this.reducedMotion.matches ? { flash: (c, s, m) => this.feedback.flash(c, s * 0.4, m), shake: () => undefined } : this.feedback,
@@ -388,7 +389,8 @@ export class World {
       const glow = 0.45 + 0.55 * Math.exp(-arrow.age * 1.6);
       const fade = Math.min(1, (arrow.life - arrow.age) / 1.2) * (1 - dissolve);
       if (fade <= 0) { this.removeStuckArrow(i); continue; }
-      for (const { material, base } of arrow.fades) material.opacity = base * glow * fade;
+      // Only the light dims to an ember; wood, steel and feathers stay solid until the arrow fades.
+      for (const { material, base } of arrow.fades) material.opacity = base * (material.blending === THREE.AdditiveBlending || material instanceof THREE.SpriteMaterial ? glow : 1) * fade;
     }
   }
 
