@@ -1,11 +1,11 @@
 
-# ARcane
+# Arcane
 
 <img width="2172" height="724" alt="Arcane Forest: Where Unreal Feels Real" src="https://github.com/user-attachments/assets/a54d5355-0b58-4404-a44b-c429de7f069e" />
 
 ### Magic was never meant to be bound to a button.
 
-**ARcane is a gesture-controlled fantasy experience where your hands become your spellbook.**
+**Arcane is a gesture-controlled fantasy experience where your hands become your spellbook.**
 
 Make a fist. Draw a circle in the air. Raise your palm against the dark.
 
@@ -19,7 +19,7 @@ Hushwood is ARcane's liminal fantasy realm — a world of ethereal light, drifti
 
 **Just you, your hands, and Hushwood.**
 
-## 🪄 Play ARcane
+## 🪄 Play Arcane
 
 **The easiest way to enter Hushwood is right in your browser.**
 
@@ -52,4 +52,4 @@ Open the local URL provided by Vite and allow camera access.
 
 ---
 
-*🌙 Make the sign. Cast the spell. Enter the Unreal.*
+
