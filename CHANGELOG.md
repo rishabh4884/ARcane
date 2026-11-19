@@ -12,6 +12,7 @@ All notable changes to ARcane are recorded here. The format follows
 
 ### Changed
 
+- The view breathes: a slow rise and fall and the faintest drift, render-only so aiming is untouched, held still during the hush. The near frame sits closer than any spirit can come, so the depth of field never softens a spirit at striking distance.
 - The frame is staged in depth like a painted 2D world: dark branches, grass and a fern hang into the corners right in front of the eye and sway slowly, the depth of field softens them and the far wood while the playing ground stays crisp, and the grass at the caster's feet sinks toward a dark, quiet band. The grade adds light from above, a slow projector flicker, a softer oval vignette and grain at film rate.
 - The hush: every so often the whole wood holds its breath. Wind, grass, fog and fireflies slow almost to a stop, the crickets fall silent, every watching spirit freezes and stares, the frame dims, and the wood breathes out as it resumes.
 - The Rise gnomes match the new look: thin, warm, half-transparent lines instead of heavy cartoon ink, feathered and softly shaded. Each gnome is seven continuous painted sheets skinned to one skeleton (no visible joints when knees and elbows bend), with a three-segment cap that flops and trails behind every turn and landing and a beard that swings a beat behind the jaw. Their boots stand in the ground mist.

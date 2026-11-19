@@ -70,4 +70,29 @@ describe('creature expressions', () => {
     expect(creature.gait).toBeGreaterThanOrEqual(0);
     creature.dispose();
   });
+
+  it('binds every painted vertex to the skeleton with weights that sum to one', () => {
+    for (const kind of ['goblin', 'root', 'hollow', 'wraith'] as const) {
+      const creature = new Creature(kind);
+      creature.group.traverse((o) => {
+        if (!(o instanceof THREE.SkinnedMesh)) return;
+        const w = o.geometry.getAttribute('skinWeight');
+        for (let i = 0; i < w.count; i++) expect(w.getX(i) + w.getY(i) + w.getZ(i) + w.getW(i)).toBeCloseTo(1, 3);
+      });
+      creature.dispose();
+    }
+  });
+
+  it('holds still when the wood hushes, then moves on', () => {
+    const creature = new Creature('root');
+    for (let i = 0; i < 20; i++) creature.animate(i * 0.05, 'walk', 0, 0.05);
+    creature.still(1.5);
+    let stopped = false;
+    for (let i = 20; i < 40; i++) { creature.animate(i * 0.05, 'walk', 0, 0.05); if (creature.gait < 0.1) stopped = true; }
+    expect(stopped).toBe(true);
+    let resumed = false;
+    for (let i = 40; i < 120; i++) { creature.animate(i * 0.05, 'walk', 0, 0.05); if (creature.gait > 0.6) resumed = true; }
+    expect(resumed).toBe(true);
+    creature.dispose();
+  });
 });

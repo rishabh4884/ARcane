@@ -26,8 +26,9 @@ const DepthOfFieldShader = {
     uniform sampler2D tDiffuse; uniform sampler2D tDepth; uniform float uNear; uniform float uFar; uniform vec2 uResolution; uniform float uMaxRadius;
     varying vec2 vUv;
     float viewDepth(vec2 uv){ return -perspectiveDepthToViewZ(texture2D(tDepth, uv).x, uNear, uFar); }
-    // 0 = sharp, 1 = fully soft. Near: the foreground frame. Far: the deep wood.
-    float blurAmount(float d){ return max(1.0 - smoothstep(1.2, 3.4, d), smoothstep(26.0, 75.0, d) * 0.75); }
+    // 0 = sharp, 1 = fully soft. Near: only the foreground frame (a spirit at striking distance stays
+    // crisp). Far: the deep wood.
+    float blurAmount(float d){ return max(1.0 - smoothstep(0.7, 1.6, d), smoothstep(26.0, 75.0, d) * 0.75); }
     void main(){
       vec4 base = texture2D(tDiffuse, vUv);
       float coc = blurAmount(viewDepth(vUv));

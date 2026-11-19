@@ -85,14 +85,15 @@ export class Foreground {
 
   constructor() {
     this.group.name = 'Near frame';
-    // Drawn after the world: these are the nearest things in view.
+    // Drawn after the world: these are the nearest things in view, closer than any spirit can come,
+    // so the near blur that softens them never touches a spirit at striking distance.
     this.group.renderOrder = 50;
     // [shape, corner (x, y in -1..1), size (m), depth (m), inset (fraction of the shape kept inside the frame), anchor]
     const layout: Array<[Shape, [number, number], [number, number], number, [number, number], 'top' | 'bottom', number]> = [
-      ['branch', [-1, 1], [1.9, 1.5], 1.75, [0.66, 0.97], 'top', 1],
-      ['branch', [1, 1], [1.5, 1.2], 2.3, [0.5, 0.97], 'top', 7],
-      ['grass', [-1, -1], [1.2, 0.9], 1.6, [0.72, 0.96], 'bottom', 3],
-      ['fern', [1, -1], [1.0, 0.85], 1.7, [0.66, 0.95], 'bottom', 5],
+      ['branch', [-1, 1], [1.09, 0.86], 1.0, [0.66, 0.97], 'top', 1],
+      ['branch', [1, 1], [0.82, 0.65], 1.25, [0.5, 0.97], 'top', 7],
+      ['grass', [-1, -1], [0.71, 0.53], 0.95, [0.72, 0.96], 'bottom', 3],
+      ['fern', [1, -1], [0.59, 0.50], 1.0, [0.66, 0.95], 'bottom', 5],
     ];
     for (const [shape, corner, size, depth, inset, anchor, seed] of layout) {
       const canvas = paint(shape, seed);

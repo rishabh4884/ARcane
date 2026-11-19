@@ -156,6 +156,7 @@ describe('gnome rig',()=>{
     root.traverse(o=>{if(o instanceof THREE.SkinnedMesh)partMeshes.push(o);});
     expect(partMeshes).toHaveLength(7);
     for(const joint of ['armL_up','armL_fore','armL_hand','armL_fingers','legR_up','legR_low','cap','cap2','cap3','beard'])expect(root.getObjectByName(joint)).toBeTruthy();
+    root.traverse(o=>{if(o instanceof THREE.SkinnedMesh){const w=o.geometry.getAttribute('skinWeight');for(let i=0;i<w.count;i++)expect(w.getX(i)+w.getY(i)+w.getZ(i)+w.getW(i)).toBeCloseTo(1,3);}});
     const torso=root.getObjectByName('torso')!;
     const world=new THREE.Vector3(),player=new THREE.Vector3(0,1.85,12);
     summons.update(.05,true,player,[]);

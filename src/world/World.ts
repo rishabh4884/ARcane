@@ -104,6 +104,7 @@ export class World {
    * 0 = the wood moving, 1 = utterly still.
    */
   private hush = 0;
+  private breath = 0;
   private hushClock = 0;
   private hushAt = 28 + Math.random() * 14;
   private hushEnds = -1;
@@ -616,30 +617,32 @@ export class World {
   }
 
   private render(dt: number): void {
-    // Shake is applied only for the draw, so aiming and targeting always use the steady view.
+    // Shake and breath are applied only for the draw, so aiming and targeting always use the
+    // steady view.
     this.trauma = Math.max(0, this.trauma - dt * 1.9);
-    const shaking = this.trauma > 0.001;
-    if (shaking) {
-      const k = this.trauma * this.trauma;
-      const time = this.clock.elapsedTime * 38;
-      this.basePosition.copy(this.camera.position);
-      this.baseQuaternion.copy(this.camera.quaternion);
-      this.shakeEuler.set(
-        Math.sin(time * 1.1) * 0.016 * k,
-        Math.sin(time * 0.9 + 1.7) * 0.02 * k,
-        Math.sin(time * 1.3 + 3.1) * 0.012 * k,
-      );
-      this.camera.quaternion.multiply(this.shakeQuaternion.setFromEuler(this.shakeEuler));
-      this.camera.position.y += Math.sin(time * 1.7 + 0.4) * 0.03 * k;
-      this.camera.updateMatrixWorld(true);
-    }
+    const k = this.trauma * this.trauma;
+    const time = this.clock.elapsedTime * 38;
+    // The view breathes: a slow rise and fall and the faintest drift, as if someone were standing
+    // here holding it. In a hush it holds its breath with the wood.
+    const calm = this.reducedMotion.matches ? 0 : 1 - this.hush * 0.85;
+    this.breath += dt * calm;
+    const inhale = Math.sin(this.breath * 0.42) * calm;
+    this.basePosition.copy(this.camera.position);
+    this.baseQuaternion.copy(this.camera.quaternion);
+    this.shakeEuler.set(
+      Math.sin(time * 1.1) * 0.016 * k + inhale * 0.0035 + Math.sin(this.breath * 0.17) * 0.002 * calm,
+      Math.sin(time * 0.9 + 1.7) * 0.02 * k + Math.sin(this.breath * 0.13 + 1.1) * 0.003 * calm,
+      Math.sin(time * 1.3 + 3.1) * 0.012 * k + Math.sin(this.breath * 0.21 + 2.3) * 0.0015 * calm,
+    );
+    this.camera.quaternion.multiply(this.shakeQuaternion.setFromEuler(this.shakeEuler));
+    this.camera.position.y += Math.sin(time * 1.7 + 0.4) * 0.03 * k + inhale * 0.012;
+    this.camera.updateMatrixWorld(true);
     this.post.render(dt, this.scene, this.camera);
-    if (shaking) {
-      this.camera.position.copy(this.basePosition);
-      this.camera.quaternion.copy(this.baseQuaternion);
-      this.camera.updateMatrixWorld(true);
-    }
+    this.camera.position.copy(this.basePosition);
+    this.camera.quaternion.copy(this.baseQuaternion);
+    this.camera.updateMatrixWorld(true);
   }
+
 
   /**
    * One marker per hand. A tracked hand pulls its marker to the palm. When a hand drops out (or
