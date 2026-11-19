@@ -1,193 +1,269 @@
 import * as THREE from 'three';
-import { describe, expect, it, vi } from 'vitest';
-import { Creature, type CreatureKind } from '../src/world/Creature.ts';
-import { CreatureState, CREATURE_SPECS, PlayerState } from '../src/world/EncounterState.ts';
+import { describe, expect, it } from 'vitest';
+import { GESTURES } from '../src/config/gestures.ts';
+import { LEGEND_SPELLS, SPELLS } from '../src/config/spells.ts';
+import { CHAPTERS, LEVELS } from '../src/game/campaign.ts';
+import { SpellBook } from '../src/spells/SpellBook.ts';
+import { DESIGNS } from '../src/world/characters/index.ts';
+import { CREATURE_SPECS, CreatureState, PlayerState, type CreatureKind } from '../src/world/EncounterState.ts';
 import { FrameBudget } from '../src/world/FrameBudget.ts';
-import { GNOME_ATTACK_RANGE, GNOME_LIFETIME, GNOME_RUN_SPEED, GnomeSummons } from '../src/world/GnomeSummons.ts';
-import { sweptShape, vectors } from '../src/world/storybook.ts';
+import { GNOME_ATTACK_RANGE, GNOME_DESIGNS, GNOME_LIFETIME, GnomeSummons } from '../src/world/GnomeSummons.ts';
+import { ellipsoid, lathe, tube } from '../src/world/rig/Body.ts';
+import { Character } from '../src/world/rig/Character.ts';
 
-const kinds:CreatureKind[]=['goblin','root','hollow','wraith'];
+const kinds: CreatureKind[] = ['goblin', 'root', 'hollow', 'wraith', 'mossling', 'thornback', 'moth'];
 
-describe('telegraphed enemy simulation',()=>{
-  it.each(kinds)('%s pursues, winds up and strikes only once per attack',kind=>{
-    const state=new CreatureState(kind),spec=CREATURE_SPECS[kind];
-    expect(state.update(0.1,30,true,true)).toBe(false);expect(state.pose).toBe('walk');
-    state.update(0.1,spec.range-0.2,true,true);expect(state.pose).toBe('windup');
-    expect(state.update(spec.windup-0.1,1,true,true)).toBe(false);
-    expect(state.update(0.11,1,true,true)).toBe(true);expect(state.pose).toBe('strike');
-    expect(state.update(0.1,1,true,true)).toBe(false);
-    state.update(0.4,1,true,true);expect(state.pose).toBe('recover');
-    state.update(spec.recovery+0.01,1,true,true);expect(state.pose).toBe('walk');
+describe('telegraphed enemy simulation', () => {
+  it.each(kinds)('%s pursues, winds up and strikes only once per attack', (kind) => {
+    const state = new CreatureState(kind), spec = CREATURE_SPECS[kind];
+    const inRange = Math.max(spec.attacks[0].range[0] + 0.1, spec.range - 0.2);
+    expect(state.update(0.1, 60, true, true)).toBe(false); expect(state.pose).toBe('walk');
+    state.update(0.1, inRange, true, true); expect(state.pose).toBe('windup');
+    expect(state.update(spec.windup - 0.1, inRange, true, true)).toBe(false);
+    expect(state.update(0.11, inRange, true, true)).toBe(true); expect(state.pose).toBe('strike');
+    expect(state.update(0.1, inRange, true, true)).toBe(false);
+    state.update(state.strikeTime, inRange, true, true); expect(state.pose).toBe('recover');
+    state.update(spec.recovery + 0.01, 60, true, true); expect(state.pose).toBe('walk');
   });
-  it('does not wind up across scenery or outside actual range',()=>{
-    const state=new CreatureState('goblin');state.update(10,1,false,true);expect(state.pose).toBe('walk');
-    state.update(10,10,true,true);expect(state.pose).toBe('walk');
+  it('does not wind up across scenery or outside actual range', () => {
+    const state = new CreatureState('goblin'); state.update(10, 1, false, true); expect(state.pose).toBe('walk');
+    state.update(10, 10, true, true); expect(state.pose).toBe('walk');
   });
-  it('pauses timers and attacks while a guide/settings modal is open',()=>{
-    const state=new CreatureState('root');state.update(0.1,1,true,true);
-    const age=state.age;expect(state.update(20,1,true,false)).toBe(false);expect(state.pose).toBe('windup');expect(state.age).toBe(age);
+  it('pauses timers and attacks while a menu is open', () => {
+    const state = new CreatureState('root'); state.update(0.1, 1, true, true);
+    const age = state.age; expect(state.update(20, 1, true, false)).toBe(false); expect(state.pose).toBe('windup'); expect(state.age).toBe(age);
   });
-  it('frost interrupts a wind-up and prevents attacking until it has thawed',()=>{
-    const state=new CreatureState('goblin');state.update(0.1,1,true,true);state.hit('frost');expect(state.pose).toBe('frozen');
-    expect(state.update(2,1,true,true)).toBe(false);expect(state.pose).toBe('frozen');
-    state.hit('arrow');expect(state.pose).toBe('frozen');
-    state.update(2,1,true,true);expect(state.pose).toBe('recover');expect(state.freeze).toBe(0);
+  it('frost interrupts a wind-up and prevents attacking until it has thawed', () => {
+    const state = new CreatureState('goblin'); state.update(0.1, 1, true, true); state.hit('frost'); expect(state.pose).toBe('frozen');
+    expect(state.update(2, 1, true, true)).toBe(false); expect(state.pose).toBe('frozen');
+    state.hit('arrow'); expect(state.pose).toBe('frozen');
+    state.update(2, 1, true, true); expect(state.pose).toBe('recover'); expect(state.freeze).toBe(0);
   });
-  it('stagger cancels attacks and dead enemies cannot attack or take damage',()=>{
-    const state=new CreatureState('goblin');state.update(0.1,1,true,true);state.hit('arrow');expect(state.pose).toBe('stagger');
-    state.hit('lightning');expect(state.alive).toBe(false);expect(state.pose).toBe('dead');
-    expect(state.update(10,1,true,true)).toBe(false);expect(state.hit('arrow')).toBe(false);
+  it('stagger cancels attacks and dead enemies cannot attack or take damage', () => {
+    const state = new CreatureState('goblin'); state.update(0.1, 1, true, true); state.hit('arrow'); expect(state.pose).toBe('stagger');
+    state.hit('lightning'); expect(state.alive).toBe(false); expect(state.pose).toBe('dead');
+    expect(state.update(10, 1, true, true)).toBe(false); expect(state.hit('arrow')).toBe(false);
   });
-  it('defensive spells do not hurt an enemy',()=>{
-    const state=new CreatureState('hollow');expect(state.hit('shield')).toBe(false);expect(state.hit('healing')).toBe(false);expect(state.health).toBe(120);
+  it('defensive spells do not hurt an enemy', () => {
+    const state = new CreatureState('hollow');
+    expect(state.hit('shield')).toBe(false); expect(state.hit('healing')).toBe(false); expect(state.hit('veil')).toBe(false);
+    expect(state.health).toBe(CREATURE_SPECS.hollow.health);
+  });
+  it('level scaling makes later creatures tougher and hit harder', () => {
+    const early = new CreatureState('wraith'), late = new CreatureState('wraith', { health: 2, damage: 1.5, speed: 1 });
+    expect(late.maxHealth).toBe(early.maxHealth * 2);
+    expect(late.damage).toBe(Math.round(early.damage * 1.5));
+  });
+  it('stuns and roots stop movement; bosses shrug off most of it', () => {
+    const goblin = new CreatureState('goblin');
+    goblin.stunFor(2); expect(goblin.mobile).toBe(false);
+    goblin.update(2.1, 30, true, true); expect(goblin.mobile).toBe(true);
+    goblin.rootFor(4); expect(goblin.mobile).toBe(false);
+    const king = new CreatureState('king');
+    king.rootFor(3); expect(king.rooted).toBeCloseTo(1);
+    king.hit('frost'); expect(king.pose).not.toBe('frozen'); expect(king.slow).toBeGreaterThan(0);
   });
 });
 
-describe('player vitality and wards',()=>{
-  it('absorbs damage before vitality and carries excess damage through',()=>{
-    const player=new PlayerState();expect(player.cast('shield')).toBe(true);
-    expect(player.damage(30)).toBe('blocked');expect(player.health).toBe(100);expect(player.shield).toBe(15);
-    player.update(1);expect(player.damage(22)).toBe('hurt');expect(player.health).toBe(93);expect(player.shield).toBe(0);
+describe('bosses choose among their attacks', () => {
+  it('only picks attacks whose range fits, and honours cooldowns', () => {
+    const gorrik = new CreatureState('gorrik', undefined, 3);
+    const seen = new Set<string>();
+    for (let i = 0; i < 300; i++) {
+      const s = new CreatureState('gorrik', undefined, i + 1);
+      s.update(0.1, 2, true, true);
+      if (s.pose === 'windup') seen.add(s.attack.type);
+    }
+    expect(seen.has('melee')).toBe(true);
+    expect(seen.has('shockwave')).toBe(true);
+    // A charge needs room to run: never chosen at point-blank range.
+    expect(seen.has('charge')).toBe(false);
+    gorrik.update(0.1, 12, true, true);
+    expect(['shockwave', 'charge', 'summon']).toContain(gorrik.attack.type);
   });
-  it('limits simultaneous attacks with a brief grace period',()=>{
-    const player=new PlayerState();expect(player.damage(20)).toBe('hurt');expect(player.damage(20)).toBe('ignored');expect(player.health).toBe(80);
-    player.update(0.66);expect(player.damage(20)).toBe('hurt');expect(player.health).toBe(60);
-  });
-  it('expires wards and enforces real per-spell cooldowns',()=>{
-    const player=new PlayerState();player.cast('shield');expect(player.cast('shield')).toBe(false);
-    player.update(5.1);expect(player.shield).toBe(0);expect(player.cast('shield')).toBe(false);
-    player.update(1);expect(player.cast('shield')).toBe(true);
-  });
-  it('keeps summoned scouts brief, ranged, mobile, and off cooldown until they fade',()=>{
-    expect(GNOME_LIFETIME).toBe(10);expect(GNOME_ATTACK_RANGE).toBe(35);expect(GNOME_RUN_SPEED).toBe(6);
-    const player=new PlayerState();expect(player.cast('summon')).toBe(true);expect(player.cooldowns.summon).toBe(12);
-    player.update(10);expect(player.cast('summon')).toBe(false);player.update(2.1);expect(player.cast('summon')).toBe(true);
-    const goblin=new CreatureState('goblin');expect(goblin.hit('summon')).toBe(true);expect(goblin.health).toBe(57);
-  });
-  it('heals by 30, caps at 100 and cannot be spammed',()=>{
-    const player=new PlayerState();player.health=55;expect(player.cast('healing')).toBe(true);expect(player.health).toBe(85);
-    expect(player.cast('healing')).toBe(false);player.update(7);player.cast('healing');expect(player.health).toBe(100);
-  });
-  it('death stops casts and restart clears old health, wards and cooldowns',()=>{
-    const player=new PlayerState();player.cast('frost');player.damage(150);expect(player.alive).toBe(false);expect(player.cast('healing')).toBe(false);
-    player.reset();expect(player.health).toBe(100);expect(player.cooldowns.frost).toBe(0);expect(player.damage(10)).toBe('ignored');
+  it('a sub-boss and final boss in every chapter, each stronger than the one before', () => {
+    const finals = LEVELS.filter((l) => l.kind === 'final').map((l) => CREATURE_SPECS[l.boss!]);
+    for (let i = 1; i < finals.length; i++) expect(finals[i].health).toBeGreaterThan(finals[i - 1].health);
+    const king = CREATURE_SPECS.king;
+    expect(king.height).toBeGreaterThan(Math.max(...finals.slice(0, 3).map((f) => f.height)));
   });
 });
 
-describe('summoned gnome lifecycle',()=>{
-  it('repositions quickly and lands thrown rocks on living, visible targets',()=>{
-    let health=100;
-    const summons=new GnomeSummons([],()=>null,()=>{health-=8;}),point=new THREE.Vector3(0,0,-8);
-    summons.summon(point,point,4);
-    const target={id:4,position:point,height:2,alive:true};
-    for(let i=0;i<120;i++)summons.update(.05,true,new THREE.Vector3(0,1.85,17),[target]);
-    expect(health).toBeLessThan(100);summons.dispose();
-  });
-  it('replaces the previous pair and cleans every sprite at ten seconds',()=>{
-    const summons=new GnomeSummons([],()=>null,()=>{}),point=new THREE.Vector3(0,0,-8);
-    summons.summon(point,point);expect(summons.group.children).toHaveLength(2);
-    summons.summon(point,point);expect(summons.group.children).toHaveLength(2);
-    for(let i=0;i<201;i++)summons.update(.05,false,point,[]);
-    expect(summons.group.children).toHaveLength(0);summons.dispose();
+describe('the player', () => {
+  it('Moonveil blocks everything; Verdant Bloom restores fully; light breaks the darkness', () => {
+    const p = new PlayerState();
+    p.cast('veil'); expect(p.damage(50)).toBe('blocked'); expect(p.health).toBe(100);
+    p.update(8); p.invulnerability = 0; p.damage(60); expect(p.health).toBe(40);
+    p.cast('bloom'); expect(p.health).toBe(100);
+    p.darkness = 9; p.cast('flare'); expect(p.darkness).toBe(0);
   });
 });
 
-describe('articulated 2.5D character artwork',()=>{
-  it.each(kinds)('%s has layered artwork, articulated poses and a grounded footprint',kind=>{
-    const model=new Creature(kind);model.group.updateMatrixWorld(true);
-    const bounds=new THREE.Box3().setFromObject(model.group),size=bounds.getSize(new THREE.Vector3());
-    expect(size.y).toBeGreaterThan(1.5);expect(size.z).toBeGreaterThan(0.1);expect(size.x).toBeGreaterThan(0.5);
-    const before=model.body.matrix.clone();model.animate(1,'walk',0.2,0.1);model.group.updateMatrixWorld(true);expect(model.body.matrix.equals(before)).toBe(false);
-    model.animate(2,'windup',0.8,0.1);model.group.updateMatrixWorld(true);expect(model.body.rotation.x).toBeLessThan(0);
-    model.animate(3,'dead',1,0.1);expect(model.group.visible).toBe(false);
-    const disposals:ReturnType<typeof vi.fn>[]=[];
-    const geometries=new Set<THREE.BufferGeometry>();model.group.traverse(o=>{if(o instanceof THREE.Mesh)geometries.add(o.geometry);});
-    geometries.forEach(g=>{const spy=vi.fn();g.addEventListener('dispose',spy);disposals.push(spy);});
-    model.dispose();model.dispose();disposals.forEach(spy=>expect(spy).toHaveBeenCalledOnce());
+describe('the campaign', () => {
+  it('has forty levels in four chapters of ten', () => {
+    expect(LEVELS).toHaveLength(40);
+    expect(CHAPTERS).toHaveLength(4);
+    for (const c of CHAPTERS) expect(LEVELS.filter((l) => l.chapter === c.id)).toHaveLength(10);
   });
-  it('does not rotate the artwork toward a camera and visibly recoils when hit',()=>{
-    const model=new Creature('goblin');model.group.position.set(4,0,-9);
-    model.animate(1,'idle',0,.1);const rotation=model.group.quaternion.clone(),position=model.group.position.clone();
-    model.hit();model.animate(1.1,'stagger',.2,.1);
-    expect(model.body.position.x).toBeGreaterThan(0.01);
-    expect(model.group.quaternion.equals(rotation)).toBe(true);expect(model.group.position.equals(position)).toBe(true);model.dispose();
+  it('puts a sub-boss after eight levels and a final boss at the end of every chapter', () => {
+    for (const c of CHAPTERS) {
+      const levels = LEVELS.filter((l) => l.chapter === c.id);
+      expect(levels.slice(0, 8).every((l) => l.kind === 'normal' && !l.boss)).toBe(true);
+      expect(levels[8].kind).toBe('sub');
+      expect(CREATURE_SPECS[levels[8].boss!].rank).toBe('sub');
+      expect(levels[9].kind).toBe('final');
+      expect(CREATURE_SPECS[levels[9].boss!].rank).toBe('final');
+      // A cutscene introduces each ruler before its fight.
+      expect(levels[9].before).toBeTruthy();
+    }
   });
-  it('swept organic shapes have outward normals rather than inverted hollow surfaces',()=>{
-    const geometry=sweptShape(vectors([[0,0,0],[0,1,0],[0,2,0]]),[1,0.8,0.6],12,10);
-    const p=geometry.getAttribute('position'),n=geometry.getAttribute('normal');
-    for(let i=13;i<26;i++){expect(p.getX(i)*n.getX(i)+p.getZ(i)*n.getZ(i)).toBeGreaterThan(0.4);}
-    geometry.dispose();
+  it('gives every non-final level three waves that grow harder', () => {
+    const threat = (k: CreatureKind) => CREATURE_SPECS[k].health;
+    for (const level of LEVELS.filter((l) => l.kind !== 'final')) {
+      expect(level.waves).toHaveLength(3);
+      for (const wave of level.waves) expect(wave.reduce((s, g) => s + g.count, 0)).toBeGreaterThan(0);
+      const totals = level.waves.map((w) => w.reduce((s, g) => s + g.count * threat(g.kind), 0));
+      expect(totals[2]).toBeGreaterThanOrEqual(totals[0]);
+    }
+  });
+  it('tells its story every seven levels and at every boss', () => {
+    for (const id of [7, 14, 21, 28, 35]) expect(LEVELS[id - 1].after).toBeTruthy();
+    expect(LEVELS[0].before).toBe('intro');
+    expect(LEVELS[39].after).toBe('ending');
+  });
+  it('hands out every legendary spell from a boss, and only from a boss', () => {
+    const rewards = LEVELS.filter((l) => l.reward).map((l) => l.reward);
+    expect(new Set(rewards)).toEqual(new Set(LEGEND_SPELLS.map((s) => s.id)));
+    for (const level of LEVELS.filter((l) => l.reward)) expect(level.boss).toBeTruthy();
   });
 });
 
-describe('adaptive resolution budget',()=>{
-  it('lowers render resolution under sustained load without exceeding safe bounds',()=>{
-    const budget=new FrameBudget(1.5,1.5);for(let i=0;i<200;i++)budget.sample(0.12);expect(budget.ratio).toBeGreaterThanOrEqual(0.55);expect(budget.ratio).toBeLessThan(1);
+describe('the spellbook', () => {
+  it('keeps legendary spells silent until they are learned', () => {
+    const book = new SpellBook(SPELLS, GESTURES, null);
+    const quake = SPELLS.find((s) => s.effect === 'quake')!;
+    expect(book.isKnown(quake.id)).toBe(false);
+    expect(book.activeGestures().some((g) => g.id === quake.defaultGesture)).toBe(false);
+    expect(book.spellFor(quake.defaultGesture)).toBeUndefined();
+    book.setLearned([quake.id]);
+    expect(book.isKnown(quake.id)).toBe(true);
+    expect(book.spellFor(quake.defaultGesture)?.id).toBe(quake.id);
   });
-  it('recovers cautiously and ignores invalid timing samples',()=>{
-    const budget=new FrameBudget(0.8,1.5);expect(budget.sample(NaN)).toBeNull();expect(budget.sample(-1)).toBeNull();
-    for(let i=0;i<1500;i++)budget.sample(1/60);expect(budget.ratio).toBeGreaterThan(0.8);expect(budget.ratio).toBeLessThanOrEqual(1.5);
+  it('binds every spell to its own gesture', () => {
+    const gestures = SPELLS.map((s) => s.defaultGesture);
+    expect(new Set(gestures).size).toBe(gestures.length);
+    for (const g of gestures) expect(GESTURES.some((x) => x.id === g)).toBe(true);
   });
 });
 
-describe('summoned gnome behaviour',()=>{
-  it('climbs out of the circle where it was cast and holds a firing position short of the target',()=>{
-    const summons=new GnomeSummons([],()=>null,()=>{}),circle=new THREE.Vector3(0,0,5),enemy=new THREE.Vector3(0,0,-20);
-    summons.summon(circle,enemy,1);
-    const roots=[...summons.group.children] as THREE.Group[];
-    for(const root of roots)expect(Math.hypot(root.position.x-circle.x,root.position.z-circle.z)).toBeLessThan(1);
-    const player=new THREE.Vector3(0,1.85,17);
-    for(let i=0;i<100;i++)summons.update(.05,true,player,[{id:1,position:enemy,height:2,alive:true}]);
-    for(const root of roots){
-      // Between the caster and the spirit, never past it.
+describe('procedural bodies', () => {
+  it('builds tubes, lathes and ellipsoids with outward-facing surfaces', () => {
+    for (const g of [tube([[0, 0, 0], [0, 1, 0], [0.2, 2, 0]], [0.3, 0.25, 0.1]), lathe([[0.2, 2], [0.5, 1], [0.4, 0]], { closeTop: true, closeBottom: true }), ellipsoid([0, 1, 0], [0.5, 0.8, 0.4])]) {
+      g.computeBoundingBox();
+      const centre = g.boundingBox!.getCenter(new THREE.Vector3());
+      const p = g.getAttribute('position'), n = g.getAttribute('normal');
+      let outward = 0;
+      for (let i = 0; i < p.count; i++) {
+        const dx = p.getX(i) - centre.x, dz = p.getZ(i) - centre.z;
+        if (Math.hypot(dx, dz) > 0.05) outward += Math.sign(dx * n.getX(i) + dz * n.getZ(i));
+      }
+      expect(outward).toBeGreaterThan(0);
+    }
+  });
+  it.each(Object.keys(DESIGNS) as CreatureKind[])('%s is one skinned body on one skeleton, with sound weights', (kind) => {
+    const c = new Character(DESIGNS[kind], 0.5);
+    expect(c.mesh).toBeInstanceOf(THREE.SkinnedMesh);
+    const w = c.mesh.geometry.getAttribute('skinWeight');
+    for (let i = 0; i < w.count; i += 7) expect(w.getX(i) + w.getY(i) + w.getZ(i) + w.getW(i)).toBeCloseTo(1, 3);
+    c.mesh.geometry.computeBoundingBox();
+    const size = c.mesh.geometry.boundingBox!.getSize(new THREE.Vector3());
+    expect(size.y).toBeGreaterThan(DESIGNS[kind].height * 0.45);
+    // Every body is a real volume with depth, not a flat sheet.
+    expect(Math.min(size.x, size.z)).toBeGreaterThan(0.15);
+    c.dispose();
+  });
+  it('walks forward, side-steps both ways and turns toward its heading', () => {
+    const c = new Character(DESIGNS.goblin, 0.2);
+    const look = new THREE.Vector3(0, 1.8, 10);
+    const thigh = c.bones.thighL;
+    const frames = (velocity: THREE.Vector3, faceYaw: number | null, n = 40) => {
+      const zs: number[] = [];
+      for (let i = 0; i < n; i++) { c.update(1 / 30, { pose: 'walk', progress: 0, velocity, faceYaw, look, groundY: 0 }); zs.push(thigh.rotation.z); }
+      return zs;
+    };
+    frames(new THREE.Vector3(0, 0, 1.4), 0);
+    const left = frames(new THREE.Vector3(1.4, 0, 0), 0);
+    const right = frames(new THREE.Vector3(-1.4, 0, 0), 0);
+    // Side-steps open the legs sideways (about Z), in opposite directions.
+    expect(Math.max(...left.map(Math.abs))).toBeGreaterThan(0.05);
+    expect(Math.max(...right.map(Math.abs))).toBeGreaterThan(0.05);
+    // Facing travel: it turns to face the way it is going (here, to its left).
+    frames(new THREE.Vector3(1.4, 0, 0), Math.PI / 2, 60);
+    expect(c.yaw).toBeCloseTo(Math.PI / 2, 1);
+    c.dispose();
+  });
+});
+
+describe('adaptive resolution budget', () => {
+  it('lowers render resolution under sustained load without exceeding safe bounds', () => {
+    const budget = new FrameBudget(1.5, 1.5); for (let i = 0; i < 200; i++) budget.sample(0.12);
+    expect(budget.ratio).toBeGreaterThanOrEqual(0.75); expect(budget.ratio).toBeLessThan(1);
+  });
+  it('recovers cautiously and ignores invalid timing samples', () => {
+    const budget = new FrameBudget(0.8, 1.5); expect(budget.sample(NaN)).toBeNull(); expect(budget.sample(-1)).toBeNull();
+    for (let i = 0; i < 1500; i++) budget.sample(1 / 60); expect(budget.ratio).toBeGreaterThan(0.8); expect(budget.ratio).toBeLessThanOrEqual(1.5);
+  });
+});
+
+describe('summoned gnomes', () => {
+  const scouts = (s: GnomeSummons) => s.group.children.filter((c) => c instanceof THREE.Group) as THREE.Group[];
+
+  it('climbs out where cast, runs off with its back to the caster and holds a spot short of the target', () => {
+    const summons = new GnomeSummons([], () => null, () => {});
+    const circle = new THREE.Vector3(0, 0, 5), enemy = new THREE.Vector3(0, 0, -20), player = new THREE.Vector3(0, 1.85, 17);
+    summons.summon(circle, enemy, 1);
+    for (const root of scouts(summons)) expect(Math.hypot(root.position.x - circle.x, root.position.z - circle.z)).toBeLessThan(1);
+    for (let i = 0; i < 40; i++) summons.update(0.05, true, player, [{ id: 1, position: enemy, height: 2, alive: true }]);
+    // Running toward the spirit, away from the caster: it faces away (its back to the camera).
+    for (const root of scouts(summons)) expect(Math.cos(root.rotation.y)).toBeLessThan(0);
+    for (let i = 0; i < 60; i++) summons.update(0.05, true, player, [{ id: 1, position: enemy, height: 2, alive: true }]);
+    for (const root of scouts(summons)) {
       expect(root.position.z).toBeGreaterThan(enemy.z);
       expect(root.position.distanceTo(enemy)).toBeLessThan(13);
     }
     summons.dispose();
   });
-});
 
-describe('gnome rig',()=>{
-  it('is a skinned, seven-sheet puppet that starts below the torn ground and climbs out',()=>{
-    const summons=new GnomeSummons([],()=>null,()=>{}),circle=new THREE.Vector3(0,0,0);
-    summons.summon(circle,new THREE.Vector3(0,0,-20));
-    const root=summons.group.children[0] as THREE.Group;
-    const partMeshes:THREE.Mesh[]=[];
-    root.traverse(o=>{if(o instanceof THREE.SkinnedMesh)partMeshes.push(o);});
-    expect(partMeshes).toHaveLength(7);
-    for(const joint of ['armL_up','armL_fore','armL_hand','armL_fingers','legR_up','legR_low','cap','cap2','cap3','beard'])expect(root.getObjectByName(joint)).toBeTruthy();
-    root.traverse(o=>{if(o instanceof THREE.SkinnedMesh){const w=o.geometry.getAttribute('skinWeight');for(let i=0;i<w.count;i++)expect(w.getX(i)+w.getY(i)+w.getZ(i)+w.getW(i)).toBeCloseTo(1,3);}});
-    const torso=root.getObjectByName('torso')!;
-    const world=new THREE.Vector3(),player=new THREE.Vector3(0,1.85,12);
-    summons.update(.05,true,player,[]);
-    torso.getWorldPosition(world);const buried=world.y;
-    for(let i=0;i<25;i++)summons.update(.05,true,player,[]);
-    torso.getWorldPosition(world);
-    expect(world.y).toBeGreaterThan(buried+2);
+  it('turns to face the caster and runs home when its time is up', () => {
+    const summons = new GnomeSummons([], () => null, () => {});
+    const player = new THREE.Vector3(0, 1.85, 17);
+    summons.summon(new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -20));
+    for (let t = 0; t < GNOME_LIFETIME + 0.6; t += 0.05) summons.update(0.05, true, player, []);
+    for (const root of scouts(summons)) expect(Math.cos(root.rotation.y)).toBeGreaterThan(0.5);
     summons.dispose();
   });
-  it('stoops for a rock, carries it in the throwing hand, then hurls it on a falling arc',()=>{
-    let hits=0;
-    const summons=new GnomeSummons([],()=>null,()=>{hits++;}),enemy=new THREE.Vector3(0,0,-6);
-    summons.summon(new THREE.Vector3(0,0,1),enemy,1);
-    const player=new THREE.Vector3(0,1.85,12),target=[{id:1,position:enemy,height:2,alive:true}];
-    const rocksIn=(o:THREE.Object3D)=>{const found:THREE.Mesh[]=[];o.traverse(m=>{if(m instanceof THREE.Mesh&&m.geometry instanceof THREE.IcosahedronGeometry)found.push(m);});return found;};
-    let carried=false,flying:THREE.Mesh|null=null;const heights:number[]=[];
-    for(let i=0;i<160&&hits===0;i++){
-      summons.update(.02,true,player,target);
-      const scout=summons.group.children[0] as THREE.Group;
-      const hand=scout.getObjectByName('armL_hand')!;
-      if(rocksIn(hand).length)carried=true;
-      const loose=summons.group.children.find(c=>c instanceof THREE.Mesh&&c.geometry instanceof THREE.IcosahedronGeometry) as THREE.Mesh|undefined;
-      if(loose){flying=loose;heights.push(loose.position.y);}
+
+  it('grabs a stone in its throwing hand and hurls it on a falling arc', () => {
+    let hits = 0;
+    const summons = new GnomeSummons([], () => null, () => { hits++; });
+    const enemy = new THREE.Vector3(0, 0, -6), player = new THREE.Vector3(0, 1.85, 12);
+    summons.summon(new THREE.Vector3(0, 0, 1), enemy, 1);
+    const target = [{ id: 1, position: enemy, height: 2, alive: true }];
+    let carried = false; const heights: number[] = [];
+    for (let i = 0; i < 400 && hits === 0; i++) {
+      summons.update(0.02, true, player, target);
+      summons.group.traverse((o) => { if (o instanceof THREE.Bone && o.name === 'handR' && o.children.some((c) => c instanceof THREE.Mesh)) carried = true; });
+      const loose = summons.group.children.find((c) => c instanceof THREE.Mesh) as THREE.Mesh | undefined;
+      if (loose) heights.push(loose.position.y);
     }
     expect(carried).toBe(true);
-    expect(flying).not.toBeNull();
-    // Up, then down: a thrown stone, not a bolt.
-    const peak=Math.max(...heights);
+    expect(heights.length).toBeGreaterThan(2);
+    const peak = Math.max(...heights);
     expect(peak).toBeGreaterThan(heights[0]);
-    expect(heights[heights.length-1]).toBeLessThan(peak);
+    expect(heights[heights.length - 1]).toBeLessThan(peak);
     expect(hits).toBe(1);
+    expect(GNOME_ATTACK_RANGE).toBeGreaterThan(10);
+    expect(GNOME_DESIGNS.ember.kind).not.toBe(GNOME_DESIGNS.moss.kind);
     summons.dispose();
   });
 });

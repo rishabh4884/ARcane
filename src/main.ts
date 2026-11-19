@@ -1,8 +1,10 @@
 import './style.css';
+import './ui/encounter.css';
 import { AudioEngine } from './audio/AudioEngine.ts';
 import { GESTURES } from './config/gestures.ts';
 import { SPELLS } from './config/spells.ts';
 import { DEFAULT_TUNING, type Tuning } from './config/tuning.ts';
+import { Game } from './game/Game.ts';
 import type { EngineOutput } from './gestures/GestureEngine.ts';
 import { HandsEngine } from './gestures/HandsEngine.ts';
 import { SpellBook } from './spells/SpellBook.ts';
@@ -11,9 +13,7 @@ import { HandTracker, type TrackerStats } from './tracking/HandTracker.ts';
 import type { HandSide } from './tracking/types.ts';
 import { DebugOverlay } from './ui/DebugOverlay.ts';
 import { el, qs } from './ui/dom.ts';
-import { describeError } from './ui/errors.ts';
 import { Hud } from './ui/Hud.ts';
-import { Onboarding } from './ui/Onboarding.ts';
 import { SettingsPanel } from './ui/SettingsPanel.ts';
 import { World } from './world/World.ts';
 
@@ -34,13 +34,13 @@ world.start();
 
 const audio = new AudioEngine();
 world.events.on((event) => audio.handle(event));
-// Browsers keep audio locked until a user gesture; the Begin button is the first one.
+// Browsers keep audio locked until a user gesture; the loading screen's Enter is the first one.
 const unlockAudio = () => audio.unlock();
 window.addEventListener('pointerdown', unlockAudio, { capture: true });
 window.addEventListener('keydown', unlockAudio, { capture: true });
 
 const book = new SpellBook(SPELLS, GESTURES);
-// Only gestures bound to a spell are live; the rest are just choices in the Spellbook dropdown.
+// Only gestures bound to a known spell are live; legendary spells wake when they are learned.
 const engine = new HandsEngine(book.activeGestures(), tuning);
 book.onChange(() => engine.setGestures(book.activeGestures()));
 const tracker = new HandTracker(tuning.cameraFps);
@@ -48,7 +48,6 @@ const tracker = new HandTracker(tuning.cameraFps);
 const hudRoot = qs('#hud');
 const hud = new Hud(hudRoot, book);
 const debug = new DebugOverlay(hudRoot);
-new Onboarding(hudRoot, book, () => tracker.start());
 const soundButton = el('button', { class: 'sound-tool', type: 'button', onclick: () => audio.toggleMuted() });
 const renderSound = () => {
   soundButton.textContent = audio.muted ? 'Sound off' : 'Sound on';
@@ -57,14 +56,14 @@ const renderSound = () => {
 };
 audio.onChange(renderSound);
 renderSound();
-hudRoot.append(soundButton);
+document.body.append(soundButton);
 window.addEventListener('keydown', (event) => {
   if ((event.key === 'm' || event.key === 'M') && !event.metaKey && !event.ctrlKey && !(event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement)) {
     audio.toggleMuted();
   }
 });
 
-new SettingsPanel(hudRoot, {
+const settings = new SettingsPanel(document.body, {
   sound: audio,
   book,
   tuning,
@@ -84,10 +83,10 @@ new SettingsPanel(hudRoot, {
   },
 });
 
-/** One cast, from any source: a recognised gesture or a keyboard shortcut. */
+/** One cast, from a recognised gesture. */
 function cast(spellId: string, from?: HandSide | 'both', detail?: string): void {
   const spell = SPELLS.find((s) => s.id === spellId);
-  if (!spell) return;
+  if (!spell || !book.isKnown(spell.id)) return;
   if (world.cast(spell, from, detail)) hud.flash(spell.id);
   else hud.refuse(spell.id);
 }
@@ -155,7 +154,6 @@ tracker.onFrame = (hands, stats) => {
   }
 };
 
-
 // Spell recovery is a game-clock value; a light poll keeps the dock honest without a camera frame.
 window.setInterval(() => hud.setCooldowns(world.cooldowns()), 100);
 
@@ -163,19 +161,40 @@ document.addEventListener('visibilitychange', () => {
   if (document.hidden) engine.reset();
 });
 
-// Development-only console hook for checking spell visuals without a camera. Stripped from builds.
+/** Fetch the hand model ahead of time so the camera starts quickly (it then comes from cache). */
+async function prefetchModel(step: (f: number, label: string) => void): Promise<void> {
+  try {
+    const response = await fetch(`${import.meta.env.BASE_URL}models/hand_landmarker.task`);
+    const total = Number(response.headers.get('content-length')) || 7_800_000;
+    const reader = response.body?.getReader();
+    if (!reader) return;
+    let read = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      read += value.byteLength;
+      step(0.64 + Math.min(1, read / total) * 0.34, 'Teaching the wood to see your hands…');
+    }
+  } catch {
+    // Offline or blocked: the tracker falls back to its own loading path.
+  }
+}
+
+const game = new Game({ world, audio, book, settings, hudRoot, startCamera: () => tracker.start() });
+void game.boot(async (step) => {
+  await world.warmup(step);
+  await prefetchModel(step);
+});
+
+// Development-only console hooks for checking levels, scenes and spells without a camera.
 if (import.meta.env.DEV) {
   Object.assign(window, {
     arcane: {
       cast: (spellId: string, side: HandSide = 'right') => cast(spellId, side, spellId === 'spell-1' ? '90% draw' : 'left'),
       aim: (x: number, y: number, side: HandSide = 'right') => world.setCursors({ [side]: { x, y } }),
-      charge: (progress: number, side: HandSide = 'right') => world.setCharges({ [side]: { progress, color: '#b69cff' } }),
-      skipIntro: () => {
-        document.body.classList.remove('is-intro');
-        qs<HTMLElement>('#intro').hidden = true;
-        hudRoot.inert = false;
-      },
       world,
+      game: game.debug(),
+      book,
     },
   });
 }

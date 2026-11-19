@@ -3,86 +3,24 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ARcane: cast spells with your bare hands</title>
+    <title>ARcane: free the Hushwood with your bare hands</title>
     <meta
       name="description"
-      content="ARcane turns the shapes and sweeps of your hands into spells in another world. Just a webcam and a browser. Nothing to install, nothing recorded."
+      content="ARcane is a gesture-cast fantasy game. Forty levels, eight bosses and nineteen spells, cast with the shapes and sweeps of your hands through a webcam. Nothing to install, nothing recorded."
     />
-    <meta name="theme-color" content="#0d0f0e" />
+    <meta name="theme-color" content="#0b0d0c" />
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="ARcane: cast spells with your bare hands" />
+    <meta property="og:title" content="ARcane: free the Hushwood with your bare hands" />
     <meta
       property="og:description"
-      content="Make a fist, draw a circle, sweep your hand. Magic answers in another world. Runs in your browser."
+      content="Make the sign. Cast the spell. Free the wood. A gesture-cast fantasy that runs in your browser."
     />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" type="image/png" href="/assets/arcane-logo-tab.png" />
   </head>
   <body class="is-intro">
-    <div id="world" aria-label="The Hushwood casting ground"></div>
+    <div id="world" aria-label="The Hushwood"></div>
     <div id="hud"></div>
-
-    <main id="intro" class="intro">
-      <section class="onboarding-shell" role="dialog" aria-modal="true" aria-labelledby="onboarding-title" tabindex="-1">
-        <div class="onboarding-topline">
-          <span class="onboarding-brand"><span aria-hidden="true"></span> ARcane</span>
-          <span id="onboarding-step" class="onboarding-step" hidden>FIRST LIGHT <i>01 / 02</i></span>
-        </div>
-
-        <section id="onboarding-welcome" class="welcome-step" aria-labelledby="onboarding-title">
-          <div class="welcome-copy">
-            <h1 id="onboarding-title">Arcane</h1>
-            <div class="welcome-actions">
-              <button id="onboarding-begin" class="button-primary" type="button">Begin</button>
-            </div>
-            <p id="onboarding-message" class="onboarding-message" role="status" aria-live="polite"></p>
-          </div>
-
-        </section>
-
-        <section id="onboarding-story" class="story-step" aria-labelledby="story-quote" hidden>
-          <div class="story-copy">
-            <p class="story-quote" id="story-quote">“Long before the world forgot its magic, the forest learned to keep it.”</p>
-            <div class="story-body">
-              <p>In the forgotten reaches of Hushwood, something ancient stirs beneath the trees.</p>
-              <p>Once, magic flowed freely through this land. Then came the silence and the old paths vanished into mist. Now, strange lights flicker between the branches, and forgotten forces begin to awaken.</p>
-              <p>You have found your way here for a reason.</p>
-              <p>The forest does not answer words. It answers to intent and the will to shape what lies unseen.</p>
-              <p>Raise your hands. The woods are watching.</p>
-            </div>
-            <p class="story-end">Your story begins now</p>
-            <button id="onboarding-story-enter" class="button-primary" type="button">Enter Hushwood</button>
-          </div>
-        </section>
-
-        <section id="onboarding-guide" class="guide-step" aria-labelledby="guide-title" hidden>
-          <header class="guide-header">
-            <div>
-              <p class="eyebrow">Know your magic</p>
-              <h2 id="guide-title">Six spells. One pair of hands.</h2>
-              <p class="guide-lead">Each spell has its own move. Your live bindings are shown below.</p>
-            </div>
-          </header>
-          <div id="spell-guide-grid" class="spell-guide-grid" aria-label="Spell guide" tabindex="0"></div>
-          <aside class="casting-primer" aria-label="How casting works">
-            <strong>CASTING</strong>
-            <p>Follow the hand marker to aim. Hold hand signs until their charge fills; sweeps and circles cast as soon as the motion is recognized. For Arcane Bow, point, pinch with your other hand, pull, then release.</p>
-          </aside>
-          <p class="combat-note">
-            <strong>Hold your ground</strong> Your view stays fixed, leaving both hands free to cast. Eight spirits approach after “Awaken the wood”. Watch their health and attack wind-up; freeze them to interrupt, or use Mend and Aegis to survive. Spells are gesture-controlled—no movement or number-key casting.
-          </p>
-          <p id="guide-message" class="onboarding-message" role="status" aria-live="polite"></p>
-          <footer class="guide-actions">
-            <button id="guide-back" class="button-secondary" type="button">Back to setup</button>
-            <div class="guide-action-end">
-              <button id="guide-skip" class="button-secondary" type="button">Close guide</button>
-              <button id="guide-enter" class="button-primary" type="button">Enter the arena</button>
-            </div>
-          </footer>
-        </section>
-      </section>
-    </main>
-
     <noscript>ARcane needs JavaScript and a webcam to cast spells.</noscript>
     <script type="module" src="/src/main.ts"></script>
   </body>

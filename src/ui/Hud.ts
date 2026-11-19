@@ -94,7 +94,9 @@ export class Hud {
   private build(): void {
     this.dock.replaceChildren();
     this.slots.clear();
-    for (const spell of this.book.spells) {
+    const spells = this.book.available;
+    if (spells.length > 6) this.dock.dataset.count = String(spells.length); else delete this.dock.dataset.count;
+    for (const spell of spells) {
       const g: GestureDef | undefined = this.book.gestureFor(spell.id);
       const icon = createSpellIcon(spell.id);
       const gesture = el('span', { class: 'gesture' }, g ? `${g.glyph} ${g.name}` : '');
@@ -102,13 +104,14 @@ export class Hud {
       const cooldown = el('span', { class: 'cooldown', 'aria-hidden': 'true' });
       const root = el(
         'div',
-        { class: 'slot', style: { '--spell': spell.color }, title: g?.hint ?? '', 'aria-label': `${spell.name}: ${g?.name ?? 'unbound'}` },
+        { class: `slot${spell.tier === 'legend' ? ' is-legend' : ''}`, title: g?.hint ?? '', 'aria-label': `${spell.name}: ${g?.name ?? 'unbound'}` },
         cooldown,
         icon,
         el('span', { class: 'name' }, spell.name),
         gesture,
         bar,
       );
+      root.style.setProperty("--spell", spell.color);
       this.dock.append(root);
       this.slots.set(spell.id, { root, gesture, bar, cooldown, effect: spell.effect, recovering: false });
     }

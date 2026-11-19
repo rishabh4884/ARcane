@@ -15,13 +15,30 @@ export class SpellBook {
   private bySpell = new Map<string, string>();
   private store: KeyValueStore | null | undefined;
   private listeners = new Set<() => void>();
+  /** Spells the caster knows. Base spells always; legendary ones once their boss falls. */
+  private known = new Set<string>();
 
   constructor(spells: readonly SpellDef[], gestures: readonly GestureDef[], store?: KeyValueStore | null) {
     this.spells = spells;
     this.gestures = gestures;
     this.store = store;
+    for (const s of spells) if (s.tier !== 'legend') this.known.add(s.id);
     this.restore();
   }
+
+  /** Legendary spells learned so far (base spells are always known). */
+  setLearned(ids: Iterable<string>): void {
+    const next = new Set(this.spells.filter((s) => s.tier !== 'legend').map((s) => s.id));
+    for (const id of ids) if (this.spells.some((s) => s.id === id)) next.add(id);
+    const changed = next.size !== this.known.size || [...next].some((id) => !this.known.has(id));
+    this.known = next;
+    if (changed) this.listeners.forEach((fn) => fn());
+  }
+
+  isKnown(spellId: string): boolean { return this.known.has(spellId); }
+
+  /** The spells the caster can cast right now, in grimoire order. */
+  get available(): SpellDef[] { return this.spells.filter((s) => this.known.has(s.id)); }
 
   gestureFor(spellId: string): GestureDef | undefined {
     const id = this.bySpell.get(spellId);
@@ -30,7 +47,7 @@ export class SpellBook {
 
   spellFor(gestureId: string): SpellDef | undefined {
     for (const [spellId, gId] of this.bySpell) {
-      if (gId === gestureId) return this.spells.find((s) => s.id === spellId);
+      if (gId === gestureId && this.known.has(spellId)) return this.spells.find((s) => s.id === spellId);
     }
     return undefined;
   }
@@ -40,7 +57,7 @@ export class SpellBook {
    * (the library lists stricter variants first, and the engine honours that order).
    */
   activeGestures(): GestureDef[] {
-    const bound = new Set(this.bySpell.values());
+    const bound = new Set([...this.bySpell].filter(([spellId]) => this.known.has(spellId)).map(([, g]) => g));
     return this.gestures.filter((g) => bound.has(g.id));
   }
 

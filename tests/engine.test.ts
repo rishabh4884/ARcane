@@ -95,16 +95,16 @@ describe('GestureEngine (end to end on synthetic hands)', () => {
   });
 
   it('ignores gestures that are not bound to a spell', () => {
-    // Every gesture in the library is switched on here, but only the default seven are bound.
+    // Every gesture in the library is switched on here, but only the known spells' gestures are bound.
     const d = makeDriver(liveGestures());
-    expect(d.hold(0.7, 0.5, POSES.trident, 1500)).toEqual([]);
+    expect(d.hold(0.7, 0.5, POSES.fist, 1500)).toEqual([]);
     expect(d.hold(0.7, 0.5, POSES.open, 1500)).toEqual(['aegis']);
     expect(GESTURES.length).toBeGreaterThan(liveGestures().length);
   });
 
   it('fires a newly bound gesture and nothing else', () => {
-    const d = makeDriver(liveGestures([['spell-1', 'trident']]));
-    expect(d.hold(0.7, 0.5, POSES.trident, 1500)).toEqual(['trident']);
+    const d = makeDriver(liveGestures([['spell-1', 'fist']]));
+    expect(d.hold(0.7, 0.5, POSES.fist, 1500)).toEqual(['fist']);
   });
 
   it('only charges a bound open-palm ward while the palm is still', () => {

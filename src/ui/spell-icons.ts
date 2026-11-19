@@ -38,6 +38,62 @@ const ICONS: Record<string, readonly Shape[]> = {
     { tag: 'path', className: 'shield-seam', attrs: { d: 'M24 8v32m-9-21 9 5 9-5' } },
     { tag: 'path', className: 'shield-rune', attrs: { d: 'm18 26 4 4 8-10' } },
   ],
+  'spell-8': [
+    { tag: 'path', className: 'icon-main', attrs: { d: 'M8 40c6-4 4-12 10-16s14-2 16-10' } },
+    { tag: 'path', className: 'icon-accent', attrs: { d: 'M34 14c2-4 6-6 8-10M30 20c4 0 8 2 10 6' } },
+    { tag: 'circle', className: 'icon-accent', attrs: { cx: '12', cy: '38', r: '2.5', fill: 'currentColor' } },
+  ],
+  'spell-9': [
+    { tag: 'path', className: 'icon-main', attrs: { d: 'M24 44V26c0-6-8-8-8-16M24 30c0-6 9-7 9-15M24 36c-4-2-10 0-12-4' } },
+    { tag: 'path', className: 'icon-accent', attrs: { d: 'M16 10l-3-3M33 15l3-3M12 32l-3 1M8 44h32' } },
+  ],
+  'spell-10': [
+    { tag: 'path', className: 'icon-main', attrs: { d: 'M8 30C14 12 34 8 42 14 30 12 18 18 14 32z', fill: 'currentColor' } },
+    { tag: 'path', className: 'icon-accent', attrs: { d: 'M6 40l10-6M14 42l6-4' } },
+  ],
+  'spell-11': [
+    { tag: 'circle', className: 'icon-main', attrs: { cx: '14', cy: '16', r: '4' } },
+    { tag: 'circle', className: 'icon-main', attrs: { cx: '33', cy: '12', r: '3.5' } },
+    { tag: 'circle', className: 'icon-main', attrs: { cx: '30', cy: '32', r: '4.5' } },
+    { tag: 'circle', className: 'icon-main', attrs: { cx: '12', cy: '35', r: '3' } },
+    { tag: 'path', className: 'icon-accent', attrs: { d: 'M18 18c4 4 6 8 8 12M30 15c-4 4-8 10-15 18' } },
+  ],
+  'spell-12': [
+    { tag: 'circle', className: 'icon-main', attrs: { cx: '24', cy: '24', r: '7' } },
+    { tag: 'path', className: 'icon-accent', attrs: { d: 'M24 5v7M24 36v7M5 24h7M36 24h7M10.5 10.5l5 5M32.5 32.5l5 5M37.5 10.5l-5 5M15.5 32.5l-5 5' } },
+  ],
+  'spell-13': [
+    { tag: 'path', className: 'icon-main', attrs: { d: 'M4 34h40M24 34l-4-10 6-6-3-10' } },
+    { tag: 'path', className: 'icon-accent', attrs: { d: 'M10 34l4-6 4 6M30 34l4-8 5 8' } },
+  ],
+  'spell-14': [
+    { tag: 'path', className: 'icon-main', attrs: { d: 'M24 6c10 6 14 18 0 36C10 24 14 12 24 6z' } },
+    { tag: 'path', className: 'icon-accent', attrs: { d: 'M24 12v24M12 18c-4 2-6 6-6 10M36 18c4 2 6 6 6 10' } },
+  ],
+  'spell-15': [
+    { tag: 'path', className: 'icon-main', attrs: { d: 'M4 30c6-8 10 8 16 0s10 8 16 0 6-4 8-6' } },
+    { tag: 'path', className: 'icon-accent', attrs: { d: 'M30 16c4-6 10-4 12 0-4-1-6 0-8 3M4 40c6-6 10 6 16 0s10 6 16 0' } },
+  ],
+  'spell-16': [
+    { tag: 'path', className: 'icon-main', attrs: { d: 'M24 44V22M24 22c-10 0-14-8-14-16 8 0 14 6 14 16zM24 26c8 0 12-6 12-14-6 0-12 4-12 14z' } },
+    { tag: 'circle', className: 'icon-accent', attrs: { cx: '24', cy: '14', r: '2', fill: 'currentColor' } },
+  ],
+  'spell-17': [
+    { tag: 'path', className: 'icon-main', attrs: { d: 'M12 40l4-12 10-4 8 2 6 12M26 24l-2-8 4-6' } },
+    { tag: 'path', className: 'icon-accent', attrs: { d: 'M28 10l-4-6M28 10l6-4M24 16l-6-6M30 12l8-2' } },
+  ],
+  'spell-18': [
+    { tag: 'path', className: 'icon-main', attrs: { d: 'M30 6l2.5 7 7.5.5-6 4.5 2 7-6-4-6 4 2-7-6-4.5 7.5-.5z', fill: 'currentColor' } },
+    { tag: 'path', className: 'icon-accent', attrs: { d: 'M20 22L8 40M28 28l-8 14M14 18L4 30' } },
+  ],
+  'spell-19': [
+    { tag: 'path', className: 'icon-main', attrs: { d: 'M16 30c0-10 3-18 8-18s8 8 8 18zM12 30h24M22 34a2 2 0 0 0 4 0' } },
+    { tag: 'path', className: 'icon-accent', attrs: { d: 'M8 40c5 3 27 3 32 0' } },
+  ],
+  'spell-20': [
+    { tag: 'path', className: 'icon-main', attrs: { d: 'M4 36h40M12 36a12 12 0 0 1 24 0' } },
+    { tag: 'path', className: 'icon-accent', attrs: { d: 'M24 18V6M14 21l-6-8M34 21l6-8M24 44v-4' } },
+  ],
 };
 
 const SVG_NS = 'http://www.w3.org/2000/svg';

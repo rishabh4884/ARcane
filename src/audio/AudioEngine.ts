@@ -150,6 +150,17 @@ export class AudioEngine {
       case 'projectile': this.tone({ type: 'sine', freq: 620, freqEnd: 980, decay: 1.6, attack: 0.25, gain: 0.05, pan: event.pan, vibrato: { rate: 7, depth: 18 }, reverb: 0.6 }); break;
       case 'encounter': this.sting(event.mode); break;
       case 'hush': this.hush(event.duration); break;
+      case 'wave': this.waveCall(event.index); break;
+      case 'wave-clear': [659.25, 783.99, 987.77].forEach((f, i) => this.tone({ type: 'sine', freq: f, decay: 1.2, gain: 0.05, when: i * 0.1, reverb: 1 })); break;
+      case 'boss': if (event.phase > 0) this.roar(event.kind, 0, 1.2); break;
+      case 'boss-arrive': this.roar(event.kind, event.pan, 1.6); break;
+      case 'toll': this.toll(); break;
+      case 'quake': this.noise({ filter: 'lowpass', freq: 140, brown: true, attack: 0.02, decay: 0.6 + event.amount * 0.4, gain: 0.35 * Math.min(1.4, event.amount) }); break;
+      case 'gust': this.noise({ filter: 'bandpass', freq: 500, freqEnd: 1800, q: 0.7, attack: 0.3, decay: 1.6, gain: 0.22, reverb: 0.6 }); break;
+      case 'darkness':
+        this.tone({ type: 'sawtooth', freq: 41, attack: 1.5, decay: 4, gain: 0.12, filter: { type: 'lowpass', freq: 220, q: 2 }, reverb: 1, vibrato: { rate: 0.6, depth: 3 } });
+        this.noise({ filter: 'lowpass', freq: 300, brown: true, attack: 1.4, decay: 3.5, gain: 0.18, reverb: 1 });
+        break;
     }
   }
 
@@ -265,7 +276,90 @@ export class AudioEngine {
         this.tone({ type: 'sine', freq: 1318.5, decay: 1.6, gain: 0.05, when: 0.18, reverb: 1 });
         this.tone({ type: 'sine', freq: 1975.5, decay: 1.4, gain: 0.035, when: 0.2, reverb: 1 });
         break;
+      case 'fire':
+        this.noise({ filter: 'bandpass', freq: 600, freqEnd: 2400, q: 0.8, attack: 0.03, decay: 0.45, gain: 0.3, pan });
+        this.noise({ filter: 'lowpass', freq: 400, brown: true, attack: 0.05, decay: 0.6, gain: 0.25, pan, tremolo: { rate: 18, depth: 0.5 } });
+        this.tone({ type: 'sawtooth', freq: 90, freqEnd: 200, decay: 0.3, gain: 0.05, filter: { type: 'lowpass', freq: 800 }, pan });
+        break;
+      case 'roots':
+        this.noise({ filter: 'lowpass', freq: 220, brown: true, attack: 0.25, decay: 0.9, gain: 0.4, pan });
+        for (let i = 0; i < 6; i++) this.noise({ filter: 'bandpass', freq: 700 + Math.random() * 900, q: 6, decay: 0.08, gain: 0.12, when: 0.35 + i * 0.07, pan });
+        break;
+      case 'blade':
+        this.noise({ filter: 'bandpass', freq: 2200, freqEnd: 600, q: 2, attack: 0.01, decay: 0.5, gain: 0.25, pan });
+        this.tone({ type: 'sine', freq: 1760, freqEnd: 880, decay: 0.6, gain: 0.06, pan, reverb: 0.8 });
+        break;
+      case 'wisps':
+        for (let i = 0; i < 4; i++) this.tone({ type: 'sine', freq: 880 + i * 220, freqEnd: 1760 + i * 330, decay: 0.7, gain: 0.05, when: i * 0.08, pan: (i - 1.5) * 0.3, reverb: 0.9, vibrato: { rate: 9, depth: 20 } });
+        break;
+      case 'flare':
+        this.tone({ type: 'sine', freq: 220, freqEnd: 880, attack: 0.2, decay: 0.15, gain: 0.12, pan });
+        this.noise({ filter: 'highpass', freq: 2500, attack: 0.22, decay: 1.2, gain: 0.2, reverb: 1 });
+        [1046.5, 1318.5, 1568].forEach((f, i) => this.tone({ type: 'sine', freq: f, decay: 1.6, gain: 0.05, when: 0.25 + i * 0.02, reverb: 1 }));
+        break;
+      case 'quake':
+        this.noise({ filter: 'lowpass', freq: 120, brown: true, attack: 0.05, decay: 2.2, gain: 0.7, pan });
+        this.tone({ type: 'sine', freq: 46, freqEnd: 30, decay: 1.8, gain: 0.5 });
+        break;
+      case 'veil':
+        [392, 466.16, 587.33, 698.46].forEach((f, i) => this.tone({ type: 'sine', freq: f, attack: 0.6, decay: 4, gain: 0.05, when: i * 0.15, reverb: 1, detune: (i - 1.5) * 6 }));
+        this.noise({ filter: 'highpass', freq: 5000, attack: 0.8, decay: 3, gain: 0.05, reverb: 1, tremolo: { rate: 4, depth: 0.6 } });
+        break;
+      case 'tide':
+        this.noise({ filter: 'lowpass', freq: 600, freqEnd: 1800, brown: true, attack: 0.6, decay: 2.4, gain: 0.45, reverb: 0.8 });
+        this.noise({ filter: 'highpass', freq: 3000, attack: 0.9, decay: 1.5, gain: 0.12, reverb: 0.9 });
+        this.tone({ type: 'sine', freq: 65, freqEnd: 98, attack: 0.5, decay: 2.5, gain: 0.25, reverb: 0.6 });
+        break;
+      case 'bloom':
+        [523.25, 659.25, 783.99, 1046.5, 1318.5, 1568].forEach((f, i) => this.tone({ type: 'sine', freq: f, decay: 3, attack: 0.05, gain: 0.05, when: i * 0.12, reverb: 1 }));
+        break;
+      case 'stag':
+        for (let i = 0; i < 10; i++) this.noise({ filter: 'lowpass', freq: 260, brown: true, decay: 0.18, gain: 0.3, when: i * 0.17, pan: pan + (i / 10 - 0.5) });
+        this.tone({ type: 'sawtooth', freq: 220, freqEnd: 440, attack: 0.1, decay: 1.2, gain: 0.05, filter: { type: 'bandpass', freq: 1200, q: 3 }, reverb: 1 });
+        break;
+      case 'starfall':
+        for (let i = 0; i < 8; i++) this.tone({ type: 'sine', freq: 2600 - i * 180, freqEnd: 400, decay: 0.9, gain: 0.04, when: 0.4 + i * 0.18, pan: (Math.random() - 0.5), reverb: 1 });
+        break;
+      case 'stillness':
+        this.toll();
+        this.noise({ filter: 'highpass', freq: 6000, attack: 0.1, decay: 3, gain: 0.03, reverb: 1 });
+        break;
+      case 'dawn':
+        [261.63, 329.63, 392, 523.25, 659.25, 783.99].forEach((f, i) => this.tone({ type: 'sawtooth', freq: f, attack: 0.15, decay: 2.6, gain: 0.03, when: i * 0.03, filter: { type: 'lowpass', freq: 2400 }, reverb: 1 }));
+        this.noise({ filter: 'bandpass', freq: 1200, freqEnd: 400, q: 0.8, attack: 0.1, decay: 1.8, gain: 0.25 });
+        break;
     }
+  }
+
+  /** A wave of creatures is coming: a low horn far off in the wood. */
+  private waveCall(index: number): void {
+    const f = 98 + index * 14.7;
+    this.tone({ type: 'sawtooth', freq: f, attack: 0.5, decay: 2.2, gain: 0.07, filter: { type: 'lowpass', freq: 600, q: 3 }, reverb: 1, vibrato: { rate: 4, depth: 3 } });
+    this.tone({ type: 'sine', freq: f / 2, attack: 0.6, decay: 2.4, gain: 0.12, reverb: 1 });
+  }
+
+  /** A great creature's voice: deep, slow, with a grain in its throat. */
+  private roar(kind: string, pan: number, size: number): void {
+    const base = kind === 'king' ? 32 : kind === 'grael' ? 38 : kind === 'matron' ? 140 : kind === 'widow' ? 110 : kind === 'herald' ? 90 : kind === 'fenwyrm' ? 55 : kind === 'stag' ? 70 : 60;
+    this.tone({ type: 'sawtooth', freq: base * 1.3, freqEnd: base, attack: 0.3, decay: 2.2 * size, gain: 0.14, filter: { type: 'lowpass', freq: 700, q: 4 }, pan, reverb: 1, vibrato: { rate: 7, depth: base * 0.04 } });
+    this.tone({ type: 'sine', freq: base / 2, attack: 0.4, decay: 2.4 * size, gain: 0.3, pan, reverb: 0.8 });
+    this.noise({ filter: 'bandpass', freq: base * 8, freqEnd: base * 3, q: 1.5, attack: 0.4, decay: 1.8 * size, gain: 0.14, pan, reverb: 1, tremolo: { rate: 13, depth: 0.6 } });
+  }
+
+  /** The Herald's bell: one heavy toll and its long, inharmonic ring. */
+  private toll(): void {
+    [1, 2.0, 2.4, 3.0, 4.2, 5.4].forEach((r, i) => this.tone({ type: 'sine', freq: 98 * r, attack: 0.005, decay: 5 - i * 0.6, gain: 0.12 / (1 + i * 0.6), reverb: 1, detune: (i % 2 ? 7 : -5) }));
+    this.noise({ filter: 'lowpass', freq: 180, brown: true, decay: 0.8, gain: 0.3 });
+  }
+
+  /** Interface sounds: a soft tick for hovering, a woody knock for choosing. */
+  ui(kind: 'hover' | 'select' | 'back' | 'unlock' | 'story'): void {
+    if (!this.ctx) return;
+    if (kind === 'hover') this.tone({ type: 'sine', freq: 1760, decay: 0.05, gain: 0.015 });
+    else if (kind === 'select') { this.tone({ type: 'triangle', freq: 440, freqEnd: 330, decay: 0.14, gain: 0.07 }); this.noise({ filter: 'bandpass', freq: 1800, q: 3, decay: 0.04, gain: 0.05 }); }
+    else if (kind === 'back') this.tone({ type: 'triangle', freq: 330, freqEnd: 220, decay: 0.14, gain: 0.06 });
+    else if (kind === 'unlock') [523.25, 659.25, 783.99, 1046.5, 1318.5].forEach((f, i) => this.tone({ type: 'sine', freq: f, decay: 2.2, gain: 0.06, when: i * 0.09, reverb: 1 }));
+    else [196, 293.66, 392].forEach((f, i) => this.tone({ type: 'sine', freq: f, attack: 0.4, decay: 3, gain: 0.05, when: i * 0.2, reverb: 1 }));
   }
 
   private spellImpact(effect: SpellEffect, pan: number): void {
@@ -397,8 +491,22 @@ export class AudioEngine {
         this.tone({ type: 'sawtooth', freq: 74, freqEnd: 55, attack: 0.4, decay: 1.6, gain: 0.12, filter: { type: 'bandpass', freq: 420, q: 5 }, pan, reverb: 0.8, vibrato: { rate: 3.5, depth: 4 } });
         this.tone({ type: 'sine', freq: 111, freqEnd: 82, attack: 0.4, decay: 1.6, gain: 0.05, pan, reverb: 0.8 });
         break;
-      default:
+      case 'mossling':
+        this.tone({ type: 'square', freq: 520, freqEnd: 760, attack: 0.05, decay: 0.4, gain: 0.025, filter: { type: 'bandpass', freq: 1400, q: 5 }, pan, vibrato: { rate: 30, depth: 40 } });
+        break;
+      case 'thornback':
+        for (let i = 0; i < 3; i++) this.noise({ filter: 'lowpass', freq: 300, brown: true, decay: 0.15, gain: 0.25, when: i * 0.35, pan });
+        this.noise({ filter: 'bandpass', freq: 900, q: 2, attack: 0.05, decay: 0.4, gain: 0.12, when: 0.9, pan });
+        break;
+      case 'moth':
+        this.noise({ filter: 'bandpass', freq: 160, q: 3, attack: 0.2, decay: 1.2, gain: 0.2, pan, tremolo: { rate: 38, depth: 0.9 } });
+        break;
+      case 'wraith':
         this.noise({ filter: 'bandpass', freq: 2400, freqEnd: 1600, q: 3, attack: 0.3, decay: 1.2, gain: 0.08, pan, reverb: 0.9, tremolo: { rate: 7, depth: 0.7 } });
+        break;
+      default:
+        // A boss's tell: its voice, louder for the heavy attacks.
+        this.roar(kind, pan, 0.7);
         break;
     }
   }

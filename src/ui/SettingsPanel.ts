@@ -62,7 +62,7 @@ export class SettingsPanel {
 
   private render(): void {
     const { book } = this.o;
-    const rows = book.spells.map((spell) => {
+    const rows = book.available.map((spell) => {
       const current = book.gestureFor(spell.id);
       const option = (g: GestureDef) => {
         const opt = el('option', { value: g.id }, `${g.glyph} ${g.name}${isDualGesture(g) ? ' · 2 hands' : ''}`);

@@ -2,8 +2,7 @@ import * as THREE from 'three';
 import type { SpellDef } from '../config/spells.ts';
 import type { HandSide } from '../tracking/types.ts';
 import { ScreenFX } from '../ui/ScreenFX.ts';
-import { Encounter } from './Encounter.ts';
-import { EnemyCombat } from './EnemyCombat.ts';
+import { Encounter, type Foe } from './Encounter.ts';
 import { createArrowMesh, createSpellAnimation, type SpellAnimation } from './effects.ts';
 import { GameEvents } from './events.ts';
 import { ParticleSystem } from './particles.ts';
@@ -13,9 +12,28 @@ import { makeLabelTexture } from './textures.ts';
 import { ForestEnvironment } from './ForestEnvironment.ts';
 import { FrameBudget } from './FrameBudget.ts';
 import { CasterView, worldInputBlocked } from './CasterView.ts';
-import { aimAssistRadius, SPELL_RANGE, chooseRayTarget, screenPointAtDepth, terrainHeight } from './spatial.ts';
+import { SPELL_RANGE, chooseRayTarget, screenPointAtDepth, terrainHeight } from './spatial.ts';
 import { disposeGroup, type ScreenFeedback } from './vfx.ts';
 import { SPELL_LIGHTS, SPELL_LIGHT_COUNT } from './LanternLighting.ts';
+import type { LevelDef, Mood } from '../game/campaign.ts';
+import type { EncounterSnapshot } from './Encounter.ts';
+import { lerpMood, MOODS, moodState, type MoodState } from './moods.ts';
+import type { ParticleSystem as Particles } from './particles.ts';
+import { DESIGNS } from './characters/index.ts';
+import { Character } from './rig/Character.ts';
+
+/** What a cutscene may use while it holds the camera. */
+export interface Stage {
+  scene: THREE.Scene;
+  camera: THREE.PerspectiveCamera;
+  particles: Particles;
+  mist: Particles;
+  light(position: THREE.Vector3, color: THREE.Color, intensity: number, duration: number, distance?: number): void;
+  illuminate(slot: number, position: THREE.Vector3, color: THREE.Color, level: number, radius: number): void;
+  shake(amount: number): void;
+  flash(color: string, strength: number): void;
+  setMood(mood: Mood, seconds?: number): void;
+}
 
 interface FloatingLabel {
   sprite: THREE.Sprite;
@@ -42,7 +60,7 @@ interface Wisp {
 interface StuckArrow {
   root: THREE.Group;
   fades: Array<{ material: THREE.Material; base: number }>;
-  owner: EnemyCombat | null;
+  owner: Foe | null;
   age: number;
   life: number;
 }
@@ -78,7 +96,6 @@ export class World {
   private readonly wisps: Record<HandSide, Wisp>;
   private readonly labels: FloatingLabel[] = [];
   private readonly spellAnimations: SpellAnimation[] = [];
-  private readonly enemies: EnemyCombat[] = [];
   private readonly stuckArrows: StuckArrow[] = [];
   private readonly worldLights = Array.from({ length: SPELL_LIGHT_COUNT }, () => ({ position: new THREE.Vector3(), color: new THREE.Color(), level: 0, radius: 10 }));
   private readonly container: HTMLElement;
@@ -108,6 +125,17 @@ export class World {
   private hushClock = 0;
   private hushAt = 28 + Math.random() * 14;
   private hushEnds = -1;
+  /** A cutscene holds the camera. */
+  cinematic: Stage | null = null;
+  /** The menu: the camera drifts slowly through the wood. */
+  private ambient = false;
+  private ambientTime = 0;
+  private readonly moodFrom: MoodState = moodState(MOODS.edge);
+  private readonly moodTo: MoodState = moodState(MOODS.edge);
+  private readonly moodNow: MoodState = moodState(MOODS.edge);
+  private moodT = 1;
+  private moodSeconds = 1;
+  private darkLevel = 0;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -138,7 +166,7 @@ export class World {
     }
 
     this.encounter = new Encounter(this.scene, this.camera, this.environment.obstacles,
-      (ray, range) => this.environment.intersect(ray, range), () => this.controls.reset(),
+      (ray, range) => this.environment.intersect(ray, range),
       { particles: this.particles, mist: this.mist, events: this.events });
     this.renderer.domElement.dataset.world = 'ready';
     // The near frame rides with the eye.
@@ -225,8 +253,6 @@ export class World {
       animation.dispose();
     }
     this.spellAnimations.length = 0;
-    for (const enemy of this.enemies) enemy.dispose();
-    this.enemies.length = 0;
     this.foreground.dispose();
     this.post.dispose();
     this.screenFx.dispose();
@@ -266,6 +292,89 @@ export class World {
     }
   }
 
+  /* ─────────────────────────────── game flow ─────────────────────────────── */
+
+  /**
+   * Behind the loading screen: compile the wood's shaders and build every creature once, so the
+   * first wave does not hitch while the GPU learns them.
+   */
+  async warmup(step: (fraction: number, label: string) => void): Promise<void> {
+    const frame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
+    step(0.08, 'Painting the wood…');
+    await frame();
+    this.renderer.compile(this.scene, this.camera);
+    const kinds = Object.keys(DESIGNS) as Array<keyof typeof DESIGNS>;
+    const figures: Character[] = [];
+    for (let i = 0; i < kinds.length; i++) {
+      step(0.12 + (i / kinds.length) * 0.5, `Waking ${DESIGNS[kinds[i]].name}…`);
+      const c = new Character(DESIGNS[kinds[i]]);
+      c.group.position.set(0, -50, -20);
+      this.scene.add(c.group);
+      figures.push(c);
+      await frame();
+    }
+    this.renderer.compile(this.scene, this.camera);
+    for (const c of figures) c.dispose();
+  }
+
+  startLevel(level: LevelDef, mood: Mood): void {
+    this.endCinematic();
+    this.ambient = false;
+    this.controls.reset();
+    this.clearStuckArrows();
+    this.setMood(mood, 1.5);
+    this.encounter.startLevel(level);
+  }
+
+  stopLevel(): void { this.encounter.stop(); this.clearStuckArrows(); }
+
+  snapshot(): EncounterSnapshot { return this.encounter.snapshot(); }
+
+  /** The menu's slow drift through the wood. */
+  setAmbient(on: boolean): void {
+    this.ambient = on;
+    if (!on) this.controls.reset();
+  }
+
+  setMood(mood: Mood, seconds = 2): void {
+    this.moodFrom.fog.copy(this.moodNow.fog); this.moodFrom.sky.copy(this.moodNow.sky); this.moodFrom.density = this.moodNow.density;
+    this.moodFrom.tint.copy(this.moodNow.tint); this.moodFrom.lift.copy(this.moodNow.lift); this.moodFrom.saturation = this.moodNow.saturation;
+    this.moodFrom.exposure = this.moodNow.exposure; this.moodFrom.vignette = this.moodNow.vignette;
+    const to = moodState(MOODS[mood]);
+    Object.assign(this.moodTo, to);
+    this.moodT = 0;
+    this.moodSeconds = Math.max(0.01, seconds);
+  }
+
+  /** Hand the camera and the stage to a cutscene. */
+  beginCinematic(): Stage {
+    this.encounter.group.visible = false;
+    this.foreground.group.visible = false;
+    this.ambient = false;
+    const stage: Stage = {
+      scene: this.scene, camera: this.camera, particles: this.particles, mist: this.mist,
+      light: (p, c, i, d, r) => this.flashLight(p, c, i, d, r),
+      illuminate: (slot, position, color, level, radius) => {
+        const light = this.worldLights[slot];
+        if (!light) return;
+        light.position.copy(position); light.color.copy(color); light.level = Math.max(0, level); light.radius = radius;
+      },
+      shake: (amount) => this.shake(amount),
+      flash: (color, strength) => this.feedback.flash(color, strength),
+      setMood: (mood, seconds) => this.setMood(mood, seconds),
+    };
+    this.cinematic = stage;
+    return stage;
+  }
+
+  endCinematic(): void {
+    if (!this.cinematic) return;
+    this.cinematic = null;
+    this.encounter.group.visible = true;
+    this.foreground.group.visible = true;
+    this.controls.reset();
+  }
+
   /** Remaining per-spell recovery (seconds) and its full length, for the HUD. */
   cooldowns(): Record<string, { remaining: number; total: number }> {
     return this.encounter.cooldowns();
@@ -273,7 +382,7 @@ export class World {
 
   /** A spell is released by a tracked hand; no movement or number-key controls. */
   cast(spell: SpellDef, from?: HandSide | 'both', detail?: string): boolean {
-    if (this.disposed || worldInputBlocked()) return false;
+    if (this.disposed || worldInputBlocked() || this.cinematic) return false;
     const pan = this.panFor(from);
     if (!this.encounter.cast(spell.effect)) {
       this.events.emit({ type: 'cast-refused', effect: spell.effect, pan });
@@ -283,20 +392,18 @@ export class World {
     this.scene.updateMatrixWorld(true);
     const color = new THREE.Color(spell.color);
     const origin = this.castOrigin(from).clone();
-    const selected = this.selectSpellTarget(origin);
+    const aim = new THREE.Ray(this.camera.position.clone(), origin.clone().sub(this.camera.position).normalize());
+    const selected = this.selectSpellTarget(aim);
     const target = selected.point;
-    let enemy = selected.enemy;
-    if (spell.effect === 'lightning' && !enemy) {
-      // Lightning falls down a column: aiming at or above a spirit strikes the spirit below.
-      const aim = origin.clone().project(this.camera);
-      const column = this.encounter.columnTarget(aim.x, aim.y);
-      if (column) { enemy = column.enemy; target.copy(column.point); }
+    let foe = selected.foe;
+    if (spell.effect === 'lightning' && !foe) {
+      // Lightning falls down a column: aiming at or above a creature strikes the one below.
+      const ndc = origin.clone().project(this.camera);
+      const column = this.encounter.columnTarget(ndc.x, ndc.y);
+      if (column) { foe = column.foe; target.copy(column.point); }
     }
-    if (spell.effect === 'arrow' && enemy && this.encounter.hasEnemy(enemy)) {
-      // Fly to the spirit's actual body, not the edge of its generous aim-assist box.
-      const ray = new THREE.Ray(this.camera.position.clone(), origin.clone().sub(this.camera.position).normalize());
-      this.encounter.bodyPoint(enemy, ray, target);
-    }
+    if ((spell.effect === 'arrow' || spell.effect === 'fire' || spell.effect === 'frost') && foe) this.encounter.bodyPoint(foe, aim, target);
+    const plan = this.encounter.resolve(spell.effect, aim, foe, target);
     const effectTarget = spell.effect === 'summon' ? origin : target;
     const targetNdc = effectTarget.clone().project(this.camera);
     const cameraTarget = effectTarget.clone().applyMatrix4(this.camera.matrixWorldInverse);
@@ -312,6 +419,9 @@ export class World {
       depth: Math.max(0.5, -cameraTarget.z),
       hand: from,
       fov: this.camera.fov,
+      targets: plan.points,
+      delays: plan.delays,
+      lane: plan.lane,
       particles: this.particles,
       mist: this.mist,
       screen: this.reducedMotion.matches ? { flash: (c, s, m) => this.feedback.flash(c, s * 0.4, m), shake: () => undefined } : this.feedback,
@@ -324,15 +434,14 @@ export class World {
         light.level = Math.max(0, level);
         light.radius = radius;
       },
-      onStick: spell.effect === 'arrow' ? (point, tip, scale) => this.stickArrow(point, tip, scale, color, enemy) : undefined,
+      onStick: spell.effect === 'arrow' ? (point, tip, scale) => this.stickArrow(point, tip, scale, color, foe) : undefined,
     });
-    if (spell.effect === 'summon') this.encounter.summon(origin, target, enemy);
+    if (spell.effect === 'summon') this.encounter.summon(origin, target, foe);
     const impactPan = THREE.MathUtils.clamp(targetNdc.x, -1, 1);
     const announceImpact = () => this.events.emit({ type: 'spell-impact', effect: spell.effect, position: effectTarget.clone(), pan: impactPan });
-    if (enemy && spell.effect !== 'summon') {
-      const hit = this.encounter.hasEnemy(enemy)
-        ? this.encounter.impactCallback(enemy, spell.effect, target, color)
-        : () => { enemy.impact(spell.effect, target, color); };
+    const single = spell.effect === 'arrow' || spell.effect === 'lightning' || spell.effect === 'frost' || spell.effect === 'fire';
+    if (foe && single) {
+      const hit = this.encounter.impact(foe, spell.effect, target.clone());
       animation.setImpactCallback(() => { announceImpact(); hit(); });
     } else {
       animation.setImpactCallback(announceImpact);
@@ -344,12 +453,6 @@ export class World {
     return true;
   }
 
-  /** Register an already-placed enemy model. The returned function unregisters its reactions. */
-  registerEnemy(root: THREE.Object3D): () => void {
-    const enemy = this.addEnemy(root);
-    return () => this.removeEnemy(enemy);
-  }
-
   /** Add camera trauma (0..1); shake falls off quadratically and decays in about half a second. */
   shake(amount: number): void {
     if (this.reducedMotion.matches) return;
@@ -359,7 +462,7 @@ export class World {
   /* ─────────────────────────────── internals ─────────────────────────────── */
 
   /** Leave the arrow embedded where it hit: in a spirit's body (moving with it) or in the world. */
-  private stickArrow(point: THREE.Vector3, tip: THREE.Vector3, scale: number, color: THREE.Color, enemy: EnemyCombat | null): void {
+  private stickArrow(point: THREE.Vector3, tip: THREE.Vector3, scale: number, color: THREE.Color, enemy: Foe | null): void {
     const { root, halo } = createArrowMesh(color);
     root.scale.setScalar(scale);
     root.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), tip);
@@ -368,7 +471,7 @@ export class World {
     halo.scale.multiplyScalar(0.7);
     this.scene.add(root);
     root.updateMatrixWorld(true);
-    const owner = enemy && this.encounter.hasEnemy(enemy) && this.encounter.attachToEnemy(enemy, root) ? enemy : null;
+    const owner = enemy && this.encounter.hasFoe(enemy) && this.encounter.attachToFoe(enemy, root) ? enemy : null;
     const fades: StuckArrow['fades'] = [];
     root.traverse((object) => {
       if (object instanceof THREE.Mesh || object instanceof THREE.Sprite) {
@@ -384,7 +487,7 @@ export class World {
     for (let i = this.stuckArrows.length - 1; i >= 0; i--) {
       const arrow = this.stuckArrows[i];
       arrow.age += dt;
-      const dissolve = arrow.owner ? this.encounter.enemyFade(arrow.owner) : 0;
+      const dissolve = arrow.owner ? this.encounter.foeFade(arrow.owner) : 0;
       // Bright on impact, settling to a quiet ember glow, then fading out (or with the spirit).
       const glow = 0.45 + 0.55 * Math.exp(-arrow.age * 1.6);
       const fade = Math.min(1, (arrow.life - arrow.age) / 1.2) * (1 - dissolve);
@@ -478,19 +581,6 @@ export class World {
     };
   }
 
-  private addEnemy(root: THREE.Object3D): EnemyCombat {
-    const enemy = new EnemyCombat(root);
-    this.enemies.push(enemy);
-    return enemy;
-  }
-
-  private removeEnemy(enemy: EnemyCombat): void {
-    const index = this.enemies.indexOf(enemy);
-    if (index < 0) return;
-    this.enemies.splice(index, 1);
-    enemy.dispose();
-  }
-
   private spawnLabel(text: string, color: string, origin: THREE.Vector3): void {
     const material = new THREE.SpriteMaterial({
       map: makeLabelTexture(text, color),
@@ -533,12 +623,10 @@ export class World {
     return this.mid;
   }
 
-  private selectSpellTarget(origin: THREE.Vector3): { point: THREE.Vector3; enemy: EnemyCombat | null } {
-    const ray = new THREE.Ray(this.camera.position.clone(), origin.clone().sub(this.camera.position).normalize());
-    return chooseRayTarget(ray, SPELL_RANGE, this.environment.intersect(ray, SPELL_RANGE), [...this.enemies, ...this.encounter.reactions()],
-      (enemy, aim, point) => this.encounter.hasEnemy(enemy)
-        ? this.encounter.intersectEnemy(enemy, aim, point)
-        : enemy.intersectRay(aim, point, aimAssistRadius(enemy.root.getWorldPosition(this.scratch).distanceTo(aim.origin))));
+  private selectSpellTarget(ray: THREE.Ray): { point: THREE.Vector3; foe: Foe | null } {
+    const chosen = chooseRayTarget(ray, SPELL_RANGE, this.environment.intersect(ray, SPELL_RANGE), this.encounter.targets(),
+      (foe, aim, point) => this.encounter.intersectFoe(foe, aim, point));
+    return { point: chosen.point, foe: chosen.enemy };
   }
 
   private cursorToWorld(c: { x: number; y: number }, out: THREE.Vector3): THREE.Vector3 {
@@ -563,7 +651,9 @@ export class World {
 
   private frame(dt: number, render = true, renderDt = dt): void {
     this.idleTime += dt;
-    const paused = worldInputBlocked();
+    const paused = worldInputBlocked() && !this.cinematic;
+    this.updateMood(dt);
+    if (this.ambient && !this.cinematic) this.driftCamera(dt);
     this.updateHush(paused ? 0 : dt);
     // In a hush the wood slows almost to a stop rather than freezing: the stillness feels held.
     const stillness = 1 - this.hush * 0.93;
@@ -571,7 +661,7 @@ export class World {
     this.foreground.update(dt * stillness, this.camera, this.reducedMotion.matches);
     this.encounter.update(dt, paused, this.reducedMotion.matches);
     const simulationDt = paused ? 0 : dt;
-    for (const side of SIDES) this.updateWisp(this.wisps[side], dt);
+    for (const side of SIDES) { if (this.cinematic || this.ambient) this.wisps[side].cursor = null; this.updateWisp(this.wisps[side], dt); }
 
     for (let i = this.labels.length - 1; i >= 0; i--) {
       const l = this.labels[i];
@@ -612,10 +702,33 @@ export class World {
 
     this.particles.update(simulationDt || dt * 0.25);
     this.mist.update(simulationDt || dt * 0.25);
-    for (const enemy of this.enemies) enemy.update(simulationDt);
     this.updateStuckArrows(simulationDt);
     this.screenFx.setWard(this.encounter.player.shield / 45);
     if (render) this.render(renderDt);
+  }
+
+  private updateMood(dt: number): void {
+    this.moodT = Math.min(1, this.moodT + dt / this.moodSeconds);
+    const t = this.moodT * this.moodT * (3 - 2 * this.moodT);
+    const m = lerpMood(this.moodNow, this.moodFrom, this.moodTo, t);
+    const fog = this.scene.fog as THREE.FogExp2 | null;
+    if (fog) { fog.color.copy(m.fog); fog.density = m.density; }
+    if (this.scene.background instanceof THREE.Color) this.scene.background.copy(m.sky);
+    this.renderer.setClearColor(m.sky);
+    this.post.setGrade(m.tint, m.lift, m.saturation, m.exposure, m.vignette);
+    const dark = this.encounter.player.darkness > 0 && this.encounter.active ? 1 : 0;
+    this.darkLevel += (dark - this.darkLevel) * Math.min(1, dt * (dark ? 1.2 : 2.5));
+    this.post.setDark(this.darkLevel);
+  }
+
+  /** Slow, wandering look through the wood behind the menus. */
+  private driftCamera(dt: number): void {
+    this.ambientTime += dt;
+    const t = this.ambientTime;
+    this.camera.position.set(Math.sin(t * 0.05) * 3.5, 0, 17 + Math.sin(t * 0.031) * 2);
+    this.camera.position.y = terrainHeight(this.camera.position.x, this.camera.position.z) + 1.85 + Math.sin(t * 0.07) * 0.25;
+    this.camera.lookAt(Math.sin(t * 0.04 + 1) * 8, 2.2 + Math.sin(t * 0.05) * 0.6, -12);
+    this.camera.updateMatrixWorld(true);
   }
 
   private render(dt: number): void {

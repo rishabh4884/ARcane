@@ -4,6 +4,7 @@ import {
   Trail, WHITE, clamp01, disposeGroup, easeInOut, easeOutBack, easeOutCubic, energy, flareTexture, glowSprite,
   ringTexture, rng, type FxContext,
 } from './vfx.ts';
+import { createSpellAnimation2 } from './effects2.ts';
 
 export interface SpellAnimation {
   group: THREE.Group;
@@ -32,6 +33,11 @@ export interface SpellContext extends FxContext {
    * of the shared world lights; it fades within a few frames unless refreshed.
    */
   illuminate?: (slot: number, position: THREE.Vector3, color: THREE.Color, level: number, radius: number) => void;
+  /** Multi-target spells: where each hit lands and when (seconds after the cast). */
+  targets?: THREE.Vector3[];
+  delays?: number[];
+  /** Lane spells: the line they travel. */
+  lane?: { from: THREE.Vector3; to: THREE.Vector3 };
   /** Arrow only: called at impact with the point and the tip direction the arrow should stick at. */
   onStick?: (point: THREE.Vector3, tipDirection: THREE.Vector3, scale: number) => void;
 }
@@ -55,10 +61,11 @@ export function createSpellAnimation(
     case 'healing': return mend(origin, color, detail, ctx);
     case 'summon': return rise(target, color, ctx);
     case 'shield': return aegis(origin, color, ctx);
+    default: return createSpellAnimation2(kind, origin, target, color, ctx) ?? aegis(origin, color, ctx);
   }
 }
 
-function animate(
+export function animate(
   group: THREE.Group,
   duration: number,
   tick: (t: number, age: number, dt: number) => void,
@@ -90,7 +97,7 @@ function animate(
 }
 
 /** A camera-facing flat mesh (ring or flare) that the caller scales and fades. */
-function facingPlane(texture: THREE.Texture, color: THREE.ColorRepresentation, size: number, quaternion?: THREE.Quaternion): THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial> {
+export function facingPlane(texture: THREE.Texture, color: THREE.ColorRepresentation, size: number, quaternion?: THREE.Quaternion): THREE.Mesh<THREE.PlaneGeometry, THREE.MeshBasicMaterial> {
   const material = energy(color, 0);
   material.map = texture;
   const mesh = new THREE.Mesh(new THREE.PlaneGeometry(size, size), material);

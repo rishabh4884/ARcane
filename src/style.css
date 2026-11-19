@@ -487,11 +487,17 @@ kbd {
   left: 50%;
   bottom: clamp(0.75rem, 2.5vw, 1.75rem);
   transform: translateX(-50%);
-  width: min(46rem, calc(100% - 1.5rem));
+  width: min(86rem, calc(100% - 1.5rem));
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
-  gap: 0.5rem;
+  grid-template-columns: repeat(auto-fit, minmax(64px, 1fr));
+  gap: 0.4rem;
 }
+/* Many spells: the dock packs tighter so every one stays visible. */
+.dock[data-count] .slot { padding: 0.45rem 0.2rem 0.55rem; }
+.dock[data-count] .slot .spell-icon { width: 1.55rem; height: 1.55rem; }
+.dock[data-count] .slot .name { font-size: 0.78rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.dock[data-count] .slot .gesture { font-size: 0.6rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.slot.is-legend { border-color: color-mix(in srgb, var(--spell) 70%, #ffd9a0); box-shadow: inset 0 0 18px color-mix(in srgb, var(--spell) 18%, transparent); }
 .slot {
   --spell: #dfe8d3;
   position: relative;

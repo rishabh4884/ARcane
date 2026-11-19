@@ -63,10 +63,16 @@ const GradeShader = {
     uGrain: { value: 0.045 },
     uAspect: { value: 1 },
     uHush: { value: 0 },
+    uTint: { value: new THREE.Vector3(1, 1, 1) },
+    uLift: { value: new THREE.Vector3(0, 0, 0) },
+    uSat: { value: 1 },
+    uExposure: { value: 1 },
+    uDark: { value: 0 },
   },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
   fragmentShader: `
     uniform sampler2D tDiffuse; uniform float uTime; uniform float uVignette; uniform float uGrain; uniform float uAspect; uniform float uHush;
+    uniform vec3 uTint; uniform vec3 uLift; uniform float uSat; uniform float uExposure; uniform float uDark;
     varying vec2 vUv;
     float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
     vec3 shoulder(vec3 c){
@@ -76,6 +82,11 @@ const GradeShader = {
     }
     void main(){
       vec3 c = texture2D(tDiffuse, vUv).rgb;
+      // Chapter mood: a tint and lift over the painted world, its saturation, and the King's darkness.
+      c = c * uTint * uExposure + uLift;
+      float l0 = dot(c, vec3(0.2126, 0.7152, 0.0722));
+      c = mix(vec3(l0), c, uSat);
+      c *= 1.0 - uDark * 0.6;
       c = shoulder(c);
       float l = dot(c, vec3(0.2126, 0.7152, 0.0722));
       // Split tone: moonlit teal in the shadows, lantern amber in the highlights.
@@ -87,7 +98,7 @@ const GradeShader = {
       c *= flicker * (1.0 - uHush * 0.07);
       vec2 q = (vUv - 0.5) * vec2(uAspect * 0.85, 1.0);
       float v = smoothstep(0.3 - uHush * 0.05, 1.0, length(q) * 1.18);
-      c *= 1.0 - v * (uVignette + uHush * 0.12);
+      c *= 1.0 - v * (uVignette + uHush * 0.12 + uDark * 0.4);
       // Grain at 24 frames a second, heavier in the shadows.
       float frame = floor(uTime * 24.0);
       c += (hash(vUv * vec2(1931.0, 1543.0) + fract(frame * 0.1731)) - 0.5) * uGrain * (1.0 - l * 0.7);
@@ -131,6 +142,15 @@ export class PostFX {
   get enabled(): boolean { return this.enabledFlag; }
 
   setEnabled(enabled: boolean): void { this.enabledFlag = enabled; }
+
+  /** Chapter grade: tint, lift, saturation and exposure (eased by the caller). */
+  setGrade(tint: THREE.Vector3, lift: THREE.Vector3, saturation: number, exposure: number, vignette: number): void {
+    const u = this.grade.uniforms;
+    u.uTint.value.copy(tint); u.uLift.value.copy(lift); u.uSat.value = saturation; u.uExposure.value = exposure; u.uVignette.value = vignette;
+  }
+
+  /** 0 … 1 the King's devouring darkness. */
+  setDark(amount: number): void { this.grade.uniforms.uDark.value = amount; }
 
   /** 0 normal … 1 the whole wood holding its breath. */
   setHush(amount: number): void { this.grade.uniforms.uHush.value = amount; }

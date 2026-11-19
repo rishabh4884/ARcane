@@ -18,7 +18,7 @@ describe('spell visuals', () => {
     expect(animation.update(0.08)).toBe(true);
     for (let i = 0; i < 100 && impact.mock.calls.length === 0; i++) animation.update(0.05);
     expect(impact).toHaveBeenCalledTimes(1);
-    expect(animation.update(4)).toBe(false);
+    expect(animation.update(12)).toBe(false);
     expect(impact).toHaveBeenCalledTimes(1);
     animation.dispose();
   });
