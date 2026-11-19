@@ -8,6 +8,7 @@ import { createArrowMesh, createSpellAnimation, type SpellAnimation } from './ef
 import { GameEvents } from './events.ts';
 import { ParticleSystem } from './particles.ts';
 import { PostFX } from './PostFX.ts';
+import { Foreground } from './Foreground.ts';
 import { makeLabelTexture } from './textures.ts';
 import { ForestEnvironment } from './ForestEnvironment.ts';
 import { FrameBudget } from './FrameBudget.ts';
@@ -96,6 +97,16 @@ export class World {
   private running = false;
   private disposed = false;
   private readonly encounter: Encounter;
+  private readonly foreground = new Foreground();
+  /**
+   * The hush: every so often the whole wood holds its breath. Wind, grass, fog and fireflies run
+   * down almost to nothing, the crickets stop, every spirit freezes and stares, and the frame dims.
+   * 0 = the wood moving, 1 = utterly still.
+   */
+  private hush = 0;
+  private hushClock = 0;
+  private hushAt = 28 + Math.random() * 14;
+  private hushEnds = -1;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -129,6 +140,9 @@ export class World {
       (ray, range) => this.environment.intersect(ray, range), () => this.controls.reset(),
       { particles: this.particles, mist: this.mist, events: this.events });
     this.renderer.domElement.dataset.world = 'ready';
+    // The near frame rides with the eye.
+    this.scene.add(this.camera);
+    this.camera.add(this.foreground.group);
 
     const params = new URLSearchParams(window.location.search);
     this.post = new PostFX(this.renderer, this.scene, this.camera, params.get('post') !== '0');
@@ -212,6 +226,7 @@ export class World {
     this.spellAnimations.length = 0;
     for (const enemy of this.enemies) enemy.dispose();
     this.enemies.length = 0;
+    this.foreground.dispose();
     this.post.dispose();
     this.screenFx.dispose();
     this.renderer.dispose();
@@ -528,10 +543,29 @@ export class World {
     return out;
   }
 
+  private updateHush(dt: number): void {
+    this.hushClock += dt;
+    if (this.hushEnds < 0 && this.hushClock > this.hushAt && !this.reducedMotion.matches) {
+      const duration = 2.6 + Math.random() * 1.6;
+      this.hushEnds = this.hushClock + duration;
+      this.events.emit({ type: 'hush', duration });
+      this.encounter.hush(duration);
+    }
+    const holding = this.hushEnds > 0 && this.hushClock < this.hushEnds;
+    if (this.hushEnds > 0 && !holding) { this.hushEnds = -1; this.hushAt = this.hushClock + 40 + Math.random() * 35; }
+    // It falls still quickly and breathes again slowly.
+    this.hush += ((holding ? 1 : 0) - this.hush) * (1 - Math.exp(-dt * (holding ? 2.2 : 0.9)));
+    this.post.setHush(this.hush);
+  }
+
   private frame(dt: number, render = true, renderDt = dt): void {
     this.idleTime += dt;
-    this.environment.update(dt, this.camera, this.reducedMotion.matches);
     const paused = worldInputBlocked();
+    this.updateHush(paused ? 0 : dt);
+    // In a hush the wood slows almost to a stop rather than freezing: the stillness feels held.
+    const stillness = 1 - this.hush * 0.93;
+    this.environment.update(dt * stillness, this.camera, this.reducedMotion.matches);
+    this.foreground.update(dt * stillness, this.camera, this.reducedMotion.matches);
     this.encounter.update(dt, paused, this.reducedMotion.matches);
     const simulationDt = paused ? 0 : dt;
     for (const side of SIDES) this.updateWisp(this.wisps[side], dt);

@@ -84,6 +84,10 @@ export class GrassField {
           vec3 rootColor=mix(vec3(.012,.039,.026),vec3(.023,.068,.04),patchShade);
           vec3 tipColor=mix(vec3(.041,.104,.043),vec3(.078,.155,.061),patchShade);
           vec3 color=mix(rootColor,tipColor,tip*.88)*diffuse+vec3(.98,.57,.24)*lamp*(.035+.12*tip)+spellIllumination(worldPoint)*(.08+.3*tip);
+          // Depth staging: the grass right at the caster's feet sinks toward a dark, quiet
+          // silhouette, so the eye passes over it to the lit ground where the spirits walk.
+          float nearness=1.0-smoothstep(3.0,11.0,distance(worldPoint,cameraPosition));
+          color=mix(color,vec3(dot(color,vec3(.3,.59,.11)))*vec3(.55,.66,.62),nearness*.55)*(1.0-nearness*.5);
           gl_FragColor=vec4(color,1.0);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>

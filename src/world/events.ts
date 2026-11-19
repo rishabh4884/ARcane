@@ -17,7 +17,9 @@ export type GameEvent =
   | { type: 'enemy-hit'; kind: CreatureKind; position: THREE.Vector3; pan: number; effect: SpellEffect }
   | { type: 'enemy-death'; kind: CreatureKind; position: THREE.Vector3; pan: number; height: number }
   | { type: 'projectile'; position: THREE.Vector3; pan: number }
-  | { type: 'encounter'; mode: 'active' | 'won' | 'lost' };
+  | { type: 'encounter'; mode: 'active' | 'won' | 'lost' }
+  /** The whole wood falls still for `duration` seconds. */
+  | { type: 'hush'; duration: number };
 
 type Listener = (event: GameEvent) => void;
 

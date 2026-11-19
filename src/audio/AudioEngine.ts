@@ -45,6 +45,7 @@ export class AudioEngine {
   private master!: GainNode;
   private sfx!: GainNode;
   private ambience!: GainNode;
+  private hushedUntil = 0;
   private reverbSend!: GainNode;
   private white!: AudioBuffer;
   private brown!: AudioBuffer;
@@ -148,6 +149,7 @@ export class AudioEngine {
       case 'enemy-death': this.death(event.pan); break;
       case 'projectile': this.tone({ type: 'sine', freq: 620, freqEnd: 980, decay: 1.6, attack: 0.25, gain: 0.05, pan: event.pan, vibrato: { rate: 7, depth: 18 }, reverb: 0.6 }); break;
       case 'encounter': this.sting(event.mode); break;
+      case 'hush': this.hush(event.duration); break;
     }
   }
 
@@ -434,6 +436,17 @@ export class AudioEngine {
     }
   }
 
+  /** The wood falls silent: the bed sinks, the crickets stop, and it breathes out when it resumes. */
+  private hush(duration: number): void {
+    const ctx = this.ctx!, now = ctx.currentTime;
+    this.hushedUntil = now + duration;
+    this.ambience.gain.cancelScheduledValues(now);
+    this.ambience.gain.setTargetAtTime(0.22, now, 0.35);
+    this.ambience.gain.setTargetAtTime(0.85, now + duration, 1.4);
+    // One low exhale as the wood starts moving again.
+    this.noise({ filter: 'lowpass', freq: 380, freqEnd: 220, brown: true, attack: 0.8, decay: 1.8, gain: 0.12, when: duration - 0.3, pan: 0, reverb: 0.8, toAmbience: true });
+  }
+
   /* ─────────────────────────────── ambience ─────────────────────────────── */
 
   private startAmbience(): void {
@@ -481,6 +494,7 @@ export class AudioEngine {
     if (this.windFilter) {
       this.windFilter.frequency.setTargetAtTime(280 + Math.random() * 700, now, 2.5);
     }
+    if (now < this.hushedUntil) this.nextCricket = Math.max(this.nextCricket, this.hushedUntil + 0.4 + Math.random());
     while (this.nextCricket < now + 0.5) {
       const when = Math.max(0, this.nextCricket - now);
       const pan = Math.random() * 1.6 - 0.8;

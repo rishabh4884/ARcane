@@ -164,6 +164,7 @@ export class Creature {
   /** How alive the figure is right now: 1 moving freely, near 0 while it holds utterly still. */
   private life=1;
   private holdUntil=-1;
+  private pendingStill=0;
   private nextHold=6;
   private flowClock=0;
   private breathClock=0;
@@ -414,6 +415,8 @@ export class Creature {
     for(const rig of this.armRigs){rig.springs.elbow.velocity+=kick*2*rig.side;rig.springs.shoulder.velocity+=kick*rig.side;}
     this.life=1;this.holdUntil=-1;
   }
+  /** Hold utterly still for `seconds` (the wood's hush), if it is only watching or prowling. */
+  still(seconds:number):void{this.pendingStill=seconds;}
   /** 0 when solid, 1 when fully dissolved (dead or not yet risen). */
   get fade():number{return this.group.visible?this.dissolve.value:1;}
   /** 0 while the spirit has stopped dead mid-stride, 1 while it is walking; scales its ground speed. */
@@ -539,6 +542,10 @@ export class Creature {
    */
   private updateLife(time:number,pose:CreaturePose,dt:number,reducedMotion:boolean):void {
     const temper=TEMPER[this.kind],calm=pose==='idle'||pose==='walk'||pose==='recover';
+    if(this.pendingStill>0){
+      if(calm){this.holdUntil=time+this.pendingStill;this.nextHold=Math.max(this.nextHold,this.holdUntil+3);}
+      this.pendingStill=0;
+    }
     if(!reducedMotion&&calm&&time>this.nextHold&&this.holdUntil<0){
       this.holdUntil=time+1+this.random()*1.6;
       this.nextHold=time+temper.holdEvery[0]+this.random()*(temper.holdEvery[1]-temper.holdEvery[0]);

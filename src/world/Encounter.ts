@@ -124,6 +124,8 @@ export class Encounter {
     if(!this.player.alive){this.mode='lost';this.clearProjectiles();this.summons.clear();this.notify('Encounter ended. Your next attempt starts at the glade.');this.fx.events?.emit({type:'encounter',mode:'lost'});}
     this.refreshHud();
   }
+  /** The wood holds its breath: every spirit that is only watching or prowling stops and stares. */
+  hush(seconds:number):void{for(const actor of this.actors)if(actor.state.alive)actor.puppet.still(seconds);}
   cast(effect:SpellEffect):boolean {
     if(!this.player.alive){this.notify('Return to the glade to begin again.');return false;}
     if(!this.player.cast(effect)){this.notify(`${effect==='healing'?'Mend':effect==='shield'?'Aegis':'Spell'} is recovering · ${this.player.cooldowns[effect].toFixed(1)}s`);return false;}
