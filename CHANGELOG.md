@@ -10,6 +10,13 @@ All notable changes to ARcane are recorded here. The format follows
 
 - The Gale spell, its wind effect, its gust through the grass, its sound, dock icon and the left-sweep Gale gesture. Six spells now ship by default; old saved bindings for Gale are ignored.
 
+### Changed
+
+- The spirits are repainted for a soft, painted 2D look instead of cut-outs: no ink outlines, dark quiet masses that belong to the fog, feathered edges, a thin backlight on edges facing the sky, very little interior detail, and limbs that melt into the body. Distance haze fades them toward the air and the ground mist swallows their feet.
+- Each spirit is now a 2D bone rig: every painting is a single sheet skinned to one skeleton, so spines ripple and elbows, wrists and talons bend the paint itself. Joints move through damped springs (late arrival, slight overshoot, settle), fingers curl in a slow ripple, and a hit whips up through the body.
+- Spirits pause. Every few seconds one lets its breath, sway and even its cloth run down and simply watches you, then breaks the stillness with one small sudden movement. Wind-ups draw back slowly, hold frozen, then tremble before the strike.
+- The Antlered Hollow wears a floor-length shroud and a darker cape behind it, both flowing slowly in the shader, with dead moss drifting from its antlers; it glides rather than walks. The Wraith's robe flows and fades to vapour, and its lantern swings on its own.
+
 ### Added
 
 - Rise gnomes throw rocks instead of firing bolts. They are redrawn as a 15-part rig (thigh, boot and knee patch per leg; upper arm, forearm, palm and curling fingers per arm; torso, head and a floppy cap that lags the head) with the crossbow removed. Each throw is choreographed: stoop and reach with both hands, close them on a stone, stand with it at the chest, cock it behind the head while the other arm sights the target, whip it over, release and follow through. Stones fly a true ballistic arc with spin and a dust trail and shatter into chips and grit on a spirit, on scenery or on the ground.

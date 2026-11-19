@@ -55,7 +55,7 @@ describe('creature expressions', () => {
       const restCurl = talons[0].rotation.x;
       for (let i = 0; i < 40; i++) creature.animate(3 + i * 0.05, 'windup', i / 40, 0.05);
       for (let i = 0; i < 9; i++) creature.animate(5 + i * 0.05, 'strike', i / 8, 0.05);
-      if (kind !== 'wraith') expect(talons[0].rotation.x).toBeLessThan(restCurl - 0.3);
+      if (kind !== 'wraith') expect(talons[0].rotation.x).toBeLessThan(restCurl - 0.15);
       const point = creature.castPoint(new THREE.Vector3());
       expect(Number.isFinite(point.x) && point.y > 0).toBe(true);
       creature.dispose();

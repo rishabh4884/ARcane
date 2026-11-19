@@ -23,6 +23,7 @@ export class Encounter {
   readonly player=new PlayerState();
   readonly group=new THREE.Group();
   private readonly actors:Actor[]=[];
+  private readonly depthOrder:Actor[]=[];
   private readonly art=new ArtResources();
   private readonly projectiles:Projectile[]=[];
   private readonly events=new AbortController();
@@ -281,6 +282,11 @@ export class Encounter {
       actor.warning.visible=active&&actor.state.pose==='windup';
       if(actor.warning.visible){const size=actor.puppet.kind==='wraith'?1.1:spec.range;actor.warning.scale.setScalar(size*(0.7+actor.state.progress*0.3));actor.warning.material.opacity=0.18+actor.state.progress*0.42;}
     }
+    // Soft-edged spirits blend with what is behind them, so each is drawn as one unit, far to near,
+    // and before the mist and spell light that should drift in front of them.
+    this.depthOrder.length=0;this.depthOrder.push(...this.actors);
+    this.depthOrder.sort((a,b)=>b.group.position.distanceToSquared(this.camera.position)-a.group.position.distanceToSquared(this.camera.position));
+    this.depthOrder.forEach((actor,i)=>{actor.puppet.group.renderOrder=-200+i;});
     this.summons.update(dt,this.player.alive,this.camera.position,
       this.actors.map(actor=>({id:actor.id,position:actor.group.position,height:CREATURE_SPECS[actor.puppet.kind].height,alive:actor.state.alive})),reducedMotion);
     for(let i=this.projectiles.length-1;i>=0;i--){
