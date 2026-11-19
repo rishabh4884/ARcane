@@ -487,9 +487,9 @@ kbd {
   left: 50%;
   bottom: clamp(0.75rem, 2.5vw, 1.75rem);
   transform: translateX(-50%);
-  width: min(52rem, calc(100% - 1.5rem));
+  width: min(46rem, calc(100% - 1.5rem));
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 0.5rem;
 }
 .slot {
@@ -570,9 +570,6 @@ kbd {
 .slot.cast .spell-icon--spell-3 .frost-shard {
   animation: frost-rise 0.46s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.slot.cast .spell-icon--spell-4 .gale-line {
-  animation: gale-sweep 0.42s ease-out;
-}
 .slot.cast .spell-icon--spell-5 .mend-ring {
   animation: mend-knit 0.55s ease-out;
 }
@@ -597,9 +594,6 @@ kbd {
 }
 @keyframes frost-rise {
   from { transform: translateY(5px) scale(0.82); opacity: 0.35; }
-}
-@keyframes gale-sweep {
-  to { transform: translateX(5px); opacity: 0.45; }
 }
 @keyframes mend-knit {
   from { stroke-dasharray: 26; stroke-dashoffset: 26; }
@@ -751,7 +745,7 @@ kbd {
 
 @media (max-width: 640px) {
   .dock {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
   .slot .gesture {
     display: none;

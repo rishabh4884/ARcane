@@ -115,15 +115,15 @@ describe('GestureEngine (end to end on synthetic hands)', () => {
       d.step(0.3 + i * 0.015, 0.5, POSES.open).fired.forEach((f) => fired.push(f.gestureId));
     }
     expect(fired).toEqual([]);
-    // the same hand, held still, does (after a short commit delay, because Gale also uses an open palm)
+    // the same hand, held still, does (after a short commit delay, because Rise also uses an open palm)
     expect(d.hold(0.6, 0.5, POSES.open, 1500)).toEqual(['aegis']);
   });
 
   it('prefers a stricter sweep when two overlapping ones are bound', () => {
-    const d = makeDriver(liveGestures([['spell-1', 'gale']]));
-    d.hold(0.7, 0.5, POSES.open, 400);
+    const d = makeDriver(liveGestures([['spell-1', 'tempest'], ['spell-2', 'swish']]));
+    d.hold(0.3, 0.5, POSES.open, 400);
     const fired: string[] = [];
-    for (let i = 0; i < 14; i++) d.step(0.7 - i * 0.045, 0.5, POSES.open).fired.forEach((f) => fired.push(f.gestureId));
-    expect(fired).toEqual(['gale']);
+    for (let i = 0; i < 14; i++) d.step(0.3 + i * 0.045, 0.5, POSES.open).fired.forEach((f) => fired.push(f.gestureId));
+    expect(fired).toEqual(['tempest']);
   });
 });

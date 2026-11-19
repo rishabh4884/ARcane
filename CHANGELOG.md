@@ -6,6 +6,10 @@ All notable changes to ARcane are recorded here. The format follows
 
 ## [Unreleased]
 
+### Removed
+
+- The Gale spell, its wind effect, its gust through the grass, its sound, dock icon and the left-sweep Gale gesture. Six spells now ship by default; old saved bindings for Gale are ignored.
+
 ### Added
 
 - Pooled GPU particle system, camera-facing ribbon trails and half-resolution bloom with a display-space grade (vignette, split tone, highlight shoulder, grain). Post-processing switches itself off on slow devices, or with `?post=0`.

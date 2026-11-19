@@ -99,7 +99,7 @@ const STRIKE_VETO_MS = 500;
  */
 const CUSP = (40 * Math.PI) / 180;
 /**
- * A hold whose shape also starts a live motion (an open palm while Gale is bound) only begins
+ * A hold whose shape also starts a live motion (an open palm while Rise or another open-hand sweep is bound) only begins
  * charging after this much stillness: the pause before a sweep must not become a ward.
  */
 const HOLD_COMMIT_MS = 300;

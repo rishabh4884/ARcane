@@ -15,7 +15,6 @@ import { CasterView, worldInputBlocked } from './CasterView.ts';
 import { aimAssistRadius, SPELL_RANGE, chooseRayTarget, screenPointAtDepth, terrainHeight } from './spatial.ts';
 import { disposeGroup, type ScreenFeedback } from './vfx.ts';
 import { SPELL_LIGHTS, SPELL_LIGHT_COUNT } from './LanternLighting.ts';
-import { GUST } from './GrassField.ts';
 
 interface FloatingLabel {
   sprite: THREE.Sprite;
@@ -80,7 +79,6 @@ export class World {
   private readonly spellAnimations: SpellAnimation[] = [];
   private readonly enemies: EnemyCombat[] = [];
   private readonly stuckArrows: StuckArrow[] = [];
-  private gustAge = 99;
   private readonly worldLights = Array.from({ length: SPELL_LIGHT_COUNT }, () => ({ position: new THREE.Vector3(), color: new THREE.Color(), level: 0, radius: 10 }));
   private readonly container: HTMLElement;
   private readonly clock = new THREE.Clock();
@@ -308,13 +306,6 @@ export class World {
         light.color.copy(lightColor);
         light.level = Math.max(0, level);
         light.radius = radius;
-      },
-      gust: (gustOrigin, direction) => {
-        const flat = new THREE.Vector2(direction.x, direction.z);
-        if (flat.lengthSq() < 1e-6) return;
-        flat.normalize();
-        GUST.uGust.value.set(gustOrigin.x, gustOrigin.z, flat.x, flat.y);
-        this.gustAge = 0;
       },
       onStick: spell.effect === 'arrow' ? (point, tip, scale) => this.stickArrow(point, tip, scale, color, enemy) : undefined,
     });
@@ -567,10 +558,6 @@ export class World {
       animation.dispose();
       this.spellAnimations.splice(i, 1);
     }
-
-    // The Gale's gust front rolls through the grass for a second and a half, easing off as it goes.
-    this.gustAge += simulationDt;
-    GUST.uGustState.value.set(this.gustAge, 20, this.gustAge < 1.6 ? 1 - this.gustAge / 1.6 : 0, 7);
 
     // Shared world lights: upload this frame's levels, then let them die unless refreshed.
     this.worldLights.forEach((light, i) => {

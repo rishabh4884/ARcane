@@ -7,7 +7,7 @@ function fixture() {
   const chest = new THREE.Bone();
   chest.name = 'Chest';
   root.add(chest);
-  const names = ['Idle', 'Hit_Left', 'Hit_Right', 'Shock', 'Gust', 'Stagger', 'Freeze', 'Break_Free'];
+  const names = ['Idle', 'Hit_Left', 'Hit_Right', 'Shock', 'Stagger', 'Freeze', 'Break_Free'];
   const clips = names.map((name, i) => new THREE.AnimationClip(name, 1, [
     new THREE.NumberKeyframeTrack('Chest.rotation[x]', [0, 0.5, 1], [0, (i + 1) * 0.08, name === 'Freeze' ? 0.3 : 0]),
   ]));
@@ -64,7 +64,7 @@ describe('reusable character animation controller', () => {
     const animator = new CharacterAnimator(new THREE.Group(), []);
     expect(animator.available).toBe(false);
     expect(() => {
-      animator.impact('wind', 1);
+      animator.impact('summon', 1);
       animator.setFrostAmount(1);
       animator.update(0.1);
       animator.dispose();

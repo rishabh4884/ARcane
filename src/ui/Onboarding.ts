@@ -20,10 +20,6 @@ const SPELL_GUIDE: Record<SpellEffect, { role: string; description: string }> = 
     role: 'CONTROL',
     description: 'Bind a spirit in growing ice. It cannot move or attack while frozen.',
   },
-  wind: {
-    role: 'STRIKE',
-    description: 'A sweeping gust damages and knocks a spirit away, giving you room to move.',
-  },
   healing: {
     role: 'RESTORE',
     description: 'Restore 30 vitality, up to 100. Mend recovers for seven seconds between casts.',

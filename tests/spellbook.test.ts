@@ -14,10 +14,10 @@ const memory = (seed: Record<string, string> = {}): KeyValueStore & { data: Reco
 };
 
 describe('config integrity', () => {
-  it('ships seven spells with a unique, valid default gesture each', () => {
-    expect(SPELLS).toHaveLength(7);
+  it('ships six spells with a unique, valid default gesture each', () => {
+    expect(SPELLS).toHaveLength(6);
     const defaults = SPELLS.map((s) => s.defaultGesture);
-    expect(new Set(defaults).size).toBe(7);
+    expect(new Set(defaults).size).toBe(6);
     for (const id of defaults) expect(GESTURES.some((g) => g.id === id)).toBe(true);
   });
 
@@ -36,7 +36,6 @@ describe('config integrity', () => {
   it('lists a stricter variant before the looser one it overlaps', () => {
     const at = (id: string) => GESTURES.findIndex((g) => g.id === id);
     expect(at('phoenix')).toBeLessThan(at('rise'));
-    expect(at('gale')).toBeLessThan(at('swish'));
     expect(at('tempest')).toBeLessThan(at('swish'));
     expect(at('sunwise')).toBeLessThan(at('circle'));
     expect(at('moonwise')).toBeLessThan(at('circle'));
@@ -47,7 +46,8 @@ describe('SpellBook', () => {
   it('starts from the defaults', () => {
     const book = new SpellBook(SPELLS, GESTURES, memory());
     expect(book.spellFor('bowdraw')?.id).toBe('spell-1');
-    expect(book.gestureFor('spell-4')?.id).toBe('gale');
+    expect(book.gestureFor('spell-4')).toBeUndefined();
+    expect(book.spells.some((spell) => spell.name === 'Gale')).toBe(false);
   });
 
   it('swaps bindings so a gesture never casts two spells', () => {
@@ -76,7 +76,7 @@ describe('SpellBook', () => {
     const book = new SpellBook(SPELLS, GESTURES, memory({ 'arcane.spellbook.v1': '{"spell-1":"nope","spell-2":"nope"}' }));
     expect(book.gestureFor('spell-1')).toBeDefined();
     const ids = SPELLS.map((s) => book.gestureFor(s.id)?.id);
-    expect(new Set(ids).size).toBe(7);
+    expect(new Set(ids).size).toBe(6);
   });
 
   it('resets to defaults', () => {
@@ -93,7 +93,7 @@ describe('SpellBook', () => {
     const ids = book.activeGestures().map((g) => g.id);
     expect(ids).toContain('eclipse');
     expect(ids).not.toContain('fist');
-    expect(ids).toHaveLength(7);
+    expect(ids).toHaveLength(6);
   });
 
   it('lets a gesture nobody uses replace the old one without swapping', () => {

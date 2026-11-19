@@ -17,12 +17,6 @@ const ICONS: Record<string, readonly Shape[]> = {
     { tag: 'path', className: 'frost-facet', attrs: { d: 'm12 17 12 9 12-9M24 26v19m0-19 7 12' } },
     { tag: 'path', className: 'frost-shard', attrs: { d: 'm5 26 6-9 6 9-6 9zM31 31l6-9 6 9-6 9z' } },
   ],
-  'spell-4': [
-    { tag: 'path', className: 'gale-line gale-line-a', attrs: { d: 'M3 13c11-12 16 8 26 0s11-7 16-4' } },
-    { tag: 'path', className: 'gale-line gale-line-b', attrs: { d: 'M3 24c11-11 17 7 27 0s10-4 15-2' } },
-    { tag: 'path', className: 'gale-line gale-line-c', attrs: { d: 'M3 35c9-10 15 5 25 0s11-1 17 2' } },
-    { tag: 'path', className: 'gale-tip', attrs: { d: 'm38 7 7 2-4 6' } },
-  ],
   'spell-5': [
     { tag: 'path', className: 'mend-ring mend-ring-a', attrs: { d: 'M24 3A21 21 0 0 1 45 24' } },
     { tag: 'path', className: 'mend-ring mend-ring-b', attrs: { d: 'M45 25A21 21 0 0 1 24 45' } },

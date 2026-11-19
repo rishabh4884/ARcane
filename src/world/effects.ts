@@ -30,8 +30,6 @@ export interface SpellContext extends FxContext {
    * of the shared world lights; it fades within a few frames unless refreshed.
    */
   illuminate?: (slot: number, position: THREE.Vector3, color: THREE.Color, level: number, radius: number) => void;
-  /** Gale only: start a travelling gust from `origin` along `direction` (bows the grass). */
-  gust?: (origin: THREE.Vector3, direction: THREE.Vector3) => void;
   /** Arrow only: called at impact with the point and the tip direction the arrow should stick at. */
   onStick?: (point: THREE.Vector3, tipDirection: THREE.Vector3, scale: number) => void;
 }
@@ -52,7 +50,6 @@ export function createSpellAnimation(
     case 'arrow': return arrow(origin, target, color, detail, ctx);
     case 'lightning': return lightning(target, color, ctx);
     case 'frost': return frost(target, color, ctx);
-    case 'wind': return gale(origin, target, color, detail, ctx);
     case 'healing': return mend(origin, color, detail, ctx);
     case 'summon': return rise(target, color, ctx);
     case 'shield': return aegis(origin, color, ctx);
@@ -679,123 +676,6 @@ function frost(target: THREE.Vector3, color: THREE.Color, ctx: SpellContext): Sp
       ctx.mist?.burst(groundPoint, 8, { speed: 0.8, color: new THREE.Color('#d8eef8'), size: 1, sizeEnd: 2, alpha: 0.25, ttl: 1.2, style: 'mist' });
     }
   }, 0.12, onImpact);
-}
-
-/* ═══════════════════════════════ GALE ═══════════════════════════════ */
-
-/**
- * Gale: a real gust. Streams of wind lines pour across from the side the hand swept from, a few
- * curling into eddies, carrying tumbling leaves and kicking dust off the floor. The grass bows as
- * the wavefront passes, and the gust bursts against the target.
- */
-function gale(origin: THREE.Vector3, target: THREE.Vector3, color: THREE.Color, detail: string | undefined, ctx: SpellContext): SpellAnimation {
-  const group = new THREE.Group();
-  const sign = detail === 'left' ? -1 : 1;
-  const forward = target.clone().sub(origin);
-  if (forward.lengthSq() < 0.01) forward.set(0, 0, -1);
-  forward.normalize();
-  const right = new THREE.Vector3().crossVectors(forward, UP);
-  if (right.lengthSq() < 1e-6) right.set(1, 0, 0);
-  right.normalize();
-  // The wind enters from the side the hand swept away from and blows through and past the target.
-  const from = origin.clone().addScaledVector(right, -sign * 3.2).addScaledVector(UP, -0.4);
-  const to = target.clone().addScaledVector(right, sign * 2.2);
-  const travel = to.clone().sub(from);
-  const along = travel.clone().normalize();
-  const lift = new THREE.Vector3().crossVectors(right, along).normalize();
-  const across = new THREE.Vector3().crossVectors(along, lift).normalize();
-  const random = rng(Math.floor(Math.abs(origin.x * 13 + target.z * 7)) + 3);
-  const air = color.clone().lerp(WHITE, 0.72);
-
-  interface Lane { trail: Trail; delay: number; up: number; side: number; wave: number; phase: number; curl: number; speed: number }
-  const lanes: Lane[] = Array.from({ length: 16 }, (_, i) => {
-    const bright = i % 4 === 0;
-    const trail = new Trail(bright ? WHITE : air, bright ? 0.07 : 0.035 + random() * 0.035, 0.2 + random() * 0.12, 36, bright ? 0.9 : 0.35);
-    trail.opacity = 0;
-    group.add(trail.mesh);
-    return {
-      trail,
-      delay: random() * 0.28,
-      up: (random() - 0.35) * 2.2,
-      side: (random() - 0.5) * 1.6,
-      wave: 0.08 + random() * 0.18,
-      phase: random() * 6.28,
-      // A few lanes loop into a small eddy partway along.
-      curl: i % 5 === 2 ? 0.25 + random() * 0.25 : 0,
-      speed: 0.85 + random() * 0.35,
-    };
-  });
-
-  const burst = facingPlane(ringTexture(), air, 1, ctx.cameraQuaternion);
-  burst.position.copy(target);
-  group.add(burst);
-  const leafColors = [new THREE.Color('#a9c46a'), new THREE.Color('#d6b55e'), new THREE.Color('#7fa86a'), new THREE.Color('#c98f4a')];
-  const dust = new THREE.Color('#8d8a73');
-  const head = new THREE.Vector3();
-  const flight = 0.5;
-  const arrive = flight * 0.62;
-  ctx.gust?.(from, along);
-
-  const onImpact = () => {
-    ctx.particles?.burst(target, 22, { speed: 3.8, color: air, size: 0.08, sizeEnd: 0.01, ttl: 0.6, drag: 2.2, style: 'spark' });
-    ctx.mist?.burst(target, 14, { speed: 3.2, direction: along, spread: 1.3, color: new THREE.Color('#a7b3aa'), size: 0.9, sizeEnd: 2.6, alpha: 0.26, ttl: 1.1, drag: 2.2, style: 'mist' });
-    for (let i = 0; i < 14; i++) {
-      const c = leafColors[i % leafColors.length];
-      ctx.mist?.emit({
-        x: target.x, y: target.y + (Math.random() - 0.3), z: target.z,
-        vx: along.x * 6 + (Math.random() - 0.5) * 3, vy: 1 + Math.random() * 2.5, vz: along.z * 6 + (Math.random() - 0.5) * 3,
-        color: c, size: 0.09, sizeEnd: 0.07, alpha: 0.95, ttl: 1.3, drag: 1.1, gravity: 2.2, style: 'spark',
-      });
-    }
-    ctx.screen?.shake(0.1);
-  };
-
-  return animate(group, 1.4, (_t, age, dt) => {
-    for (const lane of lanes) {
-      const u = ((age - lane.delay) * lane.speed) / flight;
-      if (u >= 0 && u <= 1.05) {
-        const e = Math.min(1, u);
-        const spread = 0.55 + e * 0.6; // the gust fans out as it travels
-        head.copy(from).addScaledVector(travel, e)
-          .addScaledVector(lift, lane.up * spread + Math.sin(e * 9 + lane.phase) * lane.wave)
-          .addScaledVector(across, lane.side * spread);
-        if (lane.curl > 0) {
-          const k = THREE.MathUtils.smoothstep(e, 0.35, 0.55) * (1 - THREE.MathUtils.smoothstep(e, 0.55, 0.75));
-          const a = (e - 0.35) / 0.4 * Math.PI * 2;
-          head.addScaledVector(lift, Math.sin(a) * lane.curl * k * 2).addScaledVector(along, (Math.cos(a) - 1) * -lane.curl * k);
-        }
-        lane.trail.push(head);
-        lane.trail.opacity = Math.min(1, u * 6);
-        if (Math.random() < 0.35) {
-          const leaf = Math.random() < 0.6;
-          ctx.mist?.emit({
-            x: head.x, y: head.y, z: head.z,
-            vx: along.x * 7 + (Math.random() - 0.5) * 1.6, vy: (Math.random() - 0.4) * 1.4, vz: along.z * 7 + (Math.random() - 0.5) * 1.6,
-            color: leaf ? leafColors[Math.floor(Math.random() * leafColors.length)] : air,
-            size: leaf ? 0.07 + Math.random() * 0.05 : 0.03, sizeEnd: leaf ? 0.06 : 0.01, alpha: leaf ? 0.95 : 0.6,
-            ttl: 0.7 + Math.random() * 0.5, drag: 1.3, gravity: leaf ? 1.6 : 0, style: 'spark',
-          });
-        }
-      } else if (u > 1.05) {
-        lane.trail.opacity = Math.max(0, 1 - (u - 1.05) * 3);
-      }
-      lane.trail.update(dt, ctx.cameraPosition);
-    }
-    // Dust skims off the floor under the advancing front.
-    const front = Math.min(1, age / flight);
-    if (front < 1 && Math.random() < dt * 40) {
-      head.copy(from).addScaledVector(travel, front).addScaledVector(across, (Math.random() - 0.5) * 3);
-      head.y = ctx.groundY + 0.15;
-      ctx.mist?.emit({
-        x: head.x, y: head.y, z: head.z, vx: along.x * 4, vy: 0.4 + Math.random() * 0.5, vz: along.z * 4,
-        color: dust, size: 0.7, sizeEnd: 1.8, alpha: 0.2, ttl: 1.1, drag: 1.8, style: 'mist',
-      });
-    }
-    const b = (age - arrive) / 0.45;
-    burst.visible = b >= 0 && b <= 1;
-    burst.scale.setScalar(0.4 + easeOutCubic(b) * 3.4);
-    burst.material.opacity = clamp01(1 - b) * 0.55;
-  }, arrive, onImpact, () => lanes.forEach((lane) => lane.trail.dispose()));
 }
 
 /* ═══════════════════════════════ RUNE SIGILS ═══════════════════════════════ */

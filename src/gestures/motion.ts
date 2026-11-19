@@ -84,7 +84,7 @@ export function detectSwipe(samples: readonly Sample[], o: SwipeOptions): { dire
       continue;
     }
 
-    // A diagonal stroke is ambiguous: require one axis to lead clearly so Gale cannot become Rise.
+    // A diagonal stroke is ambiguous: require one axis to lead clearly so a sideways sweep cannot become Rise.
     const major = Math.max(Math.abs(dx), Math.abs(dy));
     const minor = Math.min(Math.abs(dx), Math.abs(dy));
     if (major < minor * DIRECTION_DOMINANCE) continue;

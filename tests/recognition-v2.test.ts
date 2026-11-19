@@ -183,8 +183,8 @@ describe('cross-spell accuracy', () => {
 });
 
 describe('stroke disambiguation', () => {
-  it('does not cast Gale or Rise from an ambiguous 45° diagonal sweep', () => {
-    const engine = new GestureEngine(GESTURES.filter((g) => ['gale', 'rise'].includes(g.id)), DEFAULT_TUNING);
+  it('does not cast Swish or Rise from an ambiguous 45° diagonal sweep', () => {
+    const engine = new GestureEngine(GESTURES.filter((g) => ['swish', 'rise'].includes(g.id)), DEFAULT_TUNING);
     let now = 1000;
     const fired: string[] = [];
     const step = (x: number, y: number) => {
@@ -197,8 +197,8 @@ describe('stroke disambiguation', () => {
     expect(fired).toEqual([]);
   });
 
-  it('casts a clearly leftward sweep as Gale even with a little rise in it', () => {
-    const engine = new GestureEngine(GESTURES.filter((g) => ['gale', 'rise'].includes(g.id)), DEFAULT_TUNING);
+  it('casts a clearly leftward sweep as Swish even with a little rise in it', () => {
+    const engine = new GestureEngine(GESTURES.filter((g) => ['swish', 'rise'].includes(g.id)), DEFAULT_TUNING);
     let now = 1000;
     const fired: string[] = [];
     const step = (x: number, y: number) => {
@@ -207,7 +207,7 @@ describe('stroke disambiguation', () => {
     };
     for (let i = 0; i < 10; i++) step(0.9, 0.6);
     for (let i = 1; i <= 6; i++) step(0.9 - i * 0.06, 0.6 - i * 0.02);
-    expect(fired).toEqual(['gale']);
+    expect(fired).toEqual(['swish']);
   });
 });
 
@@ -243,27 +243,27 @@ describe('easy Skyfall', () => {
   });
 });
 
-describe('Gale and Aegis do not get in each other’s way', () => {
-  const engineWith = () => new GestureEngine(liveGestures(), DEFAULT_TUNING);
+describe('open-hand sweeps and Aegis do not get in each other’s way', () => {
+  const engineWith = () => new GestureEngine(liveGestures([['spell-1', 'swish']]), DEFAULT_TUNING);
   const step = (engine: GestureEngine, t: { now: number }, x: number, ext = POSES.open, fired: string[] = []) => {
     t.now += 1000 / 30;
     fired.push(...engine.process({ time: t.now, landmarks: makeHand(x, 0.5, ext), aspect: ASPECT, confidence: 1 }, t.now).fired.map((f) => f.gestureId));
     return fired;
   };
 
-  it('does not cast Aegis while the open palm pauses for most of a second before a Gale', () => {
+  it('does not cast Aegis while the open palm pauses for most of a second before a sweep', () => {
     const engine = engineWith(), t = { now: 1000 }, fired: string[] = [];
     for (let i = 0; i < 26; i++) step(engine, t, 0.9, POSES.open, fired); // ~870 ms pause
     for (let i = 1; i <= 6; i++) step(engine, t, 0.9 - i * 0.055, POSES.open, fired);
-    expect(fired).toEqual(['gale']);
+    expect(fired).toEqual(['swish']);
   });
 
-  it('does not cast Aegis right after a Gale when the hand stops open', () => {
+  it('does not cast Aegis right after a sweep when the hand stops open', () => {
     const engine = engineWith(), t = { now: 1000 }, fired: string[] = [];
     for (let i = 0; i < 8; i++) step(engine, t, 0.9, POSES.open, fired);
     for (let i = 1; i <= 6; i++) step(engine, t, 0.9 - i * 0.055, POSES.open, fired);
     for (let i = 0; i < 40; i++) step(engine, t, 0.57, POSES.open, fired); // 1.3 s resting open
-    expect(fired).toEqual(['gale']);
+    expect(fired).toEqual(['swish']);
   });
 
   it('still casts a deliberately held Aegis', () => {
@@ -272,10 +272,10 @@ describe('Gale and Aegis do not get in each other’s way', () => {
     expect(fired).toEqual(['aegis']);
   });
 
-  it('keeps a Gale sweep whose palm turns edge-on (reads as three fingers) mid-stroke', () => {
+  it('keeps a sweep whose palm turns edge-on (reads as three fingers) mid-stroke', () => {
     const engine = engineWith(), t = { now: 1000 }, fired: string[] = [];
     for (let i = 0; i < 8; i++) step(engine, t, 0.9, POSES.open, fired);
     for (let i = 1; i <= 6; i++) step(engine, t, 0.9 - i * 0.055, i >= 4 ? POSES.trident : POSES.open, fired);
-    expect(fired).toEqual(['gale']);
+    expect(fired).toEqual(['swish']);
   });
 });

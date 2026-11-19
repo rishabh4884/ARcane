@@ -14,7 +14,7 @@ import type { PoseName } from '../gestures/poses.ts';
  *
  * ORDER MATTERS. If two live gestures would fire on the same frame, the earlier entry wins, so
  * keep the stricter variant above the looser one (Phoenix Ascent above Rise, Sunwise above the
- * any-direction Circle, Gale above Swish).
+ * any-direction Circle, Tempest above Swish).
  */
 export type GestureGroup = 'sign' | 'sweep' | 'strike' | 'sigil' | 'twin-sign' | 'twin-motion';
 
@@ -176,17 +176,6 @@ export const GESTURES: readonly GestureDef[] = [
     name: 'Rise',
     hint: 'Open hand, then scoop upward quickly, like lifting something off the floor.',
     glyph: '🙌',
-  },
-  {
-    id: 'gale',
-    group: 'sweep',
-    kind: 'swipe',
-    direction: 'left',
-    minTravel: 1.25,
-    minSpeed: 3,
-    name: 'Gale',
-    hint: 'Open hand, one quick sweep to your left, like parting a curtain of wind.',
-    glyph: '🌬️',
   },
   {
     id: 'tempest',

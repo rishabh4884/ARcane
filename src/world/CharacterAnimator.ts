@@ -7,7 +7,6 @@ export interface CharacterClips {
   hitLeft: string;
   hitRight: string;
   shock: string;
-  gust: string;
   stagger: string;
   freeze: string;
   breakFree: string;
@@ -15,7 +14,7 @@ export interface CharacterClips {
 
 const DEFAULT_CLIPS: CharacterClips = {
   idle: 'Idle', hitLeft: 'Hit_Left', hitRight: 'Hit_Right', shock: 'Shock',
-  gust: 'Gust', stagger: 'Stagger', freeze: 'Freeze', breakFree: 'Break_Free',
+  stagger: 'Stagger', freeze: 'Freeze', breakFree: 'Break_Free',
 };
 
 /** Owns clip blending, not damage or materials. Models can provide their own clip map. */
@@ -50,8 +49,7 @@ export class CharacterAnimator {
     // Repeated taps still flash the material, but do not restart a stagger every frame.
     if (this.active && this.elapsed - this.lastHit < 0.16) return;
     const name = effect === 'arrow' ? (side > 0 ? this.names.hitLeft : this.names.hitRight)
-      : effect === 'lightning' ? this.names.shock
-        : effect === 'wind' ? this.names.gust : this.names.stagger;
+      : effect === 'lightning' ? this.names.shock : this.names.stagger;
     if (this.play(name)) this.lastHit = this.elapsed;
   }
 

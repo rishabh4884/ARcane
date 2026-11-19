@@ -155,10 +155,6 @@ export class Encounter {
         :{type:'enemy-death',kind:actor.puppet.kind,position:top,pan:this.pan(top),height:CREATURE_SPECS[actor.puppet.kind].height});
       this.indicators.hit(actor.id,actor.group.position.clone().add(new THREE.Vector3(0,CREATURE_SPECS[actor.puppet.kind].height*.65,0)),before-actor.state.health,effect);
       actor.reaction.impact(effect,point,color);
-      if(effect==='wind'){
-        const dx=actor.group.position.x-this.camera.position.x,dz=actor.group.position.z-this.camera.position.z,d=Math.hypot(dx,dz)||1;
-        moveOnGround(actor.group.position,dx/d*2.5,dz/d*2.5,this.obstacles);actor.group.position.y-=EYE_HEIGHT;
-      }
       this.notify(actor.state.alive?`${CREATURE_NAMES[actor.puppet.kind]} · ${actor.state.health} vitality`:`${CREATURE_NAMES[actor.puppet.kind]} fades.`);
       if(this.actors.every(a=>!a.state.alive)){this.mode='won';this.clearProjectiles();this.summons.clear();this.notify('All eight spirits released. The glade is yours.');this.fx.events?.emit({type:'encounter',mode:'won'});}
       this.refreshHud();

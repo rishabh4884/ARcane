@@ -3,15 +3,6 @@ import { makeGrassTile, grassLod, GRASS_TILE, type GrassLod, type GrassSite } fr
 import { seededRandom, terrainHeight, type Obstacle } from './spatial.ts';
 import { createLanternUniform, LANTERN_GLSL, SPELL_LIGHTS, type LanternUniform } from './LanternLighting.ts';
 
-/**
- * One travelling gust (the Gale spell) that bows the grass as its front passes.
- *   uGust: origin x/z, direction x/z      uGustState: age (s), speed (m/s), strength, half-width (m)
- */
-export const GUST = {
-  uGust: { value: new THREE.Vector4(0, 0, 0, -1) },
-  uGustState: { value: new THREE.Vector4(99, 18, 0, 6) },
-};
-
 /** Curved, tapered ribbons with a shallow ridge: actual blade silhouettes, never grass cards. */
 export function makeGrassClump(blades:number,segments:number):THREE.BufferGeometry {
   const random=seededRandom(0x61ade),positions:number[]=[],normals:number[]=[],uv:number[]=[],roots:number[]=[],indices:number[]=[];
@@ -53,7 +44,7 @@ export class GrassField {
 
   constructor(obstacles:readonly Obstacle[],private readonly lantern:LanternUniform=createLanternUniform()){
     this.group.name='Living geometry grass — curved individual blades';
-    this.material=new THREE.ShaderMaterial({side:THREE.DoubleSide,fog:true,uniforms:{...THREE.UniformsUtils.clone(THREE.UniformsLib.fog),grassTime:this.time,uLanterns:this.lantern,...SPELL_LIGHTS,...GUST},
+    this.material=new THREE.ShaderMaterial({side:THREE.DoubleSide,fog:true,uniforms:{...THREE.UniformsUtils.clone(THREE.UniformsLib.fog),grassTime:this.time,uLanterns:this.lantern,...SPELL_LIGHTS},
       vertexShader:`
         attribute vec3 rootOffset; attribute vec4 grassParams; attribute vec3 grassGround;
         attribute vec2 bladeRoot;
@@ -72,14 +63,6 @@ export class GrassField {
           float gust=sin(base.x*0.13+base.z*0.09-grassTime*0.8)*0.65+sin(base.x*0.31-base.z*0.21+grassTime*0.6)*0.35;
           float flutter=sin(grassTime*2.7+grassParams.w+position.y*4.0)*0.015;
           p.xz+=vec2(0.75,0.43)*(gust*0.13+flutter)*uv.y*uv.y*grassParams.z;
-          // The Gale's wavefront: blades bow hard as it passes, then spring back.
-          vec2 gustRel=base.xz-uGust.xy;
-          float gustAlong=dot(gustRel,uGust.zw);
-          float gustSide=abs(gustRel.x*uGust.w-gustRel.y*uGust.z);
-          float gustOffset=(gustAlong-uGustState.x*uGustState.y)/2.6;
-          float gustWave=exp(-gustOffset*gustOffset)*step(-1.5,gustAlong)*(1.0-smoothstep(uGustState.w*0.55,uGustState.w,gustSide))*uGustState.z;
-          p.xz+=uGust.zw*gustWave*0.5*uv.y*uv.y*grassParams.z;
-          p.y-=gustWave*0.1*uv.y*uv.y*grassParams.z;
           vec2 n=rotation*normal.xz;
           bladeNormal=normalize(vec3(n.x,normal.y,n.y));
           bladeHeight=uv.y;patchShade=grassGround.z;

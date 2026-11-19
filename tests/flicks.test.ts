@@ -8,7 +8,7 @@ import { ASPECT, makeHand, POSES } from './helpers/synth.ts';
 describe('single-hand movement gestures after a pause', () => {
   it.each([24, 30, 60])('detects quick open-palm flicks at %i fps with smoothing enabled', (fps) => {
     for (const [id, dx, dy] of [
-      ['swish', 1, 0], ['gale', -1, 0], ['tempest', 1, 0], ['rise', 0, -1], ['bury', 0, 1],
+      ['swish', 1, 0], ['swish', -1, 0], ['tempest', 1, 0], ['rise', 0, -1], ['bury', 0, 1],
     ] as const) {
       const engine = new HandsEngine(GESTURES.filter((g) => g.id === id), DEFAULT_TUNING);
       let now = 1000;

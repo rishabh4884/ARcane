@@ -249,12 +249,6 @@ export class AudioEngine {
       case 'frost':
         this.noise({ filter: 'highpass', freq: 4000, freqEnd: 7000, attack: 0.05, decay: 0.3, gain: 0.07, pan });
         break;
-      case 'wind': {
-        const from = detail === 'left' ? 0.8 : -0.8;
-        this.noise({ filter: 'bandpass', freq: 320, freqEnd: 1500, q: 0.9, attack: 0.18, decay: 1, gain: 0.42, pan: from, reverb: 0.4 });
-        this.noise({ filter: 'bandpass', freq: 700, freqEnd: 420, q: 2.4, attack: 0.3, decay: 0.9, gain: 0.18, pan: -from * 0.6, when: 0.2 });
-        break;
-      }
       case 'healing':
         [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => this.tone({ type: 'sine', freq: f, decay: 2.2, attack: 0.02, gain: 0.07, when: i * 0.07, detune: (i - 1.5) * 4, pan: pan * 0.5, reverb: 1 }));
         for (let i = 0; i < 6; i++) this.tone({ type: 'sine', freq: 2093 * (1 + i * 0.25), decay: 0.4, gain: 0.02, when: 0.25 + i * 0.06, pan: (Math.random() - 0.5), reverb: 1 });
@@ -286,9 +280,6 @@ export class AudioEngine {
         for (let i = 0; i < 7; i++) this.tone({ type: 'sine', freq: 1800 + Math.random() * 2600, decay: 0.7 + Math.random() * 0.5, gain: 0.035, when: i * 0.025, pan: pan + (Math.random() - 0.5) * 0.4, reverb: 0.8 });
         for (let i = 0; i < 4; i++) this.noise({ filter: 'bandpass', freq: 2600 + i * 500, q: 3, decay: 0.07, gain: 0.16, when: i * 0.05, pan });
         this.noise({ filter: 'lowpass', freq: 500, decay: 0.25, gain: 0.25, pan });
-        break;
-      case 'wind':
-        this.noise({ filter: 'lowpass', freq: 700, decay: 0.4, gain: 0.25, pan });
         break;
       case 'summon':
         this.tone({ type: 'sine', freq: 80, freqEnd: 40, decay: 0.6, gain: 0.35, pan });

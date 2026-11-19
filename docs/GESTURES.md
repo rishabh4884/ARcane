@@ -1,6 +1,6 @@
 # Gesture guide
 
-ARcane recognises more than thirty gestures with one or both hands. Seven are bound to spells by default, and you can rebind them any time in the **Spellbook** panel.
+ARcane recognises more than thirty gestures with one or both hands. Six are bound to spells by default, and you can rebind them any time in the **Spellbook** panel.
 
 There are two kinds of gesture:
 
@@ -17,11 +17,11 @@ On top of that there are **two-hand gestures** that need both hands in view: mat
 
 ## The gesture library
 
-Only seven gestures are assigned out of the box. The Spellbook dropdown offers the whole library, grouped by kind; anything not assigned to a spell is switched off, so it can never trigger by accident. If two assigned gestures overlap (for example Gale and Swish), the stricter one wins.
+Only six gestures are assigned out of the box. The Spellbook dropdown offers the whole library, grouped by kind; anything not assigned to a spell is switched off, so it can never trigger by accident. If two assigned gestures overlap (for example Tempest and Swish), the stricter one wins.
 
 **Hand signs** (hold for about a third of a second): Closed fist, Victory sign, Horns, Trident (three fingers up), Lance (point), Aegis (open palm, held still for 0.7 s).
 
-**Open-hand sweeps**: Swish (either way), Gale (to your left), Tempest (to your right), Rise (scoop up), Phoenix Ascent (a much faster flick up), Bury (press down).
+**Open-hand sweeps**: Swish (either way), Tempest (to your right), Rise (scoop up), Phoenix Ascent (a much faster flick up), Bury (press down).
 
 **Fist and finger strikes**: Sunder (fist down), Ember Uppercut (fist up), Wrath (fist sideways), Wyrm Slash (pointing finger sideways), Skybolt (pointing finger up), Impale (pointing finger down).
 
@@ -64,7 +64,6 @@ Start with an open palm, pause for a beat so it is recognised, then make one str
 | --- | --- |
 | Phoenix Ascent | Start low and flick the open palm sharply upward. This is the fastest and longest upward stroke. |
 | Rise | Start low and scoop the open palm upward in a confident, smooth movement. |
-| Gale | Sweep your open palm horizontally to the **left side of your screen**. |
 | Tempest | Sweep your open palm horizontally to the **right side of your screen**. |
 | Swish | Sweep your open palm sideways in either direction. Use this when you do not need a left- or right-specific cast. |
 | Bury | Start higher in the frame and press the open palm straight down. |
@@ -119,10 +118,10 @@ Start with both open palms visible, roughly shoulder-width apart. Keep both hand
 The Spellbook shows each gesture’s short instruction under the spell it is assigned to. Tips that apply to many of them:
 
 - **Shapes** need the fingers clearly up or clearly folded. Fold the middle and ring fingers all the way for Horns; tuck ring and little finger in firmly for a Fist.
-- **Sweeps** need to be decisive: roughly two and a half hand-widths in one quick, fairly straight stroke. A lazy drift is ignored on purpose. Start with your hand low in the frame for Rise. A sweep must clearly lead along one direction: a 45° diagonal is ambiguous and casts neither Gale nor Rise.
+- **Sweeps** need to be decisive: roughly two and a half hand-widths in one quick, fairly straight stroke. A lazy drift is ignored on purpose. Start with your hand low in the frame for Rise. A sweep must clearly lead along one direction: a 45° diagonal is ambiguous and casts neither Swish nor Rise.
 - **Sigils**: draw a rounder, slightly larger circle than feels natural, and pause a beat in the pointing pose first.
-- **Open-palm holds** (Aegis, Eclipse) only charge while the palm is still, so sweeping an open hand never charges them on the way. While an open-hand sweep is also assigned (Gale is by default), "still" is stricter and Aegis waits for about a third of a second of stillness before it starts filling, so the pause before a Gale never raises it. After a sweep casts, an open-palm hold cannot start for about a second (or until you change hand shape), so stopping open after a Gale never casts Aegis. Hold the palm still for about a second to cast Aegis on purpose.
-- **Gale** tolerates your palm turning edge-on during the sweep (it often reads as three fingers).
+- **Open-palm holds** (Aegis, Eclipse) only charge while the palm is still, so sweeping an open hand never charges them on the way. While an open-hand sweep is also assigned (Rise is by default), "still" is stricter and Aegis waits for about a third of a second of stillness before it starts filling, so the pause before a sweep never raises it. After a sweep casts, an open-palm hold cannot start for about a second (or until you change hand shape), so stopping open after a sweep never casts Aegis. Hold the palm still for about a second to cast Aegis on purpose.
+- **Sweeps** tolerate your palm turning edge-on mid-stroke (it often reads as three fingers).
 - **Clean signs charge faster.** A crisp, unambiguous hand shape charges up to 20% quicker than a borderline one (unless the same shape also starts an assigned motion, where holds never rush).
 - **Motion blur is tolerated.** A single blurred frame inside a stroke or a circle no longer breaks it.
 - **Two-hand motions** work with either hand leading; you do not need to match “left” and “right” to the screen.

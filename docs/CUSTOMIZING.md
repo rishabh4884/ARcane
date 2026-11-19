@@ -7,12 +7,12 @@ Everything a player or designer is likely to change lives in `src/config/`. With
 Edit `src/config/spells.ts`:
 
 ```ts
-{ id: 'spell-4', name: 'Spell 4', color: '#b69cff', effect: 'wind', defaultGesture: 'swish' }
+{ id: 'spell-8', name: 'Spell 8', color: '#b69cff', effect: 'frost', defaultGesture: 'swish' }
 ```
 
 - `name`: shown in the HUD and as the floating label when cast.
 - `color`: any CSS colour.
-- `effect`: one of `'arrow'`, `'lightning'`, `'frost'`, `'wind'`, `'healing'`, `'summon'` or `'shield'`.
+- `effect`: one of `'arrow'`, `'lightning'`, `'frost'`, `'healing'`, `'summon'` or `'shield'`.
 - `defaultGesture`: any gesture `id` from `gestures.ts`. Each gesture must be used by exactly one spell by default.
 
 Players' own bindings are saved in their browser and win over the defaults. If you change defaults while testing, press **Restore defaults** in the Spellbook (or clear the `arcane.spellbook.v1` key in local storage).
@@ -61,7 +61,7 @@ Because gestures and spells are paired one to one, add a spell (below) for any g
 
 ## Add a spell
 
-Append to `SPELLS` in `src/config/spells.ts` with an unused gesture as `defaultGesture`. The dock, Spellbook panel and key shortcuts (<kbd>1</kbd> to <kbd>9</kbd>) pick it up automatically. The dock currently fits seven columns; adjust `grid-template-columns` in `src/style.css` if you add more.
+Append to `SPELLS` in `src/config/spells.ts` with an unused gesture as `defaultGesture`. The dock, Spellbook panel and key shortcuts (<kbd>1</kbd> to <kbd>9</kbd>) pick it up automatically. The dock currently fits six columns; adjust `grid-template-columns` in `src/style.css` if you add more.
 
 ## Write a real spell effect
 
