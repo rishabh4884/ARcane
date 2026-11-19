@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { CreatureArtwork } from './CreatureArtwork.ts';
+import { CreatureArtwork, type PupilShape } from './CreatureArtwork.ts';
 import { ArtResources } from './storybook.ts';
 import { glowTexture } from './vfx.ts';
 import { bindSpellLights, SPELL_LIGHT_GLSL } from './LanternLighting.ts';
@@ -15,11 +15,11 @@ const SIZES:Record<CreatureKind,{height:number;width:number;head:number;body:num
 };
 
 /** Where the face lives on each 512px head painting: sockets, eye size and the mouth. */
-const FACES:Record<CreatureKind,{eyes:[number,number][];eyeSize:number;mouth:[number,number];mouthSize:[number,number];glow:string;blinks:boolean}>={
-  goblin:{eyes:[[217,244],[298,243]],eyeSize:40,mouth:[256,352],mouthSize:[96,40],glow:'#d4ff6a',blinks:true},
-  root:{eyes:[[230,279],[288,279]],eyeSize:40,mouth:[262,350],mouthSize:[86,40],glow:'#ffb347',blinks:true},
-  hollow:{eyes:[[229,289],[286,289]],eyeSize:30,mouth:[258,402],mouthSize:[34,48],glow:'#e6f3ff',blinks:false},
-  wraith:{eyes:[[234,277],[283,277]],eyeSize:36,mouth:[260,322],mouthSize:[62,34],glow:'#7fe8ff',blinks:true},
+const FACES:Record<CreatureKind,{eyes:[number,number][];eyeSize:number;mouth:[number,number];mouthSize:[number,number];glow:string;blinks:boolean;pupil:PupilShape}>={
+  goblin:{eyes:[[217,244],[298,243]],eyeSize:40,mouth:[256,352],mouthSize:[96,40],glow:'#d4ff6a',blinks:true,pupil:'slit'},
+  root:{eyes:[[230,279],[288,279]],eyeSize:40,mouth:[262,350],mouthSize:[86,40],glow:'#ffb347',blinks:true,pupil:'bar'},
+  hollow:{eyes:[[229,289],[286,289]],eyeSize:30,mouth:[258,402],mouthSize:[34,48],glow:'#e6f3ff',blinks:false,pupil:'pin'},
+  wraith:{eyes:[[234,277],[283,277]],eyeSize:36,mouth:[260,322],mouthSize:[62,34],glow:'#7fe8ff',blinks:true,pupil:'ring'},
 };
 const ANGER=new THREE.Color('#ff3d1f');
 const ICE=new THREE.Color('#9fdcff');
@@ -27,7 +27,13 @@ const WHITE=new THREE.Color('#ffffff');
 const EMBER=new THREE.Color('#ffb066');
 
 interface PartUniforms { bend:{value:number}; curl:{value:number}; height:{value:number} }
-interface Eye { root:THREE.Group; halo:THREE.Mesh<THREE.PlaneGeometry,THREE.MeshBasicMaterial>; core:THREE.Mesh<THREE.PlaneGeometry,THREE.MeshBasicMaterial>; home:THREE.Vector3 }
+type Overlay=THREE.Mesh<THREE.PlaneGeometry,THREE.MeshBasicMaterial>;
+/**
+ * One eye: a halo bleeding light into the socket, a glowing iris, a dark pupil that tracks and
+ * dilates, and a fixed wet glint. Each eye follows the gaze at its own rate, so the pair drifts
+ * very slightly out of step before settling: the stare never looks quite mechanical.
+ */
+interface Eye { root:THREE.Group; halo:Overlay; core:Overlay; pupil:Overlay; glint:Overlay; home:THREE.Vector3; width:number; look:THREE.Vector2; lag:number; scale:number }
 interface ArmRig { uniforms:PartUniforms; phase:number; twitchAt:number; twitch:number; twitchDir:number }
 
 /** Articulated illustrated puppets: expressive silhouettes rather than assemblies of primitives. */
@@ -66,13 +72,18 @@ export class Creature {
   private jerk=0;
   private nextJerk=6;
   private mouthOpen=0;
+  private dilation=.4;
+  private nextRoll=12;
+  private rollAt=-10;
+  private nextTremor=7;
+  private tremorAt=-10;
   private awakenAge=Infinity;
   private static count=0;
 
   constructor(readonly kind:CreatureKind){
     this.seed=(Creature.count++)*7919+kind.length*131;
     this.random=seeded(this.seed);
-    this.nextBlink=1+this.random()*4;this.nextTilt=1+this.random()*4;this.nextJerk=4+this.random()*8;
+    this.nextBlink=1+this.random()*4;this.nextTilt=1+this.random()*4;this.nextJerk=4+this.random()*8;this.nextRoll=9+this.random()*14;this.nextTremor=4+this.random()*8;
     const s=SIZES[kind],face=FACES[kind];
     this.glow=new THREE.Color(face.glow);
     this.edge={value:this.glow.clone()};
@@ -96,11 +107,18 @@ export class Creature {
     const eyeWidth=face.eyeSize/512*headWidth;
     for(const [px,py] of face.eyes){
       const root=new THREE.Group();const home=at(px,py,0.02);root.position.copy(home);
+      // A touch of asymmetry: one eye is always a little larger than the other.
+      const scale=this.eyes.length===0?1:.9+this.random()*.06;
       const halo=this.overlay(glowTexture(),eyeWidth*2.6,eyeWidth*1.5,THREE.AdditiveBlending);
-      const core=this.overlay(glowTexture(),eyeWidth*1.05,eyeWidth*0.42,THREE.AdditiveBlending);core.position.z=0.004;
-      root.add(halo,core);this.head.add(root);this.eyes.push({root,halo,core,home});
+      const core=this.overlay(this.artwork.iris(),eyeWidth*1.1,eyeWidth*0.66,THREE.AdditiveBlending);core.position.z=0.004;
+      const pupil=this.overlay(this.artwork.pupil(face.pupil),eyeWidth*.62,eyeWidth*.62,THREE.NormalBlending);pupil.position.z=0.006;
+      pupil.material.color.set('#010303');pupil.material.opacity=.92;
+      const glint=this.overlay(glowTexture(),eyeWidth*.2,eyeWidth*.16,THREE.AdditiveBlending);glint.position.set(-eyeWidth*.16,eyeWidth*.1,0.008);
+      core.renderOrder=3;pupil.renderOrder=4;glint.renderOrder=5;
+      root.scale.setScalar(scale);root.add(halo,core,pupil,glint);this.head.add(root);
+      this.eyes.push({root,halo,core,pupil,glint,home,width:eyeWidth,look:new THREE.Vector2(),lag:this.eyes.length===0?22:9+this.random()*5,scale});
     }
-    this.mouth=this.overlay(this.artwork.mouth(),face.mouthSize[0]/512*headWidth,face.mouthSize[1]/512*s.head,THREE.NormalBlending);
+    this.mouth=this.overlay(this.artwork.mouth(kind),face.mouthSize[0]/512*headWidth,face.mouthSize[1]/512*s.head,THREE.NormalBlending);
     this.mouth.material.color.set('#ffffff');
     this.mouth.position.copy(at(face.mouth[0],face.mouth[1],0.012));
     this.mouth.scale.y=0.08;
@@ -273,13 +291,36 @@ export class Creature {
     }
     if(windup>0)this.gazeTarget.set(0,0);
     this.gaze.lerp(this.gazeTarget,1-Math.exp(-dt*22));
+    // Rarely, while it is only watching, the eyes roll back white for a moment and snap down.
+    const calm=pose==='idle'||pose==='walk';
+    if(!reducedMotion&&calm&&time>this.nextRoll){this.rollAt=time;this.nextRoll=time+14+this.random()*16;}
+    const rollT=time-this.rollAt,roll=rollT>=0&&rollT<.9?Math.sin(Math.min(1,rollT/.9)*Math.PI)**.6:0;
+    // Now and then one eye shivers on its own.
+    if(!reducedMotion&&time>this.nextTremor){this.tremorAt=time;this.nextTremor=time+5+this.random()*9;}
+    const tremor=!reducedMotion&&time-this.tremorAt<.35?1-(time-this.tremorAt)/.35:0;
+    // Pupils: narrow and watchful at rest, blown wide as it fixes on you to strike, a pinprick when hurt.
+    const hurt=pose==='stagger'||this.hitTime<.4;
+    const dilateGoal=pose==='dead'?1:hurt?.08:pose==='frozen'?this.dilation:strike?.95:windup>0?.35+windup*.65:.32+(reducedMotion?0:Math.sin(time*.37+this.seed)*.08);
+    this.dilation+=(dilateGoal-this.dilation)*(1-Math.exp(-dt*(hurt?20:pose==='windup'?5:2.5)));
+    const shape=face.pupil,d=this.dilation;
+    const pupilX=shape==='slit'?.22+d*.78:shape==='bar'?1:shape==='pin'?.3+d*.8:.55+d*.5;
+    const pupilY=shape==='slit'?1:shape==='bar'?.32+d*.68:pupilX;
     const headWidth=SIZES[this.kind].width*1.2;
-    for(const eye of this.eyes){
-      eye.root.position.set(eye.home.x+this.gaze.x*headWidth*.35,eye.home.y+this.gaze.y*headWidth*.35,eye.home.z);
-      eye.root.scale.set(1+windup*.15,Math.max(.04,openY),1);
+    this.eyes.forEach((eye,index)=>{
+      eye.look.lerp(this.gaze,1-Math.exp(-dt*eye.lag));
+      const jitter=index===1&&tremor>0?Math.sin(time*90)*tremor*.04:0;
+      const lx=(eye.look.x+jitter)*headWidth*.35/eye.width,ly=eye.look.y*headWidth*.35/eye.width+roll*.42;
+      eye.root.position.copy(eye.home);
+      eye.root.scale.set(eye.scale*(1+windup*.15),eye.scale*Math.max(.04,openY),1);
+      eye.core.position.set(lx*eye.width*.7,ly*eye.width*.45,.004);
+      eye.pupil.position.set(lx*eye.width*1.1,ly*eye.width*.7,.006);
+      eye.pupil.scale.set(pupilX,pupilY,1);
+      // Rolled back, the pupil slides up under the lid and the iris goes milky.
+      eye.pupil.material.opacity=.92*(1-roll*.85)*(pose==='dead'?Math.max(0,1-progress*1.4):1);
       eye.halo.material.color.copy(this.eyeColor).multiplyScalar(intensity*.75);
-      eye.core.material.color.copy(this.eyeColor).lerp(WHITE,.45).multiplyScalar(intensity);
-    }
+      eye.core.material.color.copy(this.eyeColor).lerp(WHITE,.45+roll*.4).multiplyScalar(intensity);
+      eye.glint.material.color.setScalar(Math.min(1,intensity)*.85*(openY>.5?1:0));
+    });
     // The jaw: breathes almost shut, opens through the wind-up, gapes on the strike.
     const breathe=reducedMotion?0:Math.max(0,Math.sin(time*1.1+this.seed))*.06;
     const goal=pose==='frozen'?this.mouthOpen:pose==='dead'?.5:strike?1:pose==='stagger'?.55:windup*.75+breathe;

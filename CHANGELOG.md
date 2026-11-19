@@ -12,6 +12,8 @@ All notable changes to ARcane are recorded here. The format follows
 
 ### Added
 
+- Repainted woodland spirits, same silhouettes: every part now has a core shadow, edge occlusion and a moonlit rim, plus its own surface — the goblin's mottled, warted skin, bramble crown, scarred cheek, stitched leather and bone charm; the Rootbound's bark grain, knots, moss, shelf fungi, ember-lit cracks and something small watching from its trunk; the Hollow's cracked, stained skull, moss-hung antlers and a ribcage pressing through its shroud; the Wraith's deep cowl, robe folds, light-stitched runes and a lit lantern with soot and flame. Heads render at 1024px and bodies at 768px.
+- Creepier eyes: deep glowing sockets, a fibrous iris, a species pupil (goblin slit, Rootbound goat bar, Hollow pinprick, Wraith ring) that blows wide as a spirit fixes on you to strike and shrinks to a pinprick when hit, a wet glint, eyes that track out of step, one eye that sometimes shivers, and a rare roll-back. Mouths gained needle teeth and a faint inner glow.
 - Pooled GPU particle system, camera-facing ribbon trails and half-resolution bloom with a display-space grade (vignette, split tone, highlight shoulder, grain). Post-processing switches itself off on slow devices, or with `?post=0`.
 - Rebuilt spell visuals: an energy Arcane Arrow on a gravity arc with trail, motes, launch and impact staging; branching, flickering lightning with scorch, crawl, sparks, screen flash and shake; shattering frost; spiral gale trails with leaves; rune-sigil Mend and Rise with a light pillar; an unfolding hex-lattice Aegis with a persistent ward vignette.
 - Screen feedback layer: lightning flash, healing and ward edge glows, a red hurt vignette and camera shake when struck.
