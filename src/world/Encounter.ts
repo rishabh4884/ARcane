@@ -128,7 +128,7 @@ export class Encounter {
     if(!this.player.cast(effect)){this.notify(`${effect==='healing'?'Mend':effect==='shield'?'Aegis':'Spell'} is recovering · ${this.player.cooldowns[effect].toFixed(1)}s`);return false;}
     if(effect==='healing')this.notify('Mend · 30 vitality restored.');
     if(effect==='shield')this.notify('Aegis · 45-point ward for 5 seconds.');
-    if(effect==='summon')this.notify('Two woodland rangers answer your call.');
+    if(effect==='summon')this.notify('Two woodland gnomes answer your call, rocks in hand.');
     this.refreshHud();return true;
   }
   summon(spawn:THREE.Vector3,focus:THREE.Vector3,enemy:EnemyCombat|null):void {

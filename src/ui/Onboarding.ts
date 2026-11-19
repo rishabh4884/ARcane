@@ -26,7 +26,7 @@ const SPELL_GUIDE: Record<SpellEffect, { role: string; description: string }> = 
   },
   summon: {
     role: 'SUMMON · 10 SECONDS',
-    description: 'Two swift woodland gnomes sprint into range and fire rune bolts at visible enemies, then fade.',
+    description: 'Two sturdy woodland gnomes tear out of the ground, sprint into range and hurl rocks at visible enemies, then sink away.',
   },
   shield: {
     role: 'WARD',

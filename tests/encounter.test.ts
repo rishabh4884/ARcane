@@ -75,7 +75,7 @@ describe('player vitality and wards',()=>{
 });
 
 describe('summoned gnome lifecycle',()=>{
-  it('repositions quickly and lands ranged shots on living, visible targets',()=>{
+  it('repositions quickly and lands thrown rocks on living, visible targets',()=>{
     let health=100;
     const summons=new GnomeSummons([],()=>null,()=>{health-=8;}),point=new THREE.Vector3(0,0,-8);
     summons.summon(point,point,4);
@@ -148,19 +148,45 @@ describe('summoned gnome behaviour',()=>{
 });
 
 describe('gnome rig',()=>{
-  it('is an articulated six-part puppet that starts below the torn ground and climbs out',()=>{
+  it('is a jointed fifteen-part puppet that starts below the torn ground and climbs out',()=>{
     const summons=new GnomeSummons([],()=>null,()=>{}),circle=new THREE.Vector3(0,0,0);
     summons.summon(circle,new THREE.Vector3(0,0,-20));
     const root=summons.group.children[0] as THREE.Group;
     const partMeshes:THREE.Mesh[]=[];
     root.traverse(o=>{if(o instanceof THREE.Mesh&&o.geometry instanceof THREE.PlaneGeometry)partMeshes.push(o);});
-    expect(partMeshes).toHaveLength(6);
+    expect(partMeshes).toHaveLength(15);
+    for(const joint of ['armL_up','armL_fore','armL_hand','armL_fingers','legR_up','legR_low','cap'])expect(root.getObjectByName(joint)).toBeTruthy();
+    const torso=root.getObjectByName('torso')!;
     const world=new THREE.Vector3(),player=new THREE.Vector3(0,1.85,12);
     summons.update(.05,true,player,[]);
-    partMeshes[2].getWorldPosition(world);const buried=world.y;
+    torso.getWorldPosition(world);const buried=world.y;
     for(let i=0;i<25;i++)summons.update(.05,true,player,[]);
-    partMeshes[2].getWorldPosition(world);
+    torso.getWorldPosition(world);
     expect(world.y).toBeGreaterThan(buried+2);
+    summons.dispose();
+  });
+  it('stoops for a rock, carries it in the throwing hand, then hurls it on a falling arc',()=>{
+    let hits=0;
+    const summons=new GnomeSummons([],()=>null,()=>{hits++;}),enemy=new THREE.Vector3(0,0,-6);
+    summons.summon(new THREE.Vector3(0,0,1),enemy,1);
+    const player=new THREE.Vector3(0,1.85,12),target=[{id:1,position:enemy,height:2,alive:true}];
+    const rocksIn=(o:THREE.Object3D)=>{const found:THREE.Mesh[]=[];o.traverse(m=>{if(m instanceof THREE.Mesh&&m.geometry instanceof THREE.IcosahedronGeometry)found.push(m);});return found;};
+    let carried=false,flying:THREE.Mesh|null=null;const heights:number[]=[];
+    for(let i=0;i<160&&hits===0;i++){
+      summons.update(.02,true,player,target);
+      const scout=summons.group.children[0] as THREE.Group;
+      const hand=scout.getObjectByName('armL_hand')!;
+      if(rocksIn(hand).length)carried=true;
+      const loose=summons.group.children.find(c=>c instanceof THREE.Mesh&&c.geometry instanceof THREE.IcosahedronGeometry) as THREE.Mesh|undefined;
+      if(loose){flying=loose;heights.push(loose.position.y);}
+    }
+    expect(carried).toBe(true);
+    expect(flying).not.toBeNull();
+    // Up, then down: a thrown stone, not a bolt.
+    const peak=Math.max(...heights);
+    expect(peak).toBeGreaterThan(heights[0]);
+    expect(heights[heights.length-1]).toBeLessThan(peak);
+    expect(hits).toBe(1);
     summons.dispose();
   });
 });
