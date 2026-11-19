@@ -370,7 +370,7 @@ const NAME: Script = {
     star.sprite.material.opacity = 1 - smooth(8, 11, t) * 0.7;
     const w = s.get('warden');
     w.u.uExposure.value = smooth(6, 10, t) * 1.3;
-    w.u.uDissolve.value = 1 - smooth(6, 10, t);
+    w.overrides.dissolve = 1 - smooth(6, 10, t);
     motes.forEach((m, i) => {
       const a = t * 0.6 + i * (TAU / motes.length);
       m.place(v(G(Math.cos(a) * 2.6, 1.5 + Math.sin(t * 1.3 + i) * 0.8 + i * 0.25, -6 + Math.sin(a) * 2)));
@@ -400,7 +400,7 @@ const WARDEN_SCENE: Script = {
     w.group.scale.setScalar(0.5);
     const k = s.actor('king', UNLIT_KING, 4, -6, -Math.PI / 2, 0, 0.4);
     k.group.scale.setScalar(0.5);
-    k.u.uDissolve.value = 1;
+    k.overrides.dissolve = 1;
     const colors = ['#ffd27a', '#9fe8ff', '#ffb3e6', '#d4ff9a', '#ffffff', '#ffcf7a', '#bfe3ff', '#ffe7a3', '#c9a8ff', '#9ff0d4'];
     const lights = colors.map((c, i) => ({ l: s.lumen(c, 0.35), from: v(G(-14 + i * 3, 2 + (i % 3), -14 + (i % 4) * 4)), at: 3 + i * 1.6 }));
     (s as Shot & { wd?: unknown }).wd = { lights };
@@ -418,10 +418,10 @@ const WARDEN_SCENE: Script = {
       l.sprite.material.opacity = smooth(at - 1.5, at, t) * (1 - smooth(at + 2.2, at + 2.5, t));
     }
     w.group.scale.setScalar(0.5 + smooth(4, 22, t) * 0.25);
-    w.u.uDissolve.value = morph;
+    w.overrides.dissolve = morph;
     king.group.position.copy(w.group.position);
     king.group.scale.setScalar(0.75 + smooth(22, 30, t) * 0.25);
-    king.u.uDissolve.value = 1 - morph;
+    king.overrides.dissolve = 1 - morph;
     s.act('king', 'idle');
     s.face('king', t > 24 ? 0 : Math.PI / 2);
     if (t < 24) king.setYaw(Math.PI / 2);
@@ -559,7 +559,7 @@ const KINDLER: Script = {
     if (t >= 19) s.act('hands', t < 22 ? 'windup' : 'strike', t < 22 ? smooth(19, 22, t) : smooth(22, 27, t));
     const h = s.get('hands');
     h.u.uExposure.value = 1 + smooth(19, 24, t) * 0.6;
-    h.u.uFlash.value = 0.4 * bump(19, 30, t);
+    h.overrides.flash = 0.4 * bump(19, 30, t);
     h.u.uFlashColor.value.set('#ffd9a0');
   },
 };
@@ -599,7 +599,7 @@ const KING: Script = {
       .rot('shoulderR', -1.2 * reach, 0, -0.1 * reach).rot('elbowR', -0.3 * reach).rot('handR', -0.5 * reach);
     s.act('king', 'idle');
     const k = s.get('king');
-    k.u.uEyes.value = 0.7 + smooth(9, 16, t) * 0.6 + Math.sin(t * 2) * 0.1;
+    k.overrides.eyes = 0.7 + smooth(9, 16, t) * 0.6 + Math.sin(t * 2) * 0.1;
     if (t > 15.6 && t < 15.75) { s.stage.shake(0.4); s.stage.flash('#ffe7a3', 0.15); }
     s.stage.illuminate(0, v(G(0, 6.3, -15.2)), new THREE.Color('#ffe7a3'), 0.7 + smooth(9, 16, t), 8);
   },
@@ -631,7 +631,7 @@ const ENDING: Script = {
     s.actor('king', UNLIT_KING, 0, -12, 0, 0, 0.5);
     const w = s.actor('warden', WARDEN, 0, -11, 0, 0, 0.4);
     w.group.scale.setScalar(0.55);
-    w.u.uDissolve.value = 1;
+    w.overrides.dissolve = 1;
     const colors = ['#ffd27a', '#9fe8ff', '#ffb3e6', '#d4ff9a', '#ffffff', '#ffcf7a', '#bfe3ff', '#c9a8ff', '#9ff0d4', '#ffe7a3'];
     const lights = Array.from({ length: 30 }, (_, i) => ({ l: s.lumen(colors[i % colors.length], 0.4), dir: new THREE.Vector3(Math.cos(i * 2.4) * (8 + (i % 5) * 6), 6 + (i % 7) * 2, Math.sin(i * 2.4) * (8 + (i % 5) * 6) - 12) }));
     const field = flowerField(v(G(0, 0, -6)), 22, 900, terrainHeight);
@@ -648,9 +648,9 @@ const ENDING: Script = {
       blooms.push(f);
     }
     const gnomes = [GNOME_DESIGNS.moss, GNOME_DESIGNS.ember, GNOME_DESIGNS.moss, GNOME_DESIGNS.ember];
-    gnomes.forEach((d, i) => { const g = s.actor(`g${i}`, d, Math.cos(i * 1.57) * 1.6, -7.5 + Math.sin(i * 1.57) * 1.6, 0, 0, i * 0.23); g.awaken(1); g.group.visible = false; });
+    gnomes.forEach((d, i) => { const g = s.actor(`g${i}`, d, Math.cos(i * 1.57) * 1.6, -7.5 + Math.sin(i * 1.57) * 1.6, 0, 0, i * 0.23); g.overrides.dissolve = 1; });
     const furs = ['#f3e9da', '#e8d6c0', '#fff6ea', '#e2cdb6', '#f7efe2'], caps = ['#e05a4a', '#f0a640', '#c86ad8', '#5ab0e0', '#e05a4a'];
-    for (let i = 0; i < 5; i++) { const b = s.actor(`b${i}`, bloomkin(furs[i], caps[i]), -5 + i * 2.5, -4 + Math.sin(i * 2) * 2, 0.4, 0, i * 0.31); b.awaken(1); b.group.visible = false; }
+    for (let i = 0; i < 5; i++) { const b = s.actor(`b${i}`, bloomkin(furs[i], caps[i]), -5 + i * 2.5, -4 + Math.sin(i * 2) * 2, 0.4, 0, i * 0.31); b.overrides.dissolve = 1; }
     (s as Shot & { en?: unknown }).en = { lights, field, flies, blooms };
   },
   tick(s, t) {
@@ -658,8 +658,10 @@ const ENDING: Script = {
     // The King kneels and the light he swallowed breaks out of him.
     s.act('king', 'dead', smooth(0, 7, t) * 0.4 + smooth(10, 16, t) * 0.6);
     const king = s.get('king');
-    king.u.uEyes.value = 1 + smooth(2, 9, t) * 3;
-    king.u.uFlash.value = 0.3 * smooth(4, 9, t) * (1 + Math.sin(t * 12) * 0.3);
+    // He kneels first and only comes apart once the light has left him.
+    king.overrides.dissolve = smooth(11, 16.5, t);
+    king.overrides.eyes = 1 + smooth(2, 9, t) * 3;
+    king.overrides.flash = 0.3 * smooth(4, 9, t) * (1 + Math.sin(t * 12) * 0.3);
     king.u.uFlashColor.value.set('#ffe7a3');
     const heart = v(G(0, 5.2, -11.2));
     if (t > 9 && t < 9.2) { s.stage.flash('#fff6d8', 0.9); s.stage.shake(0.6); }
@@ -671,7 +673,7 @@ const ENDING: Script = {
     s.stage.illuminate(0, heart, new THREE.Color('#fff2c8'), 3 * bump(8, 16, t), 30);
     // In his place, the Warden: small again, warm-eyed. He bows, and goes into the light.
     const w = s.get('warden');
-    w.u.uDissolve.value = t < 12 ? 1 : t < 17 ? 1 - smooth(12, 14, t) : smooth(17, 19.5, t);
+    w.overrides.dissolve = t < 12 ? 1 : t < 17 ? 1 - smooth(12, 14, t) : smooth(17, 19.5, t);
     const bow = bump(14.5, 17.5, t);
     const wa = s.actors.get('warden');
     if (wa) wa.input.extra = (an) => an.rig.rot('spine', 0.6 * bow).rot('head', 0.5 * bow).rotPair('shoulder', 0.3 * bow);
@@ -681,7 +683,7 @@ const ENDING: Script = {
     blooms.forEach((f, i) => f.set(smooth(16 + i * 0.4, 18 + i * 0.4, t), smooth(16 + i * 0.4, 18 + i * 0.4, t)));
     for (let i = 0; i < 4; i++) {
       const g = s.get(`g${i}`);
-      if (t > 20 + i * 0.5 && !g.group.visible) { g.group.visible = true; g.awaken(1.1); }
+      if (t > 20 + i * 0.5 && g.overrides.dissolve === 1) { delete g.overrides.dissolve; g.awaken(1.1); }
       const a = t * 0.9 + i * 1.57;
       const p = new THREE.Vector3(Math.cos(a) * 1.7, 0, -7.5 + Math.sin(a) * 1.7);
       g.group.position.set(p.x, terrainHeight(p.x, p.z), p.z);
@@ -695,7 +697,7 @@ const ENDING: Script = {
     }
     for (let i = 0; i < 5; i++) {
       const b = s.get(`b${i}`);
-      if (t > 22 + i * 0.6 && !b.group.visible) { b.group.visible = true; b.awaken(0.8); }
+      if (t > 22 + i * 0.6 && b.overrides.dissolve === 1) { delete b.overrides.dissolve; b.awaken(0.8); }
       s.travel(`b${i}`, [-5 + i * 2.5, -4 + Math.sin(i * 2) * 2], [-4 + i * 2.2 + Math.sin(i) * 2, -6 - (i % 2) * 2], 24 + i * 0.6, 30 + i);
     }
     if (Math.random() < 0.5 && t > 18) s.stage.particles.emit({ x: (Math.random() - 0.5) * 24, y: terrainHeight(0, -8) + 0.5 + Math.random() * 3, z: -8 + (Math.random() - 0.5) * 16, vx: 0, vy: 0.2, vz: 0, color: new THREE.Color(Math.random() < 0.5 ? '#fff3a8' : '#d4ff9a'), size: 0.06, sizeEnd: 0.01, ttl: 2, drag: 1, style: 'glow' });

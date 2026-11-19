@@ -258,8 +258,8 @@ function spiritStag(target: THREE.Vector3, color: THREE.Color, ctx: SpellContext
     const p = stag.group.position.copy(start).addScaledVector(dir, d);
     p.y = terrainHeight(p.x, p.z);
     stag.update(dt, { pose: 'strike', progress: 0.5, attack: 'charge', velocity: age < travel ? velocity : new THREE.Vector3(), faceYaw: yaw, look, groundY: p.y });
-    stag.u.uFlash.value = 0.7 + Math.sin(age * 20) * 0.15;
-    if (age > travel) stag.u.uDissolve.value = clamp01((age - travel) / 0.8);
+    stag.overrides.flash = 0.7 + Math.sin(age * 20) * 0.15;
+    if (age > travel) stag.overrides.dissolve = clamp01((age - travel) / 0.8);
     trail.push(tmp.copy(p).setY(p.y + 2.2));
     trail.update(dt, ctx.cameraPosition);
     trail.opacity = clamp01(1 - Math.max(0, age - travel) / 0.6);

@@ -12,7 +12,7 @@ export const MOODS: Record<Mood, MoodDef> = {
   fen: { fog: '#1f2c22', density: 0.027, sky: '#0d1712', tint: [0.9, 1.05, 0.92], lift: [0.0, 0.008, 0.0], saturation: 0.95, exposure: 0.98, vignette: 0.55 },
   deeps: { fog: '#1a1e2b', density: 0.029, sky: '#0a0c15', tint: [0.88, 0.92, 1.1], lift: [0.004, 0.0, 0.012], saturation: 0.92, exposure: 0.94, vignette: 0.6 },
   throne: { fog: '#29292d', density: 0.025, sky: '#131317', tint: [1.0, 0.97, 1.03], lift: [0.008, 0.006, 0.01], saturation: 0.72, exposure: 0.95, vignette: 0.62 },
-  dawn: { fog: '#8fae96', density: 0.011, sky: '#b9d6de', tint: [1.55, 1.42, 1.2], lift: [0.06, 0.055, 0.03], saturation: 1.3, exposure: 1.08, vignette: 0.28 },
+  dawn: { fog: '#a3bfa6', density: 0.0085, sky: '#c4dde3', tint: [1.34, 1.27, 1.1], lift: [0.03, 0.028, 0.014], saturation: 1.32, exposure: 1.0, vignette: 0.3 },
 };
 
 export interface MoodState { fog: THREE.Color; density: number; sky: THREE.Color; tint: THREE.Vector3; lift: THREE.Vector3; saturation: number; exposure: number; vignette: number }

@@ -71,14 +71,14 @@ describe('bosses choose among their attacks', () => {
     const seen = new Set<string>();
     for (let i = 0; i < 300; i++) {
       const s = new CreatureState('gorrik', undefined, i + 1);
-      s.update(0.1, 2, true, true);
+      s.update(2, 2, true, true);
       if (s.pose === 'windup') seen.add(s.attack.type);
     }
     expect(seen.has('melee')).toBe(true);
     expect(seen.has('shockwave')).toBe(true);
     // A charge needs room to run: never chosen at point-blank range.
     expect(seen.has('charge')).toBe(false);
-    gorrik.update(0.1, 12, true, true);
+    gorrik.update(2, 12, true, true);
     expect(['shockwave', 'charge', 'summon']).toContain(gorrik.attack.type);
   });
   it('a sub-boss and final boss in every chapter, each stronger than the one before', () => {

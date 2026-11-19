@@ -63,6 +63,8 @@ export class Character {
   readonly u: FigureUniforms;
   readonly bones: Record<string, THREE.Bone>;
   yaw = 0;
+  /** Scripted values that win over the figure's own (cutscenes, spells made of light). */
+  readonly overrides: { dissolve?: number; flash?: number; eyes?: number } = {};
   private phase = 0;
   private t = 0;
   private poseAge = 0;
@@ -231,8 +233,11 @@ export class Character {
     const fury = input.pose === 'windup' ? smooth(0, 1, input.progress) : input.pose === 'strike' ? 1 : 0;
     u.uEyeColor.value.copy(this.calmEye).lerp(this.angryEye, fury);
     u.uEyes.value = (dead ? 1 - input.progress : 1) * (0.85 + fury * 0.9 + Math.sin(this.t * 2.3 + this.seed * 7) * 0.08);
+    if (this.overrides.dissolve !== undefined) u.uDissolve.value = this.overrides.dissolve;
+    if (this.overrides.flash !== undefined) u.uFlash.value = this.overrides.flash;
+    if (this.overrides.eyes !== undefined) u.uEyes.value = this.overrides.eyes;
     if (d.cloth) u.uCloth.value.w = clamp(speed / d.pace) * (d.cloth[3] ?? 0.15) * Math.max(0, fwd);
-    this.group.visible = !(dead && input.progress >= 1);
+    this.group.visible = !(dead && input.progress >= 1) && (this.overrides.dissolve ?? 0) < 0.999;
   }
 
   /** World position of the figure's head top, for health bars and labels. */

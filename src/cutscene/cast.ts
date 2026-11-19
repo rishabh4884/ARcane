@@ -3,6 +3,7 @@ import { UNLIT_KING, WARDEN_LOOK, buildRegal } from '../world/characters/bosses.
 import { ellipsoid, lathe, tube, type Body, type V3 } from '../world/rig/Body.ts';
 import type { Design } from '../world/rig/Character.ts';
 import { biped, blink, clamp, idleLife, lookAt, smooth, TAU, type Anim } from '../world/rig/Rig.ts';
+import { glowTexture } from '../world/vfx.ts';
 
 /**
  * THE CUTSCENE CAST
@@ -149,7 +150,7 @@ export function lanternFlower(height = 0.9): { group: THREE.Group; set(open: num
   const core = new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 8), new THREE.MeshBasicMaterial({ color: '#ffcf7a', transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
   core.position.y = -0.06;
   head.add(core);
-  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ color: '#ffcf7a', transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0 }));
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: '#ffcf7a', transparent: true, blending: THREE.AdditiveBlending, depthWrite: false, opacity: 0 }));
   halo.scale.setScalar(0.6);
   halo.position.y = -0.06;
   head.add(halo);
@@ -188,7 +189,7 @@ export function hangingLantern(chain = 2): { group: THREE.Group; pivot: THREE.Ob
   const flame = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), new THREE.MeshBasicMaterial({ color: '#ffc36a', transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
   flame.position.y = -chain - 0.2;
   pivot.add(flame);
-  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ color: '#ffb35a', transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
+  const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color: '#ffb35a', transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
   halo.position.y = -chain - 0.2;
   pivot.add(halo);
   return {
@@ -215,8 +216,14 @@ export function rootThrone(): THREE.Group {
 
 /** A spread of small flowers that can bloom outward from a point. */
 export function flowerField(center: THREE.Vector3, radius: number, count: number, ground: (x: number, z: number) => number): { mesh: THREE.InstancedMesh; set(t: number): void } {
-  const geometry = new THREE.ConeGeometry(0.09, 0.08, 6, 1, true).rotateX(Math.PI).translate(0, 0.16, 0);
-  const material = new THREE.MeshBasicMaterial({ vertexColors: false, side: THREE.DoubleSide });
+  // A five-petalled head held a hand's breadth above the grass.
+  const petals = new THREE.Shape();
+  for (let i = 0; i <= 60; i++) {
+    const a = (i / 60) * TAU, r = 0.05 + 0.045 * Math.pow(Math.abs(Math.cos(a * 2.5)), 0.6);
+    if (i === 0) petals.moveTo(Math.cos(a) * r, Math.sin(a) * r); else petals.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+  }
+  const geometry = new THREE.ShapeGeometry(petals, 1).rotateX(-Math.PI / 2 + 0.25).translate(0, 0.17, 0);
+  const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
   const im = new THREE.InstancedMesh(geometry, material, count);
   const palette = ['#ffd6f0', '#fff3a8', '#bfe8ff', '#ffb3c4', '#d8ffb0', '#ffffff', '#ffcf7a'].map((c) => new THREE.Color(c));
   const spots: Array<{ x: number; z: number; d: number; s: number; r: number }> = [];

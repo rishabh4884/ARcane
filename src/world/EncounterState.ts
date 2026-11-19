@@ -99,7 +99,7 @@ export const CREATURE_SPECS: Record<CreatureKind, CreatureSpec> = {
     attacks: [
       { id: 'charge', type: 'charge', range: [5, 26], windup: 1.6, recovery: 2.4, damage: 24, weight: 3, cooldown: 5 },
       { id: 'antlers', type: 'melee', range: [0, 4.5], windup: 1.2, recovery: 2.0, damage: 22, weight: 3 },
-      { id: 'coldfire', type: 'swarm', range: [0, 30], windup: 1.6, recovery: 2.2, damage: 7, weight: 2, count: 4, cooldown: 6 },
+      { id: 'coldfire', type: 'swarm', range: [0, 30], windup: 1.6, recovery: 2.2, damage: 6, weight: 2, count: 4, cooldown: 6 },
       { id: 'bell', type: 'shockwave', range: [0, 22], windup: 1.9, recovery: 2.5, damage: 16, weight: 1, cooldown: 9 },
     ] }),
   herald: spec({ name: 'The Pale Herald', title: 'Who Rings the Hush', rank: 'sub', role: 'boss', health: 1550, speed: 0.8, radius: 0.7, height: 4.3,
@@ -113,7 +113,7 @@ export const CREATURE_SPECS: Record<CreatureKind, CreatureSpec> = {
   /* ── final bosses: each rules a reach of the wood; the last rules them all ── */
   matron: spec({ name: 'The Moth Matron', title: 'Keeper of the Caged Lights', rank: 'final', role: 'boss', health: 1350, speed: 0.9, radius: 1.3, height: 5.2, hover: 1.2,
     attacks: [
-      { id: 'brood', type: 'swarm', range: [0, 40], windup: 1.6, recovery: 2.0, damage: 5, weight: 3, count: 6 },
+      { id: 'brood', type: 'swarm', range: [0, 40], windup: 1.8, recovery: 2.4, damage: 4, weight: 3, count: 4, cooldown: 4 },
       { id: 'dust', type: 'gust', range: [0, 40], windup: 1.9, recovery: 2.4, damage: 11, weight: 2, cooldown: 7, sight: false },
       { id: 'embrace', type: 'melee', range: [0, 5], windup: 1.5, recovery: 2.4, damage: 20, weight: 2 },
       { id: 'children', type: 'summon', range: [0, 60], windup: 1.8, recovery: 2.0, damage: 0, weight: 1, cooldown: 26, summon: { kind: 'moth', count: 2 }, sight: false },
@@ -127,7 +127,7 @@ export const CREATURE_SPECS: Record<CreatureKind, CreatureSpec> = {
     ] }),
   widow: spec({ name: 'The Lantern Widow', title: 'She Who Keeps the Lost', rank: 'final', role: 'boss', health: 3100, speed: 1.7, radius: 1.9, height: 4.6,
     attacks: [
-      { id: 'lanterns', type: 'volley', range: [0, 34], windup: 1.6, recovery: 2.0, damage: 7, weight: 3, count: 6 },
+      { id: 'lanterns', type: 'volley', range: [0, 34], windup: 1.7, recovery: 2.2, damage: 6, weight: 3, count: 5, cooldown: 3 },
       { id: 'stab', type: 'melee', range: [0, 5.5], windup: 1.3, recovery: 2.0, damage: 26, weight: 3 },
       { id: 'pounce', type: 'charge', range: [6, 26], windup: 1.4, recovery: 2.2, damage: 22, weight: 2, cooldown: 7 },
       { id: 'step', type: 'blink', range: [0, 60], windup: 0.7, recovery: 0.7, damage: 0, weight: 1, cooldown: 9, sight: false },
@@ -136,7 +136,7 @@ export const CREATURE_SPECS: Record<CreatureKind, CreatureSpec> = {
   king: spec({ name: 'The Unlit King', title: 'Who Swallowed Every Light', rank: 'final', role: 'boss', health: 5000, speed: 0.5, radius: 2.3, height: 9.2,
     attacks: [
       { id: 'hands', type: 'spikes', range: [0, 50], windup: 1.7, recovery: 2.2, damage: 22, weight: 3 },
-      { id: 'darkstars', type: 'stars', range: [0, 60], windup: 2.0, recovery: 2.4, damage: 9, weight: 3, count: 7, sight: false },
+      { id: 'darkstars', type: 'stars', range: [0, 60], windup: 2.0, recovery: 2.4, damage: 9, weight: 3, count: 7, cooldown: 4, sight: false },
       { id: 'devour', type: 'darkness', range: [0, 60], windup: 2.6, recovery: 3.0, damage: 6, weight: 1, cooldown: 26, sight: false },
       { id: 'crush', type: 'shockwave', range: [0, 40], windup: 2.2, recovery: 2.6, damage: 26, weight: 2, cooldown: 7 },
       { id: 'court', type: 'summon', range: [0, 60], windup: 2.0, recovery: 2.0, damage: 0, weight: 1, cooldown: 28, summon: { kind: 'hollow', count: 1 }, sight: false },
@@ -183,6 +183,8 @@ export class CreatureState {
   private savedAge = 0;
   private readonly cooldowns = new Map<string, number>();
   private interruptGuard = 0;
+  /** Time spent walking since the last attack: bosses move between blows instead of chaining them. */
+  private walked = 0;
   private random: () => number;
 
   constructor(readonly kind: CreatureKind, readonly scaling: Scaling = NO_SCALING, seed = 1) {
@@ -288,9 +290,11 @@ export class CreatureState {
       }
       return false;
     }
+    if (this.pose !== 'walk') { this.enter('walk'); this.walked = 0; }
+    this.walked += dt;
+    if (this.boss && this.walked < 1.6) return false;
     const choice = this.choose(distance, lineOfSight);
     if (choice) { this.attack = choice; this.enter('windup'); return false; }
-    if (this.pose !== 'walk') this.enter('walk');
     return false;
   }
 
