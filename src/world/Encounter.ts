@@ -600,6 +600,7 @@ export class Encounter {
     // Spells queued on the game clock.
     for (let i = this.queued.length - 1; i >= 0; i--) {
       const q = this.queued[i];
+      if (!q) continue;
       if (q.generation !== this.generation) { this.queued.splice(i, 1); continue; }
       if (this.time >= q.at) { this.queued.splice(i, 1); this.hitFoe(q.foe, q.effect, q.point, q.amount); }
     }
@@ -935,7 +936,9 @@ export class Encounter {
   private updateProjectiles(dt: number): void {
     const eye = this.camera.position;
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
+      // A hit can end the fight and clear every projectile mid-loop.
       const pr = this.projectiles[i];
+      if (!pr) continue;
       if (pr.delay > 0) {
         pr.delay -= dt;
         if (pr.delay <= 0) { pr.group.visible = true; this.fx.events?.emit({ type: 'projectile', position: pr.group.position.clone(), pan: this.pan(pr.group.position), style: pr.style }); }
@@ -989,12 +992,13 @@ export class Encounter {
           done = true;
         }
       }
-      if (done) { this.removeProjectile(i); }
+      if (done && this.projectiles[i] === pr) this.removeProjectile(i);
     }
   }
 
   private removeProjectile(i: number): void {
     const pr = this.projectiles[i];
+    if (!pr) return;
     pr.group.removeFromParent();
     pr.group.traverse((o) => { if (o instanceof THREE.Mesh || o instanceof THREE.Sprite) (o.material as THREE.Material).dispose(); });
     pr.trail?.dispose();
@@ -1091,6 +1095,7 @@ export class Encounter {
   private updateHazards(dt: number): void {
     for (let i = this.hazards.length - 1; i >= 0; i--) {
       const h = this.hazards[i];
+      if (!h) continue;
       h.age += dt;
       const t = h.age / h.life;
       if (h.kind === 'telegraph') {
