@@ -12,6 +12,7 @@ All notable changes to ARcane are recorded here. The format follows
 
 ### Changed
 
+- The Rise gnomes match the new look: thin, warm, half-transparent lines instead of heavy cartoon ink, feathered and softly shaded. Each gnome is seven continuous painted sheets skinned to one skeleton (no visible joints when knees and elbows bend), with a three-segment cap that flops and trails behind every turn and landing and a beard that swings a beat behind the jaw. Their boots stand in the ground mist.
 - The spirits are repainted for a soft, painted 2D look instead of cut-outs: no ink outlines, dark quiet masses that belong to the fog, feathered edges, a thin backlight on edges facing the sky, very little interior detail, and limbs that melt into the body. Distance haze fades them toward the air and the ground mist swallows their feet.
 - Each spirit is now a 2D bone rig: every painting is a single sheet skinned to one skeleton, so spines ripple and elbows, wrists and talons bend the paint itself. Joints move through damped springs (late arrival, slight overshoot, settle), fingers curl in a slow ripple, and a hit whips up through the body.
 - Spirits pause. Every few seconds one lets its breath, sway and even its cloth run down and simply watches you, then breaks the stillness with one small sudden movement. Wind-ups draw back slowly, hold frozen, then tremble before the strike.

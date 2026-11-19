@@ -23,7 +23,7 @@ export class Encounter {
   readonly player=new PlayerState();
   readonly group=new THREE.Group();
   private readonly actors:Actor[]=[];
-  private readonly depthOrder:Actor[]=[];
+  private readonly depthOrder:{figure:THREE.Object3D;distance:number}[]=[];
   private readonly art=new ArtResources();
   private readonly projectiles:Projectile[]=[];
   private readonly events=new AbortController();
@@ -284,9 +284,11 @@ export class Encounter {
     }
     // Soft-edged spirits blend with what is behind them, so each is drawn as one unit, far to near,
     // and before the mist and spell light that should drift in front of them.
-    this.depthOrder.length=0;this.depthOrder.push(...this.actors);
-    this.depthOrder.sort((a,b)=>b.group.position.distanceToSquared(this.camera.position)-a.group.position.distanceToSquared(this.camera.position));
-    this.depthOrder.forEach((actor,i)=>{actor.puppet.group.renderOrder=-200+i;});
+    this.depthOrder.length=0;
+    for(const actor of this.actors)this.depthOrder.push({figure:actor.puppet.group,distance:actor.group.position.distanceToSquared(this.camera.position)});
+    for(const figure of this.summons.figures())this.depthOrder.push({figure,distance:figure.getWorldPosition(this.scratch).distanceToSquared(this.camera.position)});
+    this.depthOrder.sort((a,b)=>b.distance-a.distance);
+    this.depthOrder.forEach((entry,i)=>{entry.figure.renderOrder=-200+i;});
     this.summons.update(dt,this.player.alive,this.camera.position,
       this.actors.map(actor=>({id:actor.id,position:actor.group.position,height:CREATURE_SPECS[actor.puppet.kind].height,alive:actor.state.alive})),reducedMotion);
     for(let i=this.projectiles.length-1;i>=0;i--){

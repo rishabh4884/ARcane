@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { CreatureArtwork, sheetSize, type CreaturePart, type PupilShape } from './CreatureArtwork.ts';
 import { ArtResources } from './storybook.ts';
 import { glowTexture } from './vfx.ts';
-import { bindSpellLights, SPELL_LIGHT_GLSL } from './LanternLighting.ts';
+import { paintedMaterial, type PaintUniforms } from './paintMaterial.ts';
 
 export type CreatureKind='goblin'|'root'|'hollow'|'wraith';
 export type CreaturePose='idle'|'walk'|'windup'|'strike'|'recover'|'stagger'|'frozen'|'dead';
@@ -25,8 +25,6 @@ const ANGER=new THREE.Color('#ff3d1f');
 const ICE=new THREE.Color('#9fdcff');
 const WHITE=new THREE.Color('#ffffff');
 const EMBER=new THREE.Color('#ffb066');
-/** The air between the caster and a spirit: what distance and the ground mist fade it toward. */
-const AIR=new THREE.Color('#2c3838');
 
 /**
  * Where each painted arm bends, in its 512px artwork: elbow and wrist, the knuckle line, and every
@@ -127,10 +125,11 @@ export class Creature {
   private readonly footing:Overlay;
   private readonly glow:THREE.Color;
   private readonly eyeColor=new THREE.Color();
-  private readonly dissolve={value:0};
-  private readonly edge:{value:THREE.Color};
-  private readonly flow={value:new THREE.Vector4()};
-  private readonly ground={value:0};
+  private readonly paint:PaintUniforms;
+  private get dissolve(){return this.paint.dissolve;}
+  private get edge(){return this.paint.edge;}
+  private get flow(){return this.paint.flow;}
+  private get ground(){return this.paint.ground;}
   private readonly seed:number;
   private readonly random:()=>number;
   private readonly spineSprings={hips:new Spring(40,10),spine:new Spring(30,8),chest:new Spring(22,6),neck:new Spring(26,8),head:new Spring(34,9)};
@@ -183,7 +182,7 @@ export class Creature {
     this.nextHold=TEMPER[kind].holdEvery[0]*.5+r()*TEMPER[kind].holdEvery[1];
     const s=SIZES[kind],face=FACES[kind];
     this.glow=new THREE.Color(face.glow);
-    this.edge={value:this.glow.clone()};
+    this.paint={dissolve:{value:0},edge:{value:this.glow.clone()},flow:{value:new THREE.Vector4()},ground:{value:0},mist:{value:.75}};
     this.group.name=CREATURE_NAMES[kind];this.group.renderOrder=-100;
     this.group.add(this.body);
     this.flow.value.y=TEMPER[kind].cloth;
@@ -400,55 +399,9 @@ export class Creature {
     return mesh;
   }
 
-  /**
-   * The shared painted-skin material. Soft (blended) edges, an optional cloth flow in the vertex
-   * shader, then in the fragment: the dissolve, spell light, distance haze and the ground mist that
-   * swallows the feet.
-   */
+  /** The shared painted-skin material (paintMaterial.ts), owned by this spirit's resources. */
   private skin(map:THREE.Texture,flowMode:number):THREE.MeshBasicMaterial {
-    const material=this.art.material(new THREE.MeshBasicMaterial({map,alphaTest:.03,transparent:true,depthWrite:true,side:THREE.DoubleSide,fog:true}));material.toneMapped=false;
-    const dissolve=this.dissolve,edge=this.edge,flow=this.flow,ground=this.ground,mode={value:flowMode},air={value:AIR};
-    material.onBeforeCompile=(shader)=>{
-      shader.uniforms.uFlow=flow;shader.uniforms.uFlowMode=mode;shader.uniforms.uGround=ground;shader.uniforms.uAir=air;
-      shader.uniforms.uDissolve=dissolve;shader.uniforms.uEdge=edge;bindSpellLights(shader.uniforms);
-      shader.vertexShader=shader.vertexShader.replace('#include <common>','#include <common>\nuniform vec4 uFlow; uniform float uFlowMode; varying vec2 vPartUv; varying vec3 vPartWorld;')
-        .replace('#include <begin_vertex>',`#include <begin_vertex>
-          vPartUv = uv;
-          if (uFlowMode > 0.0) {
-            // Cloth: slow, overlapping waves that grow toward the hem; strands hang looser still.
-            float hang = 1.0 - uv.y;
-            float w = uFlowMode > 1.5 ? pow(hang, 1.1) * 1.8 : pow(hang, 1.5) * uFlowMode;
-            float t = uFlow.x;
-            vec3 q = position;
-            float wave = sin(t * 0.9 + q.y * 1.7 + q.x * 0.8) * 0.55 + sin(t * 0.53 - q.y * 2.9 + q.x * 2.1 + 1.7) * 0.3 + sin(t * 1.6 + q.x * 5.0 - q.y * 4.0) * 0.15;
-            transformed.x += (wave * uFlow.y + uFlow.z) * w;
-            transformed.z += (sin(t * 0.7 + q.x * 3.1 + q.y * 1.3) * uFlow.y * 0.6 + uFlow.w) * w;
-            transformed.y += abs(wave) * uFlow.y * 0.1 * w;
-          }`)
-        .replace('#include <project_vertex>','#include <project_vertex>\n          vPartWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;');
-      shader.fragmentShader=shader.fragmentShader.replace('#include <common>',`#include <common>
-          uniform float uDissolve; uniform vec3 uEdge; uniform float uGround; uniform vec3 uAir; varying vec2 vPartUv; varying vec3 vPartWorld;
-          ${SPELL_LIGHT_GLSL}
-          float creatureHash(vec2 p){ return fract(sin(dot(p, vec2(41.3, 289.1))) * 45758.5453); }
-          float creatureNoise(vec2 p){ vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
-            return mix(mix(creatureHash(i), creatureHash(i + vec2(1.0, 0.0)), f.x), mix(creatureHash(i + vec2(0.0, 1.0)), creatureHash(i + vec2(1.0, 1.0)), f.x), f.y); }`)
-        .replace('#include <alphatest_fragment>',`#include <alphatest_fragment>
-          float creatureGrain = creatureNoise(vPartUv * 9.0) * 0.65 + creatureNoise(vPartUv * 23.0) * 0.35;
-          // Dissolve from the top down, broken up by noise, with a glowing burning edge.
-          float creatureFront = creatureGrain * 0.55 + vPartUv.y * 0.45;
-          float creatureCut = uDissolve * 1.08 - 0.04;
-          if (uDissolve > 0.0 && creatureFront < creatureCut) discard;
-          float creatureBurn = uDissolve > 0.0 ? 1.0 - smoothstep(0.0, 0.06, creatureFront - creatureCut) : 0.0;
-          diffuseColor.rgb = mix(diffuseColor.rgb, uEdge * 1.8, creatureBurn);
-          diffuseColor.rgb *= 1.0 + spellIllumination(vPartWorld);
-          // Air: distance softens the figure toward the fog, and the ground mist swallows its feet.
-          float creatureAir = 1.0 - exp(-length(vPartWorld - cameraPosition) * 0.05);
-          float creatureLow = 1.0 - smoothstep(uGround - 0.1, uGround + 0.75, vPartWorld.y);
-          diffuseColor.rgb = mix(diffuseColor.rgb, uAir, clamp(creatureAir * 0.55 + creatureLow * 0.5, 0.0, 0.85));
-          diffuseColor.a *= 1.0 - creatureLow * 0.65;`);
-    };
-    material.customProgramCacheKey=()=>'creature-paint-v3';
-    return material;
+    return this.art.material(paintedMaterial(map,this.paint,flowMode));
   }
 
   /* ─────────────────────────────── public ─────────────────────────────── */

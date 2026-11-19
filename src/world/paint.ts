@@ -24,6 +24,8 @@ export interface Finish {
   fadeTop?: [number, number];
   fadeBottom?: [number, number];
   seed?: number;
+  /** Canvas pixels per artwork unit; radii are given in artwork units. Defaults to width / 512. */
+  pixelScale?: number;
 }
 
 /**
@@ -115,7 +117,7 @@ export function finish(ctx: CanvasRenderingContext2D, options: Finish = {}): voi
   const n = width * height;
   const alpha = new Float32Array(n);
   for (let i = 0; i < n; i++) alpha[i] = data[i * 4 + 3] / 255;
-  const scale = width / 512;
+  const scale = options.pixelScale ?? width / 512;
   const feather = blur(alpha, width, height, (options.feather ?? 3) * scale);
   const rimWidth = (options.rimWidth ?? 10) * scale;
   const rimField = options.rim ? blur(alpha, width, height, rimWidth) : null;

@@ -148,14 +148,14 @@ describe('summoned gnome behaviour',()=>{
 });
 
 describe('gnome rig',()=>{
-  it('is a jointed fifteen-part puppet that starts below the torn ground and climbs out',()=>{
+  it('is a skinned, seven-sheet puppet that starts below the torn ground and climbs out',()=>{
     const summons=new GnomeSummons([],()=>null,()=>{}),circle=new THREE.Vector3(0,0,0);
     summons.summon(circle,new THREE.Vector3(0,0,-20));
     const root=summons.group.children[0] as THREE.Group;
     const partMeshes:THREE.Mesh[]=[];
-    root.traverse(o=>{if(o instanceof THREE.Mesh&&o.geometry instanceof THREE.PlaneGeometry)partMeshes.push(o);});
-    expect(partMeshes).toHaveLength(15);
-    for(const joint of ['armL_up','armL_fore','armL_hand','armL_fingers','legR_up','legR_low','cap'])expect(root.getObjectByName(joint)).toBeTruthy();
+    root.traverse(o=>{if(o instanceof THREE.SkinnedMesh)partMeshes.push(o);});
+    expect(partMeshes).toHaveLength(7);
+    for(const joint of ['armL_up','armL_fore','armL_hand','armL_fingers','legR_up','legR_low','cap','cap2','cap3','beard'])expect(root.getObjectByName(joint)).toBeTruthy();
     const torso=root.getObjectByName('torso')!;
     const world=new THREE.Vector3(),player=new THREE.Vector3(0,1.85,12);
     summons.update(.05,true,player,[]);

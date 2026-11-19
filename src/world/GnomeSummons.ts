@@ -2,6 +2,8 @@ import * as THREE from 'three';
 import type { ParticleSystem } from './particles.ts';
 import { EYE_HEIGHT, moveOnGround, terrainHeight, type Obstacle } from './spatial.ts';
 import { Trail } from './vfx.ts';
+import { finish } from './paint.ts';
+import { paintUniforms, paintedMaterial, type PaintUniforms } from './paintMaterial.ts';
 
 export const GNOME_LIFETIME = 10;
 /** How far a gnome will look for a spirit to pelt. */
@@ -36,34 +38,60 @@ const FEET_PX = 705;
 /** Artwork pixels rendered per texture pixel: the parts are small, so render them crisp. */
 const TEXTURE_SCALE = 1.2;
 
-type PartName =
-  | 'legL_up' | 'legL_low' | 'legR_up' | 'legR_low'
-  | 'armL_up' | 'armL_fore' | 'armL_hand' | 'armL_fingers'
-  | 'torso' | 'head' | 'cap'
-  | 'armR_up' | 'armR_fore' | 'armR_hand' | 'armR_fingers';
+type PartName = 'legL' | 'legR' | 'torso' | 'armL' | 'head' | 'cap' | 'armR';
+type BoneName =
+  | 'pelvis' | 'torso' | 'chest' | 'head' | 'beard' | 'cap' | 'cap2' | 'cap3'
+  | 'armL_up' | 'armL_fore' | 'armL_hand' | 'armL_fingers' | 'armR_up' | 'armR_fore' | 'armR_hand' | 'armR_fingers'
+  | 'legL_up' | 'legL_low' | 'legL_foot' | 'legR_up' | 'legR_low' | 'legR_foot';
 
 /**
- * The rig, back to front. Each part is cropped from its own `<g id>` in the gnome SVG: `rect` is
- * the crop in artwork pixels, `pivot` the joint it turns about, `parent` the part it hangs from.
- * The gnome faces screen-right; L is the throwing arm (it winds up behind the head, so it sits
- * between coat and head), R the arm that sights the target.
+ * The skeleton, in artwork pixels (the gnome faces screen-right; L is the throwing arm). The
+ * pelvis carries the legs and does not lean; the torso leans about the same point. The cap is a
+ * three-bone chain so its tip can flop and trail; the beard sways on its own bone.
  */
-const PARTS: ReadonlyArray<{ name: PartName; rect: [number, number, number, number]; pivot: [number, number]; parent: PartName | null }> = [
-  { name: 'legL_up', rect: [140, 578, 120, 92], pivot: [212, 596], parent: null },
-  { name: 'legL_low', rect: [108, 612, 152, 112], pivot: [208, 645], parent: 'legL_up' },
-  { name: 'legR_up', rect: [262, 576, 100, 94], pivot: [310, 594], parent: null },
-  { name: 'legR_low', rect: [262, 612, 196, 122], pivot: [316, 645], parent: 'legR_up' },
-  { name: 'torso', rect: [60, 330, 396, 272], pivot: [256, 598], parent: null },
-  { name: 'armL_up', rect: [130, 326, 72, 148], pivot: [166, 372], parent: 'torso' },
-  { name: 'armL_fore', rect: [134, 428, 64, 100], pivot: [166, 448], parent: 'armL_up' },
-  { name: 'armL_hand', rect: [138, 494, 80, 72], pivot: [166, 515], parent: 'armL_fore' },
-  { name: 'armL_fingers', rect: [138, 532, 56, 52], pivot: [166, 542], parent: 'armL_hand' },
-  { name: 'head', rect: [78, 112, 360, 330], pivot: [256, 405], parent: 'torso' },
-  { name: 'cap', rect: [136, 16, 248, 258], pivot: [258, 240], parent: 'head' },
-  { name: 'armR_up', rect: [310, 326, 72, 148], pivot: [346, 372], parent: 'torso' },
-  { name: 'armR_fore', rect: [314, 428, 64, 100], pivot: [346, 448], parent: 'armR_up' },
-  { name: 'armR_hand', rect: [294, 494, 80, 72], pivot: [346, 515], parent: 'armR_fore' },
-  { name: 'armR_fingers', rect: [318, 532, 56, 52], pivot: [346, 542], parent: 'armR_hand' },
+const BONES: ReadonlyArray<[BoneName, number, number, BoneName | null]> = [
+  ['pelvis', 256, 598, null], ['torso', 256, 598, 'pelvis'], ['chest', 256, 470, 'torso'], ['head', 256, 405, 'chest'],
+  ['beard', 256, 330, 'head'], ['cap', 258, 236, 'head'], ['cap2', 266, 150, 'cap'], ['cap3', 310, 84, 'cap2'],
+  ['armL_up', 166, 372, 'chest'], ['armL_fore', 166, 448, 'armL_up'], ['armL_hand', 166, 515, 'armL_fore'], ['armL_fingers', 166, 542, 'armL_hand'],
+  ['armR_up', 346, 372, 'chest'], ['armR_fore', 346, 448, 'armR_up'], ['armR_hand', 346, 515, 'armR_fore'], ['armR_fingers', 346, 542, 'armR_hand'],
+  ['legL_up', 212, 596, 'pelvis'], ['legL_low', 208, 645, 'legL_up'], ['legL_foot', 196, 684, 'legL_low'],
+  ['legR_up', 310, 594, 'pelvis'], ['legR_low', 316, 645, 'legR_up'], ['legR_foot', 330, 684, 'legR_low'],
+];
+const BONE_INDEX = Object.fromEntries(BONES.map(([name], i) => [name, i])) as Record<BoneName, number>;
+type Weights = Array<[BoneName, number]>;
+const ramp = (x: number, a: number, b: number) => THREE.MathUtils.smoothstep(x, a, b);
+/** Blend down a chain of bones by artwork height: [bone, joint y] from top to bottom. */
+function chain(py: number, joints: Array<[BoneName, number]>, width = 14): Weights {
+  for (let i = joints.length - 1; i > 0; i--) {
+    const [below, at] = joints[i];
+    if (py > at - width) { const t = ramp(py, at - width, at + width); return [[joints[i - 1][0], 1 - t], [below, t]]; }
+  }
+  return [[joints[0][0], 1]];
+}
+const arm = (side: 'L' | 'R') => (_px: number, py: number): Weights => {
+  const w = chain(py, [[`arm${side}_up`, 0], [`arm${side}_fore`, 448], [`arm${side}_hand`, 515], [`arm${side}_fingers`, 544]] as Array<[BoneName, number]>, 12);
+  // The sleeve's top stays partly with the chest so the shoulder never tears from the coat.
+  const toChest = 1 - ramp(py, 340, 380);
+  return toChest > 0 ? [...w.map(([b, v]) => [b, v * (1 - toChest * 0.4)] as [BoneName, number]), ['chest', toChest * 0.4]] : w;
+};
+const leg = (side: 'L' | 'R') => (_px: number, py: number): Weights => {
+  const w = chain(py, [[`leg${side}_up`, 0], [`leg${side}_low`, 645], [`leg${side}_foot`, 684]] as Array<[BoneName, number]>, 14);
+  const toPelvis = 1 - ramp(py, 590, 615);
+  return toPelvis > 0 ? [...w.map(([b, v]) => [b, v * (1 - toPelvis * 0.5)] as [BoneName, number]), ['pelvis', toPelvis * 0.5]] : w;
+};
+
+/**
+ * One painted sheet per body part, cropped from its `<g id>` in the gnome SVG (`rect` in artwork
+ * pixels), back to front, with the weights that bind it to the skeleton.
+ */
+const PARTS: ReadonlyArray<{ name: PartName; rect: [number, number, number, number]; grid: [number, number]; weights: (px: number, py: number) => Weights }> = [
+  { name: 'legL', rect: [108, 578, 152, 146], grid: [3, 10], weights: leg('L') },
+  { name: 'legR', rect: [262, 576, 196, 158], grid: [4, 10], weights: leg('R') },
+  { name: 'torso', rect: [60, 330, 396, 272], grid: [6, 8], weights: (_x, py) => chain(py, [['chest', 0], ['torso', 520]], 50) },
+  { name: 'armL', rect: [130, 326, 92, 258], grid: [3, 18], weights: arm('L') },
+  { name: 'head', rect: [78, 112, 360, 330], grid: [6, 7], weights: (px, py) => { const t = ramp(py, 330, 372) * (1 - ramp(Math.abs(px - 256), 62, 80)); return [['head', 1 - t], ['beard', t]]; } },
+  { name: 'cap', rect: [136, 16, 248, 258], grid: [6, 10], weights: (_x, py) => chain(-py, [['cap', -999], ['cap2', -200], ['cap3', -124]], 34) },
+  { name: 'armR', rect: [290, 326, 92, 258], grid: [3, 18], weights: arm('R') },
 ];
 const PART_NAMES = PARTS.map((part) => part.name);
 
@@ -103,10 +131,11 @@ export interface GnomeTarget {
 }
 
 interface Rig {
+  /** Sorted as one unit against the spirits (Encounter sets its renderOrder by depth). */
   root: THREE.Group;
-  parts: Record<PartName, THREE.Group>;
-  rest: Record<PartName, THREE.Vector3>;
+  parts: Record<BoneName, THREE.Bone>;
   materials: THREE.MeshBasicMaterial[];
+  paint: PaintUniforms;
 }
 
 interface Scout {
@@ -128,8 +157,11 @@ interface Scout {
   nextGlance: number;
   /** The rock being picked up or carried, before it is thrown. */
   rock: THREE.Mesh | null;
-  cap: number;
-  capVelocity: number;
+  /** Floppy cap (three segments, each lagging the one before) and a swaying beard. */
+  cap: number[];
+  capVelocity: number[];
+  beard: number;
+  beardVelocity: number;
   lastHead: number;
   lastRise: number;
 }
@@ -163,7 +195,12 @@ async function renderParts(url: string): Promise<Record<PartName, HTMLCanvasElem
       const canvas = document.createElement('canvas');
       canvas.width = width;
       canvas.height = height;
-      canvas.getContext('2d')?.drawImage(image, 0, 0, width, height);
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      if (ctx) {
+        ctx.drawImage(image, 0, 0, width, height);
+        // Soft paint: feathered edges, a warm backlight, gentle shading toward the silhouette, grain.
+        finish(ctx, { pixelScale: TEXTURE_SCALE, feather: 2.2, rim: [238, 222, 182], rimWidth: 6, rimStrength: 0.32, edgeShade: 0.32, shadeWidth: 16, grain: 0.03, mottle: 0.08, seed: name.length * 17 });
+      }
       out[name] = canvas;
     } finally {
       URL.revokeObjectURL(objectUrl);
@@ -245,11 +282,21 @@ export class GnomeSummons {
     this.obstacles = obstacles;
     this.intersectEnvironment = intersectEnvironment;
     this.group.name = 'Rise · woodland gnomes';
-    // Each part's plane is its crop, shifted so its own joint sits at the origin.
-    this.geometries = Object.fromEntries(PARTS.map(({ name, rect: [x, y, w, h], pivot }) => {
-      const geometry = new THREE.PlaneGeometry((w / FRAME_W) * RIG_W, (h / FRAME_H) * RIG_H);
-      const center = rigPoint(x + w / 2, y + h / 2).sub(rigPoint(...pivot));
+    // Each part is a grid over its crop, in rig space, bound to the skeleton by its weights.
+    this.geometries = Object.fromEntries(PARTS.map(({ name, rect: [x, y, w, h], grid, weights }) => {
+      const geometry = new THREE.PlaneGeometry((w / FRAME_W) * RIG_W, (h / FRAME_H) * RIG_H, grid[0], grid[1]);
+      const center = rigPoint(x + w / 2, y + h / 2);
       geometry.translate(center.x, center.y, 0);
+      const position = geometry.getAttribute('position');
+      const index = new Uint16Array(position.count * 4), weight = new Float32Array(position.count * 4);
+      for (let i = 0; i < position.count; i++) {
+        const px = (position.getX(i) / RIG_W + 0.5) * FRAME_W, py = FEET_PX - (position.getY(i) / RIG_H) * FRAME_H;
+        const list = weights(px, py).filter(([, v]) => v > 1e-3).sort((a, b) => b[1] - a[1]).slice(0, 4);
+        const total = list.reduce((sum, [, v]) => sum + v, 0) || 1;
+        list.forEach(([bone, v], k) => { index[i * 4 + k] = BONE_INDEX[bone]; weight[i * 4 + k] = v / total; });
+      }
+      geometry.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(index, 4));
+      geometry.setAttribute('skinWeight', new THREE.Float32BufferAttribute(weight, 4));
       return [name, geometry];
     })) as Record<PartName, THREE.PlaneGeometry>;
     this.textures = ['gnome-moss.svg', 'gnome-ember.svg'].map((file) => {
@@ -304,7 +351,7 @@ export class GnomeSummons {
         root, rig, shadow, tear, side, phase: i * Math.PI,
         nextThrow: 0.1 + i * 0.45, emerge: -i * 0.15, tore: false, attack: -1, attackTarget: null,
         facing: side, run: 0, stride: i * Math.PI, glance: 0, nextGlance: 1 + i, rock: null,
-        cap: 0, capVelocity: 0, lastHead: 0, lastRise: 0,
+        cap: [0, 0, 0], capVelocity: [0, 0, 0], beard: 0, beardVelocity: 0, lastHead: 0, lastRise: 0,
       });
     }
   }
@@ -391,6 +438,9 @@ export class GnomeSummons {
     }
   }
 
+  /** The figures to depth-sort with the spirits (blended edges need back-to-front drawing). */
+  figures(): THREE.Object3D[] { return this.scouts.map((scout) => scout.rig.root); }
+
   clear(): void {
     this.clearScouts();
     for (const rock of this.rocks) this.removeRock(rock);
@@ -425,25 +475,36 @@ export class GnomeSummons {
 
   private buildRig(variant: number): Rig {
     const root = new THREE.Group();
-    const materials: THREE.MeshBasicMaterial[] = [];
-    const parts = {} as Record<PartName, THREE.Group>;
-    const rest = {} as Record<PartName, THREE.Vector3>;
-    PARTS.forEach(({ name, pivot, parent }, layer) => {
-      const joint = new THREE.Group();
-      joint.name = name;
-      joint.position.copy(rigPoint(...pivot)).sub(parent ? rigPoint(...PARTS.find((p) => p.name === parent)!.pivot) : new THREE.Vector3());
-      rest[name] = joint.position.clone();
-      const material = new THREE.MeshBasicMaterial({ map: this.textures[variant][name], alphaTest: 0.35, side: THREE.DoubleSide, fog: true, toneMapped: false, transparent: true, depthWrite: true });
-      materials.push(material);
-      const mesh = new THREE.Mesh(this.geometries[name], material);
-      // Later parts sit a hair in front. Joints carry no depth, so this is each part's own layer.
-      mesh.position.z = layer * 0.012;
-      mesh.renderOrder = 3 + layer;
-      joint.add(mesh);
-      parts[name] = joint;
+    root.renderOrder = -100;
+    const parts = {} as Record<BoneName, THREE.Bone>;
+    const bones = BONES.map(([name, px, py, parent]) => {
+      const bone = new THREE.Bone();
+      bone.name = name;
+      bone.position.copy(rigPoint(px, py));
+      if (parent) { const [, ppx, ppy] = BONES[BONE_INDEX[parent]]; bone.position.sub(rigPoint(ppx, ppy)); parts[parent].add(bone); }
+      else root.add(bone);
+      parts[name] = bone;
+      return bone;
     });
-    for (const { name, parent } of PARTS) (parent ? parts[parent] : root).add(parts[name]);
-    return { root, parts, rest, materials };
+    const paint = paintUniforms();
+    paint.mist.value = 0.32;
+    const materials: THREE.MeshBasicMaterial[] = [];
+    const meshes = PARTS.map(({ name }, layer) => {
+      const material = paintedMaterial(this.textures[variant][name], paint);
+      materials.push(material);
+      const mesh = new THREE.SkinnedMesh(this.geometries[name], material);
+      mesh.name = name;
+      // Later parts sit a hair in front, and draw after the ones behind them.
+      mesh.position.z = layer * 0.01;
+      mesh.renderOrder = layer + 1;
+      mesh.frustumCulled = false;
+      root.add(mesh);
+      return mesh;
+    });
+    root.updateMatrixWorld(true);
+    const skeleton = new THREE.Skeleton(bones);
+    for (const mesh of meshes) mesh.bind(skeleton, mesh.matrixWorld);
+    return { root, parts, materials, paint };
   }
 
   /**
@@ -513,16 +574,25 @@ export class GnomeSummons {
       fingers.scale.set(1 + Math.max(0, -grip) * 0.35, 1 - Math.max(0, grip) * 0.5, 1);
       fingers.rotation.z = -grip * 0.25;
     }
-    // The floppy cap lags the head and bounces on landings and steps.
+    // The floppy cap and the beard: each cap segment lags the one before it, so the tip trails and
+    // flops on landings, steps and every turn of the head; the beard swings a beat behind the jaw.
     const headTurn = p.head.rotation.z + p.torso.rotation.z;
     const headVelocity = dt > 0 ? (headTurn - scout.lastHead) / dt : 0;
-    const riseVelocity = dt > 0 ? (rig.root.position.y - scout.lastRise) / dt : 0;
+    const riseVelocity = dt > 0 ? THREE.MathUtils.clamp((rig.root.position.y - scout.lastRise) / dt, -8, 8) : 0;
     scout.lastHead = headTurn; scout.lastRise = rig.root.position.y;
     if (dt > 0 && motion) {
-      scout.capVelocity += (-scout.cap * 90 - scout.capVelocity * 7 - headVelocity * 4 + THREE.MathUtils.clamp(riseVelocity, -8, 8) * 0.6) * dt;
-      scout.cap = THREE.MathUtils.clamp(scout.cap + scout.capVelocity * dt, -0.35, 0.35);
+      let drive = -headVelocity * 3 + riseVelocity * 0.5 + Math.sin(t * 1.3 + scout.phase) * 0.6;
+      for (let i = 0; i < 3; i++) {
+        const stiffness = 70 - i * 18, damping = 6 - i;
+        scout.capVelocity[i] += (-scout.cap[i] * stiffness - scout.capVelocity[i] * damping + drive * (1 + i * 0.5)) * dt;
+        scout.cap[i] = THREE.MathUtils.clamp(scout.cap[i] + scout.capVelocity[i] * dt, -0.5, 0.5);
+        drive = scout.capVelocity[i] * 0.6;
+      }
+      scout.beardVelocity += (-scout.beard * 60 - scout.beardVelocity * 5 - headVelocity * 2.4 - base.lean * 8) * dt;
+      scout.beard = THREE.MathUtils.clamp(scout.beard + scout.beardVelocity * dt, -0.3, 0.3);
     }
-    p.cap.rotation.z = scout.cap * motion;
+    p.cap.rotation.z = scout.cap[0] * motion; p.cap2.rotation.z = scout.cap[1] * motion; p.cap3.rotation.z = scout.cap[2] * motion;
+    p.beard.rotation.z = scout.beard * motion;
 
     // A held rock settles into the throwing hand's grip.
     if (scout.rock && scout.rock.parent === p.armL_hand) {
@@ -531,6 +601,7 @@ export class GnomeSummons {
 
     const fade = 1 - sinking;
     for (const material of rig.materials) material.opacity = fade;
+    rig.paint.ground.value = scout.root.position.y;
     rig.root.visible = rise > -2.65;
     (scout.shadow.material as THREE.MeshBasicMaterial).opacity = 0.26 * THREE.MathUtils.clamp((rise + 1) / 1, 0, 1) * fade;
   }
