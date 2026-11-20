@@ -1,4 +1,4 @@
-# ARcane: improvement plan (v0.2)
+# Arcane: improvement plan (v0.2)
 
 Written after reviewing every module in `src/`, the test suite (234 tests, all passing) and the docs.
 Rule for the whole plan: **keep what works.** The tracking → smoothing → features → poses → engine

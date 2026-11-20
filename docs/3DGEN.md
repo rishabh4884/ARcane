@@ -1,7 +1,7 @@
-# 3DGEN: building ARcane's 3D models in Blender
+# 3DGEN: building Arcane's 3D models in Blender
 
-**Who this is for:** the agent (or artist) building ARcane's 3D models in Blender.
-**What it covers:** everything needed to model, paint, shade, rig, animate and export every 3D asset for ARcane, so that the game can switch from 2D painted cards to real 3D without changing its look.
+**Who this is for:** the agent (or artist) building Arcane's 3D models in Blender.
+**What it covers:** everything needed to model, paint, shade, rig, animate and export every 3D asset for Arcane, so that the game can switch from 2D painted cards to real 3D without changing its look.
 **Status:** handoff, 2026-11-17. Supersedes nothing; the 2D game stays as the fallback.
 
 Read sections 1–3 before touching Blender. They are the **vision lock**. Anything that breaks them is wrong, however good it looks on its own.
@@ -33,7 +33,7 @@ Read sections 1–3 before touching Blender. They are the **vision lock**. Anyth
 
 ## 1. Vision lock
 
-ARcane is a webcam, hand-gesture spellcasting game set in **the Hushwood**: a moonlit, fog-filled storybook forest. Today every creature, tree, rock and the gate is a **flat painting** drawn in code and shown on cards in a 3D scene. Your job is to build those same things **in the round**, so the player feels they stepped *into* the illustration.
+Arcane is a dark fairy-tale action game, played with hand gestures through a webcam, set in **the Hushwood**: a moonlit, fog-filled storybook forest. Today every creature, tree, rock and the gate is a **flat painting** drawn in code and shown on cards in a 3D scene. Your job is to build those same things **in the round**, so the player feels they stepped *into* the illustration.
 
 **The test for every asset:** placed next to a screenshot of today's game, does it look like the same artist made it, only in 3D?
 
@@ -93,8 +93,8 @@ Current 2D sources, which are the **authoritative design reference** (read them,
 
 Any of these means the asset is rejected:
 
-1. Store-bought, downloaded or library models, textures, HDRIs, materials or rigs. **Everything is original**, made from ARcane's own artwork.
-2. Copying or evoking another game's or film's characters, creatures or art (no Tolkien-style Balrogs, no famous goblin designs). The designs are ARcane's own paintings.
+1. Store-bought, downloaded or library models, textures, HDRIs, materials or rigs. **Everything is original**, made from Arcane's own artwork.
+2. Copying or evoking another game's or film's characters, creatures or art (no Tolkien-style Balrogs, no famous goblin designs). The designs are Arcane's own paintings.
 3. Photo-scanned or photographic textures, procedural noise textures (Musgrave, Voronoi grain), brush-stroke overlays, film grain or dirt maps.
 4. Hard two- or three-step toon shading ramps, anime cel lines painted into textures.
 5. Visible faceting, flat shading on curved forms, or under-segmented cylinders (section 7.3).

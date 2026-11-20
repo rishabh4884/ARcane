@@ -1,4 +1,4 @@
-# Customizing ARcane
+# Customizing Arcane
 
 Everything a player or designer is likely to change lives in `src/config/`. With the dev server running, edits appear instantly.
 

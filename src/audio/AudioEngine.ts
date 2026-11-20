@@ -36,7 +36,7 @@ interface NoiseOptions {
 }
 
 /**
- * Every sound in ARcane is synthesised here with WebAudio: no downloads, works offline. A forest
+ * Every sound in Arcane is synthesised here with WebAudio: no downloads, works offline. A forest
  * ambience bed, spell sounds, creature voices and charge feedback, mixed through a compressor
  * and a generated reverb. Silent and inert until the first user gesture unlocks audio.
  */

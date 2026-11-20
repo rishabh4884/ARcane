@@ -1,7 +1,7 @@
-# ARcane v0.2: improvement report
+# Arcane v0.2: improvement report
 
 Companion to [`IMPROVEMENT_PLAN.md`](IMPROVEMENT_PLAN.md). Every stage in the plan has been built,
-tested and pushed to `rishabh4884/ARcane` (`main`), each as one commit authored only by the repo
+tested and pushed to `rishabh4884/Arcane` (`main`), each as one commit authored only by the repo
 owner.
 
 | Stage | Commit | What it delivered |

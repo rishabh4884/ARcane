@@ -1,6 +1,6 @@
-# How ARcane works
+# How Arcane works
 
-ARcane is a pipeline: camera pixels go in one end, spells come out the other. Each stage is a small module with one job, and the stages that decide what a gesture *is* know nothing about the camera or the screen.
+Arcane is a pipeline: camera pixels go in one end, spells come out the other. Each stage is a small module with one job, and the stages that decide what a gesture *is* know nothing about the camera or the screen.
 
 ```mermaid
 flowchart LR

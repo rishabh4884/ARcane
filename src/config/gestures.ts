@@ -5,7 +5,7 @@ import type { PoseName } from '../gestures/poses.ts';
 /**
  * THE GESTURE LIBRARY
  * ───────────────────
- * Every hand sign or motion ARcane can recognise is declared here, as data.
+ * Every hand sign or motion Arcane can recognise is declared here, as data.
  * Adding one is a matter of adding an entry. Which spell a gesture casts is decided
  * separately in `spells.ts` (and can be changed by players in the Spellbook panel).
  *

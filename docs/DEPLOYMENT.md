@@ -1,6 +1,6 @@
 # Deploying to Vercel
 
-ARcane is a static Vite application. The root-level `vercel.json` sets the framework, runs `npm ci`, builds with `npm run build`, and publishes `dist/`.
+Arcane is a static Vite application. The root-level `vercel.json` sets the framework, runs `npm ci`, builds with `npm run build`, and publishes `dist/`.
 
 ## First deployment
 

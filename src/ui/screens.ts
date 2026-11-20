@@ -47,20 +47,20 @@ export class LoadingScreen {
 
   constructor(onEnter: () => void, ui: Ui = noop) {
     const title = el('h1', { class: 'load-title' });
-    for (const [i, ch] of [...'ARcane'].entries()) title.append(el('span', { style: { animationDelay: `${0.25 + i * 0.12}s` } }, ch));
+    for (const [i, ch] of [...'Arcane'].entries()) title.append(el('span', { style: { animationDelay: `${0.25 + i * 0.12}s` } }, ch));
     this.enter = button('Enter the Hushwood', onEnter, 'g-button g-button--primary load-enter', ui);
     this.enter.hidden = true;
     this.root.append(
       this.motes,
       el('div', { class: 'load-trees', 'aria-hidden': 'true' }, el('span'), el('span'), el('span')),
       el('div', { class: 'load-center' },
-        el('p', { class: 'load-eyebrow' }, 'A gesture-cast fantasy'),
+        el('p', { class: 'load-eyebrow' }, 'A dark fairy-tale adventure'),
         title,
-        el('p', { class: 'load-tag' }, 'Make the sign. Cast the spell. Free the wood.'),
+        el('p', { class: 'load-tag' }, 'Forty levels. Eight rulers. One wood to free.'),
         el('div', { class: 'load-meter', role: 'progressbar', 'aria-label': 'Loading' }, this.bar),
         this.label,
         this.enter,
-        el('p', { class: 'load-note' }, 'Uses your webcam to read your hands. Nothing is recorded or sent anywhere.'),
+        el('p', { class: 'load-note' }, 'Played with your hands through your webcam. Nothing is recorded or sent anywhere.'),
       ),
     );
     this.root.hidden = false;
@@ -122,8 +122,8 @@ export class MenuScreen {
     this.root.append(
       el('div', { class: 'menu-panel' },
         el('p', { class: 'menu-eyebrow' }, 'The Hushwood'),
-        el('h1', { class: 'menu-title' }, 'ARcane'),
-        el('p', { class: 'menu-tag' }, 'Your hands are the spellbook.'),
+        el('h1', { class: 'menu-title' }, 'Arcane'),
+        el('p', { class: 'menu-tag' }, 'Something took the light. Take it back.'),
         this.freedNote,
         this.cont,
         this.status,

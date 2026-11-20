@@ -3,13 +3,13 @@
 
 <img width="2172" height="724" alt="Arcane Forest: Where Unreal Feels Real" src="https://github.com/user-attachments/assets/a54d5355-0b58-4404-a44b-c429de7f069e" />
 
-### Magic was never meant to be bound to a button.
+### Something took the light. Take it back.
 
-**Arcane is a gesture-controlled fantasy experience where your hands become your spellbook.**
+**Arcane is a dark fairy-tale action game played with your own hands.**
 
-Make a fist. Draw a circle in the air. Raise your palm against the dark.
+Forty levels. Eight rulers. One silenced forest to set free.
 
-Through your webcam, ARcane transforms your movements into magic, bringing spells to life in a strange, liminal world caught somewhere between a dream and a forgotten memory.
+No controller, no keyboard: your webcam reads your hands, and every sign you make and every sweep of your arm becomes a blow in the fight for the Hushwood.
 
 ## 🌲 Enter the World of Hushwood
 
@@ -29,19 +29,19 @@ Hushwood was bright once. Its lights were taken, and the creatures that remain h
 
 ### [ Enter Hushwood](https://ar-cane-nine.vercel.app/)
 
-Open the experience, allow webcam access, and use your hands to cast magic.
+Open the game, allow webcam access, and fight with your hands.
 
 🌐 No installation required — just a webcam and a modern browser.
 
 ## 💻 Run Locally
 
-Want to explore the code or run ARcane on your own machine?
+Want to explore the code or run Arcane on your own machine?
 
 **Requirements:** Node.js, npm, and a webcam.
 
 ```bash
-git clone https://github.com/rishabh4884/ARcane.git
-cd ARcane
+git clone https://github.com/rishabh4884/Arcane.git
+cd Arcane
 npm install
 npm run dev
 ```
@@ -52,7 +52,7 @@ Open the local URL provided by Vite and allow camera access.
 
 - 👁️ **MediaPipe** — Detects hand landmarks.
 - 🖐️ **Gesture Recognition** — Interprets hand poses and movements.
-- 🌌 **Three.js** — Brings the world and magical effects to life.
+- 🌌 **Three.js** — Renders the world, its creatures and every spell.
 
 ---
 

@@ -1,6 +1,6 @@
 # Gesture guide
 
-ARcane recognises more than thirty gestures with one or both hands. Six are bound to spells by default, and you can rebind them any time in the **Spellbook** panel.
+Arcane recognises more than thirty gestures with one or both hands. Six are bound to spells by default, and you can rebind them any time in the **Spellbook** panel.
 
 There are two kinds of gesture:
 
@@ -11,7 +11,7 @@ After any cast there is a short pause (500 ms by default) so one flourish never 
 
 ## Using both hands
 
-ARcane tracks **up to two hands at once**. It works just as well with one hand: show a second hand only when you want to use it. Each tracked hand is read independently, so your left hand can hold a fist while your right makes a victory sign, and both spells can cast at the same moment. Each hand has its own crosshair marker and charge bar.
+Arcane tracks **up to two hands at once**. It works just as well with one hand: show a second hand only when you want to use it. Each tracked hand is read independently, so your left hand can hold a fist while your right makes a victory sign, and both spells can cast at the same moment. Each hand has its own crosshair marker and charge bar.
 
 On top of that there are **two-hand gestures** that need both hands in view: matching signs held together, and motions made with both hands. When both hands are showing the same sign and a two-hand version of it is assigned, the two-hand version takes over, so a double fist casts the Blood Pact once rather than two fists and a pact.
 
@@ -136,9 +136,9 @@ The Spellbook shows each gesture’s short instruction under the spell it is ass
 | Use a plain, uncluttered background | Fewer false hands |
 | Keep your hands apart from each other and from your face | Overlapping hands are the hardest thing for the tracker; two-hand gestures need both clearly visible |
 
-Sleeves, rings and nail polish do not matter. Very fast motion can blur frames; ARcane bridges brief dropouts, but a sweep that is too fast for the camera may need a second try.
+Sleeves, rings and nail polish do not matter. Very fast motion can blur frames; Arcane bridges brief dropouts, but a sweep that is too fast for the camera may need a second try.
 
-## Seeing what ARcane sees
+## Seeing what Arcane sees
 
 Press <kbd>D</kbd> (or tick **Show tracking view** in the Spellbook) to show both tracked skeletons (left hand cyan, right hand violet), your frame rate, each hand’s detected pose and a bar for each finger. A bar that is green and long means "extended"; short and grey means "curled". It draws only numbers and lines, never the camera image.
 
