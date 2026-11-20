@@ -27,7 +27,7 @@ export function inspector(world: World) {
       last = now;
       for (const f of figures) {
         const i = input(f, (now - start) / 1000);
-        f.update(dt, { pose: i.pose, progress: i.progress, attack: i.attack, velocity: i.velocity ?? new THREE.Vector3(), faceYaw: null, look: world.stage().camera.position, groundY: f.group.position.y });
+        f.update(dt, { pose: i.pose, progress: i.progress, attack: i.attack, velocity: i.velocity ?? new THREE.Vector3(), faceYaw: f.yaw, look: world.stage().camera.position, groundY: f.group.position.y });
       }
       raf = requestAnimationFrame(loop);
     };
@@ -59,7 +59,7 @@ export function inspector(world: World) {
       const cam = world.stage().camera;
       cam.position.set(0, terrainHeight(0, 16) + 1.7, 16); cam.lookAt(0, terrainHeight(0, 8) + 1.4, 8); cam.fov = 60; cam.updateProjectionMatrix();
       const f = new Character(KINDLER_HANDS, 0.4);
-      cam.add(f.group); f.group.rotation.set(0, Math.PI, 0);
+      cam.add(f.group); f.setYaw(Math.PI);
       figures.push(f);
       run((_f, t) => (t < 2 ? { pose: 'windup', progress: Math.min(1, t / 1.5) } : { pose: 'strike', progress: Math.min(1, (t - 2) / 1.5) }));
     },

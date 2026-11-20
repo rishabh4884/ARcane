@@ -43,13 +43,17 @@ export const KINDLER_HANDS: Design = {
       b.bone(`wrist${S}`, `elbow${S}`, [X(0.17), -0.205, 0.46]);
       b.bone(`hand${S}`, `wrist${S}`, [X(0.145), -0.135, 0.5], [X(0.14), -0.07, 0.535]);
       // Forearm: oval in section, swelling with muscle toward the elbow, narrowing to the wrist.
-      b.part(tube([[X(0.33), -0.64, 0.17], [X(0.29), -0.5, 0.25], [X(0.24), -0.38, 0.33], [X(0.2), -0.28, 0.41], [X(0.17), -0.205, 0.46]], [0.05, 0.05, 0.043, 0.034, 0.028], {
+      b.part(tube([[X(0.33), -0.64, 0.17], [X(0.29), -0.5, 0.25], [X(0.24), -0.38, 0.33], [X(0.2), -0.28, 0.41], [X(0.17), -0.205, 0.46], [X(0.152), -0.15, 0.497]], [0.05, 0.05, 0.043, 0.034, 0.03, 0.027], {
         radial: 16, segments: 30, flatten: { axis: [0, 0, 1], amount: 0.3 },
       }), { color: SKIN, shade: SKIN_DEEP, surface: 'skin', bones: [`elbow${S}`, `wrist${S}`] });
       b.part(ellipsoid([X(0.192), -0.215, 0.452], [0.008, 0.009, 0.007]), { color: SKIN, surface: 'skin', bones: [`wrist${S}`] });
+      // The wrist: a bridge of flesh from forearm into the heel of the hand.
+      b.part(ellipsoid([X(0.16), -0.175, 0.482], [0.033, 0.034, 0.023]), { color: SKIN, shade: SKIN_DEEP, surface: 'skin', bones: [`wrist${S}`, `hand${S}`] });
       // The palm and back of the hand: thick at the wrist, the knuckle heads in a slight arc.
-      b.part(ellipsoid([X(0.142), -0.115, 0.513], [0.044, 0.058, 0.017], {
+      b.part(ellipsoid([X(0.142), -0.115, 0.513], [0.047, 0.06, 0.022], {
         deform: (d, p) => {
+          // Squarer than an oval: broad across the knuckles, narrowing into the wrist.
+          p.x *= (1 + 0.22 * Math.max(0, d.y) - 0.18 * Math.max(0, -d.y)) * (Math.abs(d.x) > 0.55 ? 1.06 : 1);
           if (d.z < 0) p.z *= 0.65;                                   // flatter back of the hand
           p.x += -s * Math.max(0, -d.y) * 0.006;                      // narrows toward the wrist
           if (d.y > 0.55) p.y -= (d.y - 0.55) * 0.012 * (1 - Math.abs(d.x)); // knuckle arc
