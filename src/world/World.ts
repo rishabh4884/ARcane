@@ -10,7 +10,9 @@ import { PostFX } from './PostFX.ts';
 import { Foreground } from './Foreground.ts';
 import { makeLabelTexture } from './textures.ts';
 import { AUTHORED_WORLD, ForestEnvironment } from './ForestEnvironment.ts';
+import { DRAWN_LOOK } from './authored.ts';
 import { WOODLAND_MODELS } from './Woodland.ts';
+import { INK } from './render/InkPaint.ts';
 import { preloadModels } from './render/models.ts';
 import { FrameBudget } from './FrameBudget.ts';
 import { CasterView, worldInputBlocked } from './CasterView.ts';
@@ -219,7 +221,7 @@ export class World {
     this.camera.add(this.foreground.group);
 
     const params = new URLSearchParams(window.location.search);
-    this.post = new PostFX(this.renderer, this.scene, this.camera, params.get('post') !== '0', AUTHORED_WORLD);
+    this.post = new PostFX(this.renderer, this.scene, this.camera, params.get('post') !== '0', AUTHORED_WORLD, DRAWN_LOOK);
 
     this.wisps = {
       left: this.makeWisp('left'),
@@ -715,8 +717,13 @@ export class World {
     this.post.setHush(this.hush);
   }
 
+  private drawingClock = 0;
+
   private frame(dt: number, render = true, renderDt = dt): void {
     this.idleTime += dt;
+    // The drawn characters' line boils with each new drawing: twelve drawings a second.
+    this.drawingClock += renderDt;
+    INK.uDrawing.value = Math.floor(this.drawingClock * 12);
     const paused = worldInputBlocked() && !this.cinematic;
     this.updateMood(dt);
     if (this.ambient && !this.cinematic) this.driftCamera(dt);
@@ -855,6 +862,7 @@ export class World {
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     const ratio = this.renderer.getPixelRatio();
+    INK.uResolution.value.set(w * ratio, h * ratio);
     this.post?.setSize(w, h, ratio);
     this.particles.setProjection(h, this.camera.fov, ratio);
     this.mist.setProjection(h, this.camera.fov, ratio);

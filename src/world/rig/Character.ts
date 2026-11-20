@@ -3,6 +3,9 @@ import { Body, instantiate } from './Body.ts';
 import { figureMaterial, type FigureUniforms } from './figureMaterial.ts';
 import { canUseModel, modelBody } from '../render/modelRig.ts';
 import { figureUniforms, mapsFrom, stylizedMaterial } from '../render/StylizedMaterial.ts';
+import { inkLineMaterial, inkMapsFrom, inkPaintMaterial } from '../render/InkPaint.ts';
+import { INK_LAYER } from '../render/InkEdgePass.ts';
+import { DRAWN_LOOK } from '../authored.ts';
 import { clamp, Rig, smooth, Spring, type Anim, type CreaturePose } from './Rig.ts';
 
 /** A character, described as data plus two functions: how it is built and how it moves. */
@@ -77,6 +80,8 @@ export class Character {
   /** Vertical offset inside the group: emerging from the ground, hovering. */
   readonly lift = new THREE.Group();
   readonly mesh: THREE.SkinnedMesh;
+  /** The inked outline (drawn look only). */
+  private line: THREE.SkinnedMesh | null = null;
   readonly rig: Rig;
   readonly u: FigureUniforms;
   readonly bones: Record<string, THREE.Bone>;
@@ -85,6 +90,8 @@ export class Character {
   readonly overrides: { dissolve?: number; flash?: number; eyes?: number } = {};
   private phase = 0;
   private t = 0;
+  /** Time since the last drawing (drawn look: poses change on twos). */
+  private drawAcc = 0;
   private poseAge = 0;
   private lastPose: CreaturePose = 'idle';
   private hitAt = -100;
@@ -108,7 +115,18 @@ export class Character {
   constructor(readonly design: Design, seed = Math.random()) {
     this.seed = seed;
     let material: THREE.Material, u: FigureUniforms, b: { geometry: THREE.BufferGeometry; root: THREE.Bone; names: string[] };
-    if (canUseModel(design.model)) {
+    if (DRAWN_LOOK) {
+      // Drawn: ink and paint over the authored model's colour, or the procedural body's.
+      u = figureUniforms(new THREE.Color(design.edge));
+      if (canUseModel(design.model)) {
+        const m = modelBody(design.model);
+        material = inkPaintMaterial(inkMapsFrom(m.material, m.fx), u);
+        b = m;
+      } else {
+        material = inkPaintMaterial(null, u);
+        b = baked(design);
+      }
+    } else if (canUseModel(design.model)) {
       // An authored model: its baked maps under the shared stylised lighting.
       const m = modelBody(design.model);
       u = figureUniforms(new THREE.Color(design.edge));
@@ -123,6 +141,16 @@ export class Character {
     u.uMist.value = design.mist ?? 0.5;
     const built = instantiate(b.geometry, b.root, b.names, material);
     this.mesh = built.mesh;
+    if (DRAWN_LOOK) {
+      // The inked line, bound to the same skeleton so it follows every drawing.
+      const line = new THREE.SkinnedMesh(b.geometry, inkLineMaterial(u));
+      line.bind(this.mesh.skeleton, this.mesh.bindMatrix);
+      line.frustumCulled = false;
+      line.name = `${design.name} (ink)`;
+      this.line = line;
+      // On the inner-ink layer too, so folds and overlaps inside the figure are inked.
+      this.mesh.layers.enable(INK_LAYER);
+    }
     this.bones = built.bones;
     this.mesh.name = design.name;
     this.rig = new Rig(this.bones, design.stiffness);
@@ -133,6 +161,7 @@ export class Character {
     this.group.name = `${design.name} (figure)`;
     this.mesh.castShadow = design.kind !== 'hands';
     this.lift.add(this.mesh);
+    if (this.line) this.lift.add(this.line);
     this.group.add(this.lift);
     // A soft contact shadow pooled under the body: grounds it even where the moon's map does not reach.
     if (design.kind !== 'hands') {
@@ -241,9 +270,16 @@ export class Character {
     const hitAge = this.t - this.hitAt;
     const recoil = this.recoil.step(0, dt);
 
-    if (!frozen) {
+    // Drawn figures change pose on twos (12 drawings a second) and hold between, like hand-drawn
+    // animation; strikes and hits go on ones. Movement across the ground stays smooth.
+    this.drawAcc += dt;
+    const rate = input.pose === 'strike' || input.pose === 'stagger' ? 24 : 12;
+    const drawStep = !DRAWN_LOOK || this.first || this.drawAcc >= 1 / rate;
+    const stepDt = DRAWN_LOOK ? Math.min(this.drawAcc, 0.2) : dt;
+    if (drawStep) this.drawAcc = 0;
+    if (!frozen && drawStep) {
       const a: Anim = {
-        rig: this.rig, t: this.t, dt, pose: input.pose, progress: input.progress, attack: input.attack ?? '', age: this.poseAge,
+        rig: this.rig, t: this.t, dt: stepDt, pose: input.pose, progress: input.progress, attack: input.attack ?? '', age: this.poseAge,
         phase: this.phase, move: this.moveAmount, fwd, side, speed, turn: this.turnRate,
         swayF: this.swayF.value, swayS: this.swayS.value, lookYaw, lookPitch,
         hit: Math.exp(-Math.max(0, hitAge) * 5), life: this.life, seed: this.seed, ground: input.groundY,
@@ -258,8 +294,8 @@ export class Character {
         this.rig.rotPair('knee', p * 0.9).rotPair('thigh', -p * 0.6).rotPair('shoulder', p * 0.3, 0, -p * 0.2);
       }
       if (this.first) { this.rig.snap(); this.first = false; }
-      else this.rig.apply(dt, input.reducedMotion ? 0.6 : 1);
-    } else {
+      else this.rig.apply(stepDt, input.reducedMotion ? 0.6 : 1);
+    } else if (frozen) {
       this.rig.hold();
     }
 
@@ -282,6 +318,7 @@ export class Character {
     this.group.visible = !(dead && input.progress >= 1) && (this.overrides.dissolve ?? 0) < 0.999;
     // Half-dissolved figures stop casting: a ghost should not leave a solid shadow.
     this.mesh.castShadow = d.kind !== 'hands' && u.uDissolve.value < 0.5;
+    if (this.line) this.line.visible = this.mesh.visible;
     if (this.blob) {
       const altitude = Math.max(0, this.lift.position.y);
       this.blob.material.uniforms.uOpacity.value = 0.55 * (1 - u.uDissolve.value) / (1 + altitude * 0.8);
@@ -299,6 +336,7 @@ export class Character {
     this.disposed = true;
     // The baked geometry is shared by every creature of this kind and kept for the next.
     (this.mesh.material as THREE.Material).dispose();
+    (this.line?.material as THREE.Material | undefined)?.dispose();
     this.blob?.material.dispose();
     this.mesh.skeleton.dispose();
     this.group.removeFromParent();

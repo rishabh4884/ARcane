@@ -3,6 +3,11 @@ import { DESIGNS } from '../world/characters/index.ts';
 import { loadModel, primaryMesh } from '../world/render/models.ts';
 import { propMaterial } from '../world/render/StylizedMaterial.ts';
 import { Character } from '../world/rig/Character.ts';
+import { INK } from '../world/render/InkPaint.ts';
+import { InkEdgePass } from '../world/render/InkEdgePass.ts';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import type { CreaturePose } from '../world/rig/Rig.ts';
 
 /**
@@ -19,7 +24,7 @@ const info = document.getElementById('info')!;
 const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true });
 renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1));
 renderer.outputColorSpace = THREE.SRGBColorSpace;
-renderer.toneMapping = THREE.AgXToneMapping;
+renderer.toneMapping = THREE.NoToneMapping;
 renderer.toneMappingExposure = 1.0;
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -49,6 +54,12 @@ scene.add(floor);
 
 const holder = new THREE.Group();
 scene.add(holder);
+// Inner ink over the drawn figures, as in the game.
+const composer = new EffectComposer(renderer, new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType }));
+composer.addPass(new RenderPass(scene, camera));
+const inkPass = new InkEdgePass(scene, camera);
+composer.addPass(inkPass);
+composer.addPass(new OutputPass());
 let subject: THREE.Object3D | null = null;
 const bounds = new THREE.Box3();
 const size = new THREE.Vector3();
@@ -193,6 +204,9 @@ const api = {
 function resize(): void {
   const w = container.clientWidth, h = container.clientHeight;
   renderer.setSize(w, h);
+  INK.uResolution.value.set(w * renderer.getPixelRatio(), h * renderer.getPixelRatio());
+  composer.setSize(w, h);
+  inkPass.setSize(Math.round(w * renderer.getPixelRatio()), Math.round(h * renderer.getPixelRatio()));
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
 }
@@ -200,8 +214,11 @@ window.addEventListener('resize', resize);
 resize();
 
 const clock = new THREE.Clock();
+let drawingClock = 0;
 renderer.setAnimationLoop(() => {
   const dt = clock.getDelta();
+  drawingClock += dt;
+  INK.uDrawing.value = Math.floor(drawingClock * 12);
   if (spin) yaw += dt * 0.6;
   holder.rotation.y = yaw;
   if (figure) {
@@ -213,7 +230,7 @@ renderer.setAnimationLoop(() => {
     });
     figure.group.position.set(0, 0, 0);
   }
-  renderer.render(scene, camera);
+  composer.render(dt);
 });
 
 const params = new URLSearchParams(location.search);
