@@ -48,15 +48,28 @@ function projectedMaterial(paint: THREE.Texture, depth: THREE.Texture, paintVP: 
         #if SWAY
           // Crowns breathe in the wind; the painting rides on them, sampled where the leaves rest.
           float h = max(0.0, position.y - 5.0);
-          world.xyz += vec3(sin(uTime * 0.7 + world.x * 0.15 + world.z * 0.1), 0.0, cos(uTime * 0.55 + world.z * 0.13)) * h * 0.0035;
+          float gust = 0.6 + 0.4 * sin(uTime * 0.23 + world.x * 0.02);
+          world.xyz += vec3(sin(uTime * 0.7 + world.x * 0.15 + world.z * 0.1), 0.0, cos(uTime * 0.55 + world.z * 0.13)) * h * 0.006 * gust;
         #endif
         gl_Position = projectionMatrix * viewMatrix * world;
       }`,
     fragmentShader: /* glsl */`
       uniform sampler2D tPaint; uniform sampler2D tDepth; uniform mat4 uPaintVP; uniform vec3 uPaintCam; uniform float uDepthMax; uniform vec3 uFallback; uniform vec3 uTint;
+      uniform float uTime;
       varying vec3 vRestWorld;
       varying vec3 vNormalW;
       ${SPELL_LIGHT_GLSL}
+      float psHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+      float psNoise(vec2 p) {
+        vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
+        return mix(mix(psHash(i), psHash(i + vec2(1.0, 0.0)), f.x), mix(psHash(i + vec2(0.0, 1.0)), psHash(i + vec2(1.0, 1.0)), f.x), f.y);
+      }
+      // Clouds passing the moon: soft shadows drifting slowly over the floor and the trees.
+      float cloudShade(vec3 w) {
+        vec2 q = w.xz * 0.03 + vec2(uTime * 0.018, uTime * 0.007);
+        float n = psNoise(q) * 0.65 + psNoise(q * 2.3 + 4.1) * 0.35;
+        return 1.0 - 0.09 * smoothstep(0.42, 0.78, n);
+      }
       void main() {
         vec4 clip = uPaintVP * vec4(vRestWorld, 1.0);
         vec2 uv = clip.xy / clip.w * 0.5 + 0.5;
@@ -74,7 +87,7 @@ function projectedMaterial(paint: THREE.Texture, depth: THREE.Texture, paintVP: 
           }
           // Unseen by the painting: a plain painted tone, lit from above.
           float shade = 0.6 + 0.4 * max(vNormalW.y, 0.0);
-          vec3 col = mix(uFallback * shade, texture2D(tPaint, uv).rgb, seen) * uTint;
+          vec3 col = mix(uFallback * shade, texture2D(tPaint, uv).rgb, seen) * uTint * cloudShade(vRestWorld);
           col += col * spellIllumination(vRestWorld) * 1.2;
         #endif
         gl_FragColor = vec4(col, 1.0);
