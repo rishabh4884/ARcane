@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
-    "setup:assets": "node scripts/setup-assets.mjs"
+    "setup:assets": "node scripts/setup-assets.mjs",
+    "art": "${BLENDER:-/Applications/Blender.app/Contents/MacOS/Blender} -b --factory-startup -P art/build.py --"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "0.10.35",

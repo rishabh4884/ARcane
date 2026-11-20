@@ -59,7 +59,7 @@ art/
     export.py            GLB export (skins, morphs, WebP textures, Draco)
   assets/                one script per asset: characters, trees, rocks, props, landmarks
   review/<asset>/        committed review renders
-public/models/           committed GLBs
+public/art/              committed GLBs and fx maps
 ```
 
 ### 3.1 Sculpting kernel (forms that are not primitives)
@@ -184,7 +184,7 @@ go further than this pipeline can.
 ## 8. Running it
 
 ```bash
-npm run art -- goblin            # build one asset into public/models/
+npm run art -- goblin            # build one asset into public/art/
 npm run art -- goblin --review   # also render neutral-light review images into art/review/goblin/
 npm run art -- all
 ```

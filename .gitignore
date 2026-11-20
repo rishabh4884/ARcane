@@ -28,3 +28,7 @@ pnpm-debug.log*
 .idea/
 .vscode/
 *.swp
+
+# Art pipeline intermediates
+art/build/
+__pycache__/
