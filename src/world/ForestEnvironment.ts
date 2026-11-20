@@ -45,8 +45,10 @@ export class ForestEnvironment {
     scene.background = new THREE.Color('#10171a');
     scene.fog = new THREE.FogExp2('#222b29', 0.023);
     scene.add(this.group);
-    const ambient = new THREE.HemisphereLight('#789591', '#192824', 1.15);
-    const sun = new THREE.DirectionalLight('#97aebc', .38); sun.position.set(-20,32,-35);
+    // The painted world lit its cut-outs itself; the authored world's light rig is a teal sky over dark
+    // loam (the moon, the key, comes from World; the caster's warm fill is added below).
+    const ambient = AUTHORED_WORLD ? new THREE.HemisphereLight('#4f6f70', '#1c2218', 1.35) : new THREE.HemisphereLight('#789591', '#192824', 1.15);
+    const sun = new THREE.DirectionalLight('#97aebc', AUTHORED_WORLD ? 0 : .38); sun.position.set(-20,32,-35);
     this.lantern=new LanternGrove();this.group.add(this.lantern.group);
     this.group.add(ambient,sun);
     this.sky = this.makeSky();
@@ -54,7 +56,7 @@ export class ForestEnvironment {
       (this as { woodland: Woodland | null }).woodland = new Woodland(this.obstacles);
       this.group.add(this.woodland!.group);
       // The caster's own glow: a soft warm fill from behind the eye that reveals faces the moon leaves dark.
-      const fill = new THREE.DirectionalLight('#e2c9a2', 0.55);
+      const fill = new THREE.DirectionalLight('#e2c9a2', 0.42);
       fill.position.set(3, 7, 32);
       fill.target.position.set(0, 0.5, -10);
       this.group.add(fill, fill.target);

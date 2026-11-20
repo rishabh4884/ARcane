@@ -92,7 +92,7 @@ def grain_noise(V: np.ndarray, axis: np.ndarray, freq: float, stretch: float, se
     a = np.asarray(axis, float)
     a = a / np.linalg.norm(a)
     along = V @ a
-    Q = V + np.outer(along, a) * (1 / stretch - 1)
+    Q = V + np.outer(along, a) * (stretch - 1)
     return fbm(Q * freq, 3, seed)
 
 

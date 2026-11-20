@@ -276,7 +276,8 @@ class Form:
             # Stretch the noise along the grain so bark runs with the trunk, cloth with the fall.
             g = self.grain(P)
             along = np.sum(P * g, axis=1, keepdims=True)
-            Q = (P + g * along * (1.0 / max(r.stretch, 1e-3) - 1.0)) * r.freq
+            # stretch < 1 elongates features along the grain (bark plates run with the trunk).
+            Q = (P + g * along * (r.stretch - 1.0)) * r.freq
             d = d - relief_value(Q, r) * 2 * r.amp
         return d
 

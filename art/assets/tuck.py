@@ -38,7 +38,7 @@ SKELETON = mirror([
     ('toeL', 'ankleL', (0.09, 0.03, 0.1), (0.09, 0.035, 0.16)),
 ])
 
-SKIN = hexcol('#c4927a')
+SKIN = hexcol('#b97f62')
 BEARD = hexcol('#d9d3c6')
 CAP = hexcol('#4e6a3a')
 COAT = hexcol('#6a4c32')
@@ -75,22 +75,28 @@ def spec() -> AssetSpec:
     body.ellipsoid((0, 0.79, 0.075), (0.078, 0.05, 0.06), H, k=0.03)
     for x in (1, -1):
         body.ellipsoid((x * 0.046, 0.738, 0.1), (0.032, 0.028, 0.026), A('cheek', 'skin', SKIN, 'head'), k=0.02)
-        body.sub(Ellipsoid((x * 0.032, 0.77, 0.112), (0.017, 0.012, 0.016)), k=0.008)
+        body.sub(Ellipsoid((x * 0.032, 0.77, 0.116), (0.016, 0.0115, 0.012)), k=0.007)
         e = 'eyeL' if x > 0 else 'eyeR'
-        body.ellipsoid((x * 0.032, 0.769, 0.111), (0.0115, 0.009, 0.008), A(e, 'eye', hexcol('#e8e2d4'), 'eyes', 'head'), k=0.0015)
-        body.limb([(x * 0.032 - 0.014, 0.772, 0.112), (x * 0.032, 0.78, 0.12), (x * 0.032 + 0.014, 0.773, 0.111)],
+        body.ellipsoid((x * 0.032, 0.769, 0.1175), (0.0125, 0.0098, 0.009), A(e, 'eye', hexcol('#e8e2d4'), 'eyes', 'head'), k=0.0015)
+        body.limb([(x * 0.032 - 0.015, 0.773, 0.116), (x * 0.032, 0.781, 0.125), (x * 0.032 + 0.015, 0.774, 0.115)],
                   radii=[(0, 0.004, 0.0045), (0.5, 0.0048, 0.0052), (1, 0.004, 0.0045)], attr=A('lid', 'skin', SKIN, 'head'), k=0.003)
-        body.limb([(x * 0.032 - 0.012, 0.763, 0.113), (x * 0.032, 0.758, 0.118), (x * 0.032 + 0.012, 0.763, 0.112)],
+        body.limb([(x * 0.032 - 0.013, 0.763, 0.117), (x * 0.032, 0.758, 0.123), (x * 0.032 + 0.013, 0.763, 0.116)],
                   radii=[(0, 0.0025, 0.003), (1, 0.0025, 0.003)], attr=A('lid', 'skin', SKIN, 'head'), k=0.002)
         # Crow's feet: a life of squinting into weather.
         for k in range(3):
             body.crease([(x * 0.05, 0.775 - k * 0.006, 0.1), (x * 0.064, 0.778 - k * 0.012, 0.09)], 0.0025, 0.0012)
         # Bushy brows: designed masses of hair, swept up and out.
-        body.limb([(x * 0.012, 0.79, 0.12), (x * 0.035, 0.797, 0.122), (x * 0.06, 0.803, 0.108)],
-                  radii=[(0, 0.007, 0.007), (0.5, 0.011, 0.009), (1, 0.006, 0.006)], attr=A('brow', 'hair', BEARD, 'head'), k=0.004, relief=wool)
+        body.limb([(x * 0.01, 0.789, 0.124), (x * 0.034, 0.797, 0.128), (x * 0.062, 0.806, 0.112), (x * 0.074, 0.816, 0.098)],
+                  radii=[(0, 0.009, 0.008), (0.45, 0.016, 0.012), (0.8, 0.011, 0.009), (1, 0.004, 0.004)], attr=A('brow', 'hair', BEARD, 'head'), k=0.004,
+                  relief=Relief(0.0016, 70.0, 0.25, 'ridged', 23))
+        # Nasolabial folds: the cheeks sit heavy on the moustache.
+        body.crease([(x * 0.024, 0.752, 0.128), (x * 0.042, 0.736, 0.122), (x * 0.05, 0.72, 0.112)], 0.0045, 0.0022)
         # Ears, modest and a little pointed.
-        body.limb([(x * 0.082, 0.765, 0.02), (x * 0.098, 0.785, 0.005), (x * 0.108, 0.81, -0.01)],
-                  radii=[(0, 0.022, 0.006), (0.5, 0.02, 0.005), (1, 0.004, 0.003)], up=(x * 0.3, 0.2, 1.0), attr=A('ear', 'skin', SKIN, 'head'), k=0.01)
+        body.limb([(x * 0.082, 0.762, 0.022), (x * 0.102, 0.786, 0.006), (x * 0.116, 0.818, -0.012)],
+                  radii=[(0, 0.026, 0.007), (0.5, 0.024, 0.006), (1, 0.005, 0.003)], up=(x * 0.3, 0.2, 1.0), attr=A('ear', 'skin', SKIN, 'head'), k=0.01)
+    # A forehead lined by weather.
+    for k in range(3):
+        body.crease([(-0.04, 0.812 + k * 0.009, 0.112 - k * 0.004), (0.04, 0.814 + k * 0.009, 0.112 - k * 0.004)], 0.003, 0.0014)
     # The nose: big and round, a potato of a nose, the gnome's signature.
     nose = A('nose', 'skin', SKIN, 'head')
     body.limb([(0, 0.775, 0.12), (0, 0.755, 0.138)], radii=[(0, 0.011, 0.012), (1, 0.016, 0.017)], attr=nose, k=0.01)
@@ -119,7 +125,8 @@ def spec() -> AssetSpec:
               attr=cap, k=0.01, relief=felt)
     ring = [V(np.sin(a) * 0.099, 0.835 + np.cos(a) * 0.004, 0.025 + np.cos(a) * 0.097) for a in np.linspace(0, 2 * np.pi, 33)]
     body.limb(ring, radii=[(0, 0.014, 0.012), (1, 0.014, 0.012)], attr=A('band', 'cloth', hexcol('#3e5530'), 'cap1', 'head'), k=0.006, samples=2)
-    body.crease([(0, 0.9, 0.06), (0.01, 1.0, 0.0), (0.015, 1.07, -0.06)], 0.01, 0.003)
+    for k, (x0, z0) in enumerate(((0.0, 0.07), (0.06, 0.04), (-0.06, 0.03), (0.03, -0.06))):
+        body.crease([(x0, 0.86, z0), (x0 * 0.7, 0.96, z0 * 0.6 - 0.02), (x0 * 0.4, 1.04, z0 * 0.3 - 0.07)], 0.009, 0.0035)
     leaf = A('leaf', 'leaf', hexcol('#6f8a3a'), 'cap1')
     for i, ang in enumerate((-0.4, 0.0, 0.45)):
         base = V(0.07, 0.85, 0.07)
@@ -222,7 +229,7 @@ def paint(m: Surface) -> Painted:
     skin = z('head', 'cheek', 'nose', 'lid', 'ear', 'hand', 'finger')
     s = col * (0.86 + 0.24 * noise(P, 30, 3, 1)[:, None])
     flush = z('cheek', 'nose', 'ear') * 1.0
-    s = mix(s, s * np.array([1.18, 0.82, 0.78]), flush * 0.45)
+    s = mix(s, s * np.array([1.22, 0.78, 0.72]), flush * 0.6)
     s = mix(s, s * np.array([1.1, 0.92, 0.85]), z('finger') * 0.35)
     s = hue_shift_shadow(s, np.clip(-m.curv * 0.02, 0, 1) * 0.5 + (1 - m.ao) * 0.6, toward=(0.2, 0.12, 0.12))
     s = mix(s, s * 1.15 + 0.01, np.clip(m.curv * 0.012, 0, 1) * 0.4)

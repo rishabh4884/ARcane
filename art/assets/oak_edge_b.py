@@ -1,0 +1,14 @@
+"""A heavy oak leaning out over the clearing, one limb snapped off by a storm long ago (see _trees.py)."""
+from assets._trees import TreeDesign, build
+
+
+def spec():
+    return build(TreeDesign(
+        'oak_edge_b', seed=23, height=7.0, base=1.05, top=0.34, lean=(1.4, 0.6), bends=3, twist=-0.7, square=2.6, roots=8,
+        root_reach=(2.2, 3.6),
+        limbs=[(3.8, 0.2, 3.8, 0.8, 0.26), (4.9, 1.0, 3.2, 1.1, 0.22), (5.8, 5.6, 2.6, 1.2, 0.2), (6.4, 2.2, 2.4, 1.5, 0.17)],
+        broken=(4.6, 3.9),
+        crown=[((2.4, 8.6, 0.9), (3.6, 1.9, 3.1)), ((4.6, 7.4, 1.6), (2.2, 1.4, 1.9)), ((0.4, 9.4, -0.4), (2.2, 1.6, 2.0)),
+               ((3.0, 10.2, 2.0), (1.6, 1.1, 1.4)), ((5.6, 6.6, -0.2), (1.2, 0.9, 1.1))],
+        bark='#463d33',
+    ))

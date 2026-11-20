@@ -36,7 +36,7 @@ function createMoonShadows(): THREE.Object3D[] {
   target.position.set(0, 0, -10);
   // In the authored world the moon is the real key light behind the treeline; the painted world kept
   // it as a shadow-only light over a catcher.
-  const moon = new THREE.DirectionalLight('#b9cfe0', AUTHORED_WORLD ? 1.6 : 0);
+  const moon = new THREE.DirectionalLight('#c3d6e6', AUTHORED_WORLD ? 2.4 : 0);
   moon.position.copy(target.position).addScaledVector(new THREE.Vector3(-0.34, 0.5, -0.8).normalize(), 60);
   moon.target = target;
   moon.castShadow = true;
@@ -219,7 +219,7 @@ export class World {
     this.camera.add(this.foreground.group);
 
     const params = new URLSearchParams(window.location.search);
-    this.post = new PostFX(this.renderer, this.scene, this.camera, params.get('post') !== '0');
+    this.post = new PostFX(this.renderer, this.scene, this.camera, params.get('post') !== '0', AUTHORED_WORLD);
 
     this.wisps = {
       left: this.makeWisp('left'),

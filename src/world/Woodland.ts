@@ -13,9 +13,12 @@ import { forestLayout, pathX, seededRandom, terrainHeight, type Obstacle, type T
  * the far ring at a lighter level of detail with the same textures.
  */
 
-export const WOODLAND_MODELS = ['oak_edge_a', 'rock_edge_a'];
+export const WOODLAND_MODELS = ['oak_edge_a', 'oak_edge_b', 'birch_edge_a', 'snag_edge_a', 'rock_edge_a'];
 
-const NEAR = 46;
+/** Where the caster stands: detail falls off with distance from here. */
+const EYE = new THREE.Vector2(0, 17);
+const FULL = 30, MID = 58;
+const SECTORS = 10;
 
 export class Woodland {
   readonly group = new THREE.Group();
@@ -36,7 +39,7 @@ export class Woodland {
   populate(): void {
     if (this.populated) return;
     this.populated = true;
-    if (hasModel('oak_edge_a')) this.placeTrees();
+    this.placeTrees();
     if (hasModel('rock_edge_a')) this.placeRocks();
   }
 
@@ -101,9 +104,9 @@ export class Woodland {
           float grain = gfbm(gp * 3.1);
           diffuseColor.rgb *= 0.82 + 0.36 * grain;
           float clump = smoothstep(0.42, 0.7, gfbm(gp * 0.37 + 4.0));
-          float lf = leaves(gp * 2.4) * clump;
-          vec3 leafCol = mix(vec3(0.33, 0.17, 0.07), vec3(0.42, 0.29, 0.12), gh(floor(gp * 2.4)));
-          diffuseColor.rgb = mix(diffuseColor.rgb, leafCol, lf * 0.75);
+          float lf = leaves(gp * 6.5) * clump;
+          vec3 leafCol = mix(vec3(0.3, 0.16, 0.07), vec3(0.38, 0.27, 0.12), gh(floor(gp * 6.5)));
+          diffuseColor.rgb = mix(diffuseColor.rgb, leafCol, lf * 0.55);
           float twig = 1.0 - smoothstep(0.0, 0.03, abs(gn(gp * vec2(9.0, 1.3)) - 0.5));
           diffuseColor.rgb *= 1.0 - twig * 0.25 * clump;`);
     };
@@ -114,34 +117,62 @@ export class Woodland {
     return mesh;
   }
 
+  /**
+   * The wood's species where the layout puts trees: oaks hold the clearing, birches stand pale in
+   * groups along the edge where the moon finds them, a few dead snags tell what the dark has done.
+   * Each species and level of detail is split into sectors around the clearing so what is behind the
+   * eye is culled; only the nearest trees cast the moon's shadows.
+   */
   private placeTrees(): void {
-    const data = model('oak_edge_a');
-    const meshes: Record<string, THREE.Mesh> = {};
-    data.gltf.scene.traverse((o) => { if ((o as THREE.Mesh).isMesh) meshes[o.name] = o as THREE.Mesh; });
-    const full = Object.values(meshes).find((m) => !m.name.includes('lod'))!;
-    const lod = Object.values(meshes).find((m) => m.name.includes('lod')) ?? full;
-    const material = propMaterial(full.material as THREE.Material, data.fx);
+    const species = ['oak_edge_a', 'oak_edge_b', 'birch_edge_a', 'snag_edge_a'].filter(hasModel);
+    if (!species.length) return;
     const rnd = seededRandom(4471);
-    const near = this.sites.filter((s) => Math.hypot(s.x, s.z) < NEAR);
-    const far = this.sites.filter((s) => Math.hypot(s.x, s.z) >= NEAR);
+    type Lod = 0 | 1 | 2;
+    const buckets = new Map<string, Array<{ s: TreeSite; scale: number; yaw: number }>>();
+    let snags = 0;
+    for (const s of this.sites) {
+      const d = Math.hypot(s.x - EYE.x, s.z - EYE.y);
+      const lod: Lod = d < FULL ? 0 : d < MID ? 1 : 2;
+      const h = (Math.sin(s.x * 12.9898 + s.z * 78.233) * 43758.5453) % 1;
+      const r = Math.abs(h);
+      const birchGroup = Math.sin(s.x * 0.09 + 1.3) * Math.cos(s.z * 0.07) > 0.55;
+      let kind = birchGroup ? 'birch_edge_a' : r < 0.55 ? 'oak_edge_a' : 'oak_edge_b';
+      if (lod < 2 && r > 0.93 && snags < 5) { kind = 'snag_edge_a'; snags++; }
+      if (!hasModel(kind)) kind = species[0];
+      const sector = Math.floor(((Math.atan2(s.x, s.z + 12) / (Math.PI * 2) + 1) % 1) * SECTORS);
+      const key = `${kind}|${lod}|${sector}`;
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key)!.push({ s, scale: 0.8 + s.scale * 0.32 + (kind === 'birch_edge_a' ? -0.1 : 0), yaw: rnd() * Math.PI * 2 });
+    }
+    const materials = new Map<string, THREE.Material>();
     const dummy = new THREE.Object3D();
-    const place = (sites: TreeSite[], geometry: THREE.BufferGeometry, shadows: boolean) => {
-      const inst = new THREE.InstancedMesh(geometry, material, sites.length);
-      sites.forEach((s, i) => {
-        const scale = 0.75 + s.scale * 0.35;
+    for (const [key, items] of buckets) {
+      const [kind, lodS] = key.split('|');
+      const lod = Number(lodS) as Lod;
+      const data = model(kind);
+      const meshes: THREE.Mesh[] = [];
+      data.gltf.scene.traverse((o) => { if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh); });
+      const named = (suffix: string) => meshes.find((m) => m.name.endsWith(suffix));
+      const full = meshes.find((m) => !m.name.includes('lod')) ?? meshes[0];
+      const geometry = (lod === 0 ? full : lod === 1 ? named('lod1') ?? full : named('lod2') ?? named('lod1') ?? full).geometry;
+      let material = materials.get(kind);
+      if (!material) { material = propMaterial(full.material as THREE.Material, data.fx); materials.set(kind, material); }
+      const inst = new THREE.InstancedMesh(geometry, material, items.length);
+      items.forEach(({ s, scale, yaw }, i) => {
         dummy.position.set(s.x, terrainHeight(s.x, s.z) - 0.05, s.z);
-        dummy.rotation.set(0, rnd() * Math.PI * 2, 0);
+        dummy.rotation.set(0, yaw, 0);
         dummy.scale.setScalar(scale);
         dummy.updateMatrix();
         inst.setMatrixAt(i, dummy.matrix);
       });
-      inst.castShadow = shadows; inst.receiveShadow = true;
-      inst.frustumCulled = false;
+      inst.computeBoundingSphere();
+      inst.frustumCulled = true;
+      inst.castShadow = lod === 0;
+      inst.receiveShadow = lod < 2;
+      inst.name = key;
       this.group.add(inst);
       this.owned.push(inst);
-    };
-    place(near, full.geometry, true);
-    place(far, lod.geometry, false);
+    }
   }
 
   private placeRocks(): void {
@@ -171,7 +202,8 @@ export class Woodland {
       dummy.updateMatrix();
       inst.setMatrixAt(i, dummy.matrix);
     });
-    inst.castShadow = true; inst.receiveShadow = true; inst.frustumCulled = false;
+    inst.computeBoundingSphere();
+    inst.castShadow = true; inst.receiveShadow = true; inst.frustumCulled = true;
     this.group.add(inst);
     this.owned.push(inst);
   }

@@ -69,11 +69,14 @@ const GradeShader = {
     uExposure: { value: 1 },
     uDark: { value: 0 },
     uTexel: { value: new THREE.Vector2(1 / 1280, 1 / 720) },
+    /** 1 in the authored world: no lens fringe or projector flicker, lighter grain and vignette. */
+    uAuthored: { value: 0 },
   },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
   fragmentShader: `
     uniform sampler2D tDiffuse; uniform float uTime; uniform float uVignette; uniform float uGrain; uniform float uAspect; uniform float uHush;
     uniform vec3 uTint; uniform vec3 uLift; uniform float uSat; uniform float uExposure; uniform float uDark; uniform vec2 uTexel;
+    uniform float uAuthored;
     varying vec2 vUv;
     float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
     vec3 shoulder(vec3 c){
@@ -85,12 +88,12 @@ const GradeShader = {
       // A lens's faint colour fringe toward the edges of the frame.
       vec2 fromCentre = vUv - 0.5;
       float edge2 = dot(fromCentre, fromCentre);
-      vec2 ca = fromCentre * edge2 * 0.012;
+      vec2 ca = fromCentre * edge2 * 0.012 * (1.0 - uAuthored);
       vec3 c = vec3(texture2D(tDiffuse, vUv + ca).r, texture2D(tDiffuse, vUv).g, texture2D(tDiffuse, vUv - ca).b);
       // A light unsharp mask: fine detail in skin, bark and grass reads crisply.
       vec3 blur = (texture2D(tDiffuse, vUv + vec2(uTexel.x, 0.0)).rgb + texture2D(tDiffuse, vUv - vec2(uTexel.x, 0.0)).rgb
                  + texture2D(tDiffuse, vUv + vec2(0.0, uTexel.y)).rgb + texture2D(tDiffuse, vUv - vec2(0.0, uTexel.y)).rgb) * 0.25;
-      c = max(c + (c - blur) * 0.35, 0.0);
+      c = max(c + (c - blur) * mix(0.35, 0.18, uAuthored), 0.0);
       // Chapter mood: a tint and lift over the painted world, its saturation, and the King's darkness.
       c = c * uTint * uExposure + uLift;
       float l0 = dot(c, vec3(0.2126, 0.7152, 0.0722));
@@ -103,14 +106,14 @@ const GradeShader = {
       // Light comes from above: the top of the frame is a breath lighter, as if through haze.
       c += vec3(0.016, 0.022, 0.024) * smoothstep(0.45, 1.0, vUv.y) * (1.0 - l);
       // A slow, uneven flicker, like an old projector lamp.
-      float flicker = 1.0 + (sin(uTime * 1.7) * 0.5 + sin(uTime * 4.3 + 1.3) * 0.3 + sin(uTime * 11.0) * 0.2) * 0.008;
+      float flicker = 1.0 + (sin(uTime * 1.7) * 0.5 + sin(uTime * 4.3 + 1.3) * 0.3 + sin(uTime * 11.0) * 0.2) * 0.008 * (1.0 - uAuthored);
       c *= flicker * (1.0 - uHush * 0.07);
       vec2 q = (vUv - 0.5) * vec2(uAspect * 0.85, 1.0);
       float v = smoothstep(0.3 - uHush * 0.05, 1.0, length(q) * 1.18);
-      c *= 1.0 - v * (uVignette + uHush * 0.12 + uDark * 0.4);
+      c *= 1.0 - v * (uVignette * mix(1.0, 0.45, uAuthored) + uHush * 0.12 + uDark * 0.4);
       // Grain at 24 frames a second, heavier in the shadows.
       float frame = floor(uTime * 24.0);
-      c += (hash(vUv * vec2(1931.0, 1543.0) + fract(frame * 0.1731)) - 0.5) * uGrain * (1.0 - l * 0.7);
+      c += (hash(vUv * vec2(1931.0, 1543.0) + fract(frame * 0.1731)) - 0.5) * uGrain * mix(1.0, 0.45, uAuthored) * (1.0 - l * 0.7);
       gl_FragColor = vec4(max(c, 0.0), 1.0);
     }`,
 };
@@ -127,7 +130,7 @@ export class PostFX {
   private enabledFlag: boolean;
   private time = 0;
 
-  constructor(private readonly renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.PerspectiveCamera, enabled = true) {
+  constructor(private readonly renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.PerspectiveCamera, enabled = true, authored = false) {
     // The scene renders into a target that keeps its depth, so the depth of field can read it.
     const target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
     this.composer = new EffectComposer(renderer, target);
@@ -137,13 +140,15 @@ export class PostFX {
     this.depthOfField = new ShaderPass(DepthOfFieldShader);
     this.depthOfField.uniforms.uNear.value = camera.near;
     this.depthOfField.uniforms.uFar.value = camera.far;
-    this.bloom = new UnrealBloomPass(new THREE.Vector2(256, 256), 0.62, 0.5, 0.8);
+    // Bloom softens only what is genuinely bright: in the authored world, emissives and magic.
+    this.bloom = authored ? new UnrealBloomPass(new THREE.Vector2(256, 256), 0.42, 0.45, 0.95) : new UnrealBloomPass(new THREE.Vector2(256, 256), 0.62, 0.5, 0.8);
     this.composer.addPass(this.bloom);
     this.composer.addPass(new OutputPass());
     // Edge anti-aliasing in display space: the post path bypasses the canvas's own MSAA, and SMAA
     // keeps silhouettes clean without softening the painting inside them.
     this.composer.addPass(new SMAAPass());
     this.grade = new ShaderPass(GradeShader);
+    this.grade.uniforms.uAuthored.value = authored ? 1 : 0;
     this.composer.addPass(this.grade);
     this.enabledFlag = enabled;
   }
