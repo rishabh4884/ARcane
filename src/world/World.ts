@@ -169,6 +169,8 @@ export class World {
   private moodT = 1;
   private moodSeconds = 1;
   private darkLevel = 0;
+  /** Seconds of hit-stop left: time nearly halts for a beat when a heavy blow lands. */
+  private hitStop = 0;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -226,7 +228,11 @@ export class World {
       } else if (event.type === 'player-blocked') {
         this.screenFx.edge('#c6d9ff', 0.35);
         this.shake(0.18);
+      } else if (event.type === 'enemy-hit' && ((event.amount ?? 0) >= 45 || event.critical)) {
+        this.hitStop = Math.max(this.hitStop, event.critical ? 0.07 : 0.05);
+        this.shake(event.critical ? 0.12 : 0.08);
       } else if (event.type === 'enemy-death') {
+        this.hitStop = Math.max(this.hitStop, event.boss ? 0.35 : 0.06);
         this.releaseSpirit(event.position, event.height);
       } else if (event.type === 'encounter' && event.mode === 'active') {
         this.clearStuckArrows();
@@ -253,9 +259,12 @@ export class World {
         if (ratio <= 0.76 && this.post.enabled && ++this.slowSamples >= 2) this.post.setEnabled(false);
       }
       // Bounded substeps preserve seconds of gameplay at variable render rates.
-      const time = Math.min(elapsed, 0.15);
+      // Hit-stop slows the world, not the render: the camera and its breath keep moving.
+      const slow = this.hitStop > 0 ? 0.12 : 1;
+      this.hitStop = Math.max(0, this.hitStop - elapsed);
+      const time = Math.min(elapsed, 0.15) * slow;
       const steps = Math.max(1, Math.ceil(time / 0.05));
-      for (let i = 0; i < steps; i++) this.frame(time / steps, i === steps - 1, time);
+      for (let i = 0; i < steps; i++) this.frame(time / steps, i === steps - 1, Math.min(elapsed, 0.15));
     };
     loop();
   }

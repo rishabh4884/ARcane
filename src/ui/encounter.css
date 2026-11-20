@@ -81,3 +81,7 @@
   .screen-fx-flash { display: none; }
   .screen-fx-ward { animation: none; }
 }
+
+/* A critical hit: larger, hotter, and it lingers a beat longer. */
+.enemy-damage[data-effect='critical'] { color: #ffe7a3 !important; font-size: 1.35em; font-weight: 800; text-shadow: 0 0 12px rgba(255, 190, 90, 0.9), 0 2px 6px rgba(0, 0, 0, 0.9); }
+.enemy-damage[data-effect='critical']::after { content: ' ✦'; }

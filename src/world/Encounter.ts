@@ -45,6 +45,7 @@ interface Actor extends Foe {
   haste: number;
   blink: { age: number; to: THREE.Vector3; moved: boolean } | null;
   removeAt: number;
+  elder: boolean;
 }
 
 type ProjectileStyle = 'ember' | 'bile' | 'boulder' | 'lantern' | 'moth' | 'pale' | 'cold' | 'star' | 'wisp';
@@ -300,8 +301,12 @@ export class Encounter {
   private spawn(kind: CreatureKind, from: WaveGroup['from'], slot: number, boss = false, at?: THREE.Vector3): Actor {
     const spec = CREATURE_SPECS[kind];
     const level = this.level;
-    const scaling = level?.scaling ?? { health: 1, damage: 1, speed: 1 };
+    const base = level?.scaling ?? { health: 1, damage: 1, speed: 1 };
+    // From the Mirefen on, a wave may carry an elder: bigger, tougher, eyes burning.
+    const elder = !boss && spec.rank === 'normal' && (level?.id ?? 0) >= 11 && Math.random() < 0.12 + (level?.chapter ?? 1) * 0.02;
+    const scaling = elder ? { health: base.health * 1.9, damage: base.damage * 1.3, speed: base.speed * 1.05 } : base;
     const figure = new Character(DESIGNS[kind], Math.random());
+    if (elder) { figure.group.scale.setScalar(1.18); figure.overrides.eyes = 2.4; }
     const position = at?.clone() ?? this.spawnPoint(from, slot, spec.radius, boss);
     figure.group.position.copy(position);
     figure.setYaw(Math.atan2(this.camera.position.x - position.x, this.camera.position.z - position.z));
@@ -314,7 +319,7 @@ export class Encounter {
     const actor: Actor = {
       id: this.nextId++, kind, spec, figure, state: new CreatureState(kind, scaling, this.nextId * 7919 + this.generation), boss: spec.rank !== 'normal',
       velocity: new THREE.Vector3(), phase: Math.random() * 10, strafe: Math.random() < 0.5 ? -1 : 1, strafeTimer: 1 + Math.random() * 2,
-      lastPose: 'idle', warning, rush: null, altitude: spec.hover ?? 0, burnTick: 0, bossPhase: 0, haste: 1, blink: null, removeAt: -1,
+      lastPose: 'idle', warning, rush: null, altitude: spec.hover ?? 0, burnTick: 0, bossPhase: 0, haste: 1, blink: null, removeAt: -1, elder,
     };
     this.actors.push(actor);
     if (boss) {
@@ -524,7 +529,12 @@ export class Encounter {
   private hitFoe(a: Actor, effect: SpellEffect, point: THREE.Vector3, amount?: number): void {
     if (this.disposed || !a.state.alive || !this.active) return;
     const before = a.state.health;
-    const base = amount ?? SPELL_DAMAGE[effect] ?? 0;
+    let base = amount ?? SPELL_DAMAGE[effect] ?? 0;
+    // A precise shot to the head or upper body strikes deeper.
+    const aimed = effect === 'arrow' || effect === 'lightning' || effect === 'fire' || effect === 'frost';
+    const bodyBase = a.figure.group.position.y + (a.spec.hover ? a.altitude : 0);
+    const critical = aimed && amount === undefined && (point.y - bodyBase) / (a.spec.height * a.figure.group.scale.y) > 0.74;
+    if (critical) base = Math.round(base * 1.6);
     if (!a.state.hit(effect, base)) {
       if (effect === 'flare' || effect === 'stillness') a.state.stunFor(1.8);
       return;
@@ -539,8 +549,8 @@ export class Encounter {
     else if (effect === 'fire') a.figure.u.uFlashColor.value.set('#ffb066');
     else a.figure.u.uFlashColor.value.set('#fff2d8');
     const top = a.figure.group.position.clone();
-    this.indicators.hit(a.id, this.centre(a, new THREE.Vector3()).setY(top.y + a.spec.height * 0.75 + (a.spec.hover ? a.altitude : 0)), before - a.state.health, effect);
-    if (a.state.alive) this.fx.events?.emit({ type: 'enemy-hit', kind: a.kind, position: top, pan: this.pan(top), effect });
+    this.indicators.hit(a.id, this.centre(a, new THREE.Vector3()).setY(top.y + a.spec.height * 0.75 + (a.spec.hover ? a.altitude : 0)), before - a.state.health, critical ? 'critical' : effect);
+    if (a.state.alive) this.fx.events?.emit({ type: 'enemy-hit', kind: a.kind, position: top, pan: this.pan(top), effect, amount: before - a.state.health, critical });
     else this.release(a);
     if (effect === 'frost') this.fx.particles?.burst(point, 18, { speed: 2.4, color: new THREE.Color('#cfe8ff'), size: 0.06, ttl: 0.8, gravity: 4, drag: 1.2, style: 'spark' });
     this.checkPhase(a);
@@ -1149,7 +1159,7 @@ export class Encounter {
   private updateIndicators(dt: number, paused: boolean, reducedMotion: boolean): void {
     this.indicators.update(dt, this.camera, this.actors.filter((a) => !a.boss).map((a) => ({
       id: a.id, position: a.spec.hover ? a.figure.group.position.clone().setY(a.figure.group.position.y + a.altitude) : a.figure.group.position,
-      height: a.spec.height, name: a.spec.name, health: a.state.health, maximum: a.state.maxHealth, state: a.state.pose, progress: a.state.progress,
+      height: a.spec.height * a.figure.group.scale.y, name: a.elder ? `Elder ${a.spec.name.replace(/^The /, '')}` : a.spec.name, health: a.state.health, maximum: a.state.maxHealth, state: a.state.pose, progress: a.state.progress,
     })), paused, reducedMotion);
   }
 
