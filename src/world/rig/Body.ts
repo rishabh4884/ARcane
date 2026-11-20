@@ -268,7 +268,7 @@ export interface PartOptions {
   relief?: number;
 }
 
-interface PartRecord { geometry: THREE.BufferGeometry; o: PartOptions }
+interface PartRecord { geometry: THREE.BufferGeometry; o: PartOptions; perVertex?: { colors: Float32Array; surf: Float32Array; bones: string[][] } }
 
 const sideSwap = (name: string) => name.endsWith('L') ? `${name.slice(0, -1)}R` : name.endsWith('R') ? `${name.slice(0, -1)}L` : name;
 
@@ -316,6 +316,16 @@ export class Body {
 
   part(geometry: THREE.BufferGeometry, o: PartOptions): this {
     this.parts.push({ geometry: this.sculpt(this.scaled(geometry), o), o });
+    return this;
+  }
+
+  /**
+   * Add a sculpted body (see Sculpt.ts): one smooth, blended surface meshed at `cell` metres, whose
+   * colour, material and bone influence vary across it. Detail parts can be added around it as usual.
+   */
+  sculpted(form: import("./Sculpt.ts").Sculpt, cell: number): this {
+    const m = form.mesh(cell * this.scale);
+    this.parts.push({ geometry: m.geometry, o: { color: '#ffffff', bones: ['root'], relief: 0 }, perVertex: m });
     return this;
   }
 
@@ -393,7 +403,7 @@ export class Body {
     const c0 = new THREE.Color(), c1 = new THREE.Color(), mixed = new THREE.Color();
     let vo = 0, io = 0, partIndex = 0;
     const candidates: Array<{ i: number; w: number }> = [];
-    for (const { geometry, o } of this.parts) {
+    for (const { geometry, o, perVertex } of this.parts) {
       partIndex++;
       const pos = geometry.attributes.position as THREE.BufferAttribute;
       const nor = geometry.attributes.normal as THREE.BufferAttribute;
@@ -402,24 +412,33 @@ export class Body {
       c1.set(o.shade ?? o.color);
       const sid = SURFACES[o.surface ?? 'skin'];
       for (const b of o.bones) if (!boneIndex.has(b)) throw new Error(`part binds to unknown bone ${b}`);
+      if (perVertex) for (const list of perVertex.bones) for (const b of list) if (!boneIndex.has(b)) throw new Error(`sculpt binds to unknown bone ${b}`);
       for (let i = 0; i < pos.count; i++) {
         p.fromBufferAttribute(pos, i);
         const k = vo + i;
         partOf[k] = partIndex;
         position.set([p.x, p.y, p.z], k * 3);
         normal.set([nor.getX(i), nor.getY(i), nor.getZ(i)], k * 3);
-        mixed.copy(c0).lerp(c1, grad ? grad.getX(i) : 0);
-        color.set([mixed.r, mixed.g, mixed.b], k * 3);
-        surf[k * 2] = sid;
-        surf[k * 2 + 1] = o.glow ?? 0;
-        if (o.rigid || o.bones.length === 1) {
+        if (perVertex) {
+          color.set([perVertex.colors[i * 3], perVertex.colors[i * 3 + 1], perVertex.colors[i * 3 + 2]], k * 3);
+          surf[k * 2] = perVertex.surf[i * 2];
+          surf[k * 2 + 1] = perVertex.surf[i * 2 + 1];
+        } else {
+          mixed.copy(c0).lerp(c1, grad ? grad.getX(i) : 0);
+          color.set([mixed.r, mixed.g, mixed.b], k * 3);
+          surf[k * 2] = sid;
+          surf[k * 2 + 1] = o.glow ?? 0;
+        }
+        const candidateBones = perVertex ? perVertex.bones[i] : o.bones;
+        if (!perVertex && (o.rigid || o.bones.length === 1)) {
           skinIndex[k * 4] = boneIndex.get(o.bones[0])!;
           skinWeight[k * 4] = 1;
           continue;
         }
+        if (candidateBones.length === 1) { skinIndex[k * 4] = boneIndex.get(candidateBones[0])!; skinWeight[k * 4] = 1; continue; }
         candidates.length = 0;
         const falloff = o.falloff ?? 4;
-        for (const b of o.bones) {
+        for (const b of candidateBones) {
           const a0 = segA.get(b)!, b0 = segB.get(b)!;
           let d: number;
           if (a0.distanceToSquared(b0) < 1e-10) d = a0.distanceTo(p);

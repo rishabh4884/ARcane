@@ -63,6 +63,8 @@ export function inspector(world: World) {
       figures.push(f);
       run((_f, t) => (t < 2 ? { pose: 'windup', progress: Math.min(1, t / 1.5) } : { pose: 'strike', progress: Math.min(1, (t - 2) / 1.5) }));
     },
+    /** Turn every staged figure to a heading (radians; 0 faces the camera). */
+    turn(yaw: number) { for (const f of figures) f.setYaw(yaw); },
     clear() { clear(); world.endCinematic(); },
   };
 }

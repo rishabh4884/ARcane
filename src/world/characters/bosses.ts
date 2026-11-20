@@ -1,8 +1,9 @@
 import * as THREE from 'three';
-import { ellipsoid, lathe, tube, type Body, type V3 } from '../rig/Body.ts';
+import { ellipsoid, fbm3, lathe, tube, type Body, type V3 } from '../rig/Body.ts';
 import type { Design } from '../rig/Character.ts';
 import { biped, blink, bump, idleLife, lookAt, smooth, TAU, type Anim } from '../rig/Rig.ts';
 import { flap, mothWing, pitchAbout, quadruped, serpent } from './creatures.ts';
+import { Sculpt } from '../rig/Sculpt.ts';
 import { BRAMBLE_GOBLIN } from './spirits.ts';
 
 /**
@@ -187,51 +188,133 @@ export const HOLLOW_STAG: Design = {
       .pairBone('hthighL', 'hips', [0.32, 1.95, -0.9])
       .pairBone('hkneeL', 'hthighL', [0.34, 1.1, -1.12])
       .pairBone('hankleL', 'hkneeL', [0.34, 0.28, -0.92], [0.34, 0.02, -0.88]);
-    // A spine of knuckled vertebrae, a cage of ribs with a cold heart burning inside.
-    b.part(tube([[0, 2.6, 1.22], [0, 2.2, 0.9], [0, 2.22, 0.2], [0, 2.18, -0.6], [0, 2.05, -1.25]], [0.07, 0.08, 0.075, 0.08, 0.05], { radial: 8, wobble: 0.3, wobbleFrequency: 0, segments: 50 }),
-      { color: BONE, shade: BONE_DARK, surface: 'bone', bones: ['neck', 'chest', 'spine', 'hips'] });
-    for (let i = 0; i < 7; i++) {
-      const z = 1.0 - i * 0.2, depth = 0.55 - Math.abs(i - 2) * 0.06;
-      for (const s of [1, -1]) {
-        b.part(tube([[0.04 * s, 2.2, z], [0.42 * s, 2.0, z + 0.03], [0.46 * s, 1.68, z + 0.06], [0.2 * s, 2.2 - depth - 0.1, z + 0.08]], [0.03, 0.035, 0.03, 0.015], { radial: 6 }),
-          { color: BONE, shade: BONE_DARK, surface: 'bone', bones: [i < 3 ? 'chest' : 'spine'] });
+    const bone = { color: BONE, shade: BONE_DARK, surface: 'bone' as const, relief: 0.004, reliefFreq: 14 };
+    const s = new Sculpt();
+    // The skull: a long cranium, a muzzle that narrows to the nose, a ridge of nasal bone down its top,
+    // cheek arches, deep orbits and the nasal opening carved out.
+    s.blob([0, 3.06, 1.5], [0.13, 0.125, 0.17], { ...bone, bones: ['head'], blend: 0 });
+    s.cone([0, 3.02, 1.6], [0, 2.9, 1.99], 0.105, 0.042, { ...bone, bones: ['head'], blend: 0.05 });
+    s.cone([0, 3.11, 1.58], [0, 2.95, 1.96], 0.04, 0.02, { ...bone, bones: ['head'], blend: 0.03 });
+    for (const x of [1, -1]) {
+      s.cone([x * 0.11, 3.0, 1.66], [x * 0.115, 3.02, 1.42], 0.022, 0.018, { ...bone, bones: ['head'], blend: 0.025 });
+      s.blob([x * 0.1, 3.1, 1.6], [0.05, 0.035, 0.05], { ...bone, bones: ['head'], blend: 0.03 });
+      s.cone([x * 0.1, 3.14, 1.47], [x * 0.12, 3.2, 1.44], 0.035, 0.03, { ...bone, bones: ['head'], blend: 0.02 });
+    }
+    for (const x of [1, -1]) s.carveBlob([x * 0.098, 3.075, 1.635], [0.05, 0.042, 0.048], 0.015);
+    s.carveCone([0, 2.92, 1.97], [0, 2.93, 1.9], 0.03, 0.02, 0.01);
+    s.cone([0, 2.95, 1.36], [0, 2.86, 1.32], 0.05, 0.04, { ...bone, bones: ['head', 'neck'], blend: 0.02 });
+    // The mandible, hinged at the back of the skull.
+    for (const x of [1, -1]) {
+      s.cone([x * 0.075, 3.0, 1.5], [x * 0.065, 2.86, 1.56], 0.022, 0.026, { ...bone, bones: ['jaw'], blend: 0.015 });
+      s.cone([x * 0.065, 2.86, 1.56], [x * 0.028, 2.83, 1.94], 0.026, 0.016, { ...bone, bones: ['jaw'], blend: 0.015 });
+    }
+    // A curved neck of seven vertebrae, each with its spine; the back's vertebrae carry tall
+    // spines at the withers that shorten toward the hips.
+    const neck: V3[] = [[0, 2.28, 0.98], [0, 2.42, 1.08], [0, 2.56, 1.16], [0, 2.7, 1.22], [0, 2.82, 1.27], [0, 2.92, 1.31], [0, 2.98, 1.36]];
+    // A ligament runs through the neck so the vertebrae read as one column.
+    s.chain([[0, 2.24, 0.94], ...neck, [0, 3.02, 1.42]], [0.04, 0.042, 0.04, 0.038, 0.036, 0.036, 0.036, 0.038, 0.04], { ...bone, bones: ['neck', 'chest', 'head'], blend: 0.03 });
+    neck.forEach((p, i) => {
+      s.blob(p, [0.075, 0.06, 0.06], { ...bone, bones: ['neck', i < 2 ? 'chest' : 'head'], blend: 0.03 });
+      s.cone(p, [p[0], p[1] + 0.07, p[2] - 0.05], 0.03, 0.012, { ...bone, bones: ['neck'], blend: 0.015 });
+      for (const x of [1, -1]) s.cone(p, [x * 0.09, p[1] - 0.01, p[2] + 0.01], 0.022, 0.012, { ...bone, bones: ['neck'], blend: 0.012 });
+    });
+    for (let i = 0; i < 13; i++) {
+      const t = i / 12, z = 0.92 - t * 1.9, y = 2.24 - t * 0.08 + Math.sin(t * Math.PI) * 0.04;
+      s.blob([0, y, z], [0.06, 0.055, 0.07], { ...bone, bones: [t < 0.4 ? 'chest' : t < 0.8 ? 'spine' : 'hips'], blend: 0.03 });
+      const tall = 0.36 * (1 - t) + 0.08;
+      s.cone([0, y, z], [0, y + tall, z - 0.06], 0.026, 0.01, { ...bone, bones: [t < 0.4 ? 'chest' : t < 0.8 ? 'spine' : 'hips'], blend: 0.012 });
+    }
+    // Shoulder blades: flat plates over the front of the ribs.
+    for (const x of [1, -1]) s.box([x * 0.3, 2.02, 0.86], [0.02, 0.24, 0.12], 0.015, { ...bone, bones: ['chest', x > 0 ? 'fthighL' : 'fthighR'], blend: 0.02 }, [0.25, 0, x * -0.18]);
+    // The pelvis: wings of the ilium, the sacrum between them, the ischium behind.
+    s.blob([0, 2.12, -0.95], [0.08, 0.05, 0.22], { ...bone, bones: ['hips'], blend: 0.04 });
+    for (const x of [1, -1]) {
+      s.box([x * 0.2, 2.06, -0.78], [0.1, 0.03, 0.12], 0.025, { ...bone, bones: ['hips'], blend: 0.04 }, [0.2, x * 0.3, x * 0.4]);
+      s.cone([x * 0.2, 2.02, -0.85], [x * 0.17, 1.92, -1.22], 0.045, 0.035, { ...bone, bones: ['hips'], blend: 0.04 });
+    }
+    // Legs: long bones with knobbed joints, a deer's long cannon bones, the hind hock bending back,
+    // fetlock, pastern and a split hoof.
+    for (const x of [1, -1]) {
+      const S = x > 0 ? 'L' : 'R';
+      const f = (a: string) => `${a}${S}`;
+      s.cone([x * 0.32, 1.86, 0.92], [x * 0.33, 1.42, 0.78], 0.06, 0.045, { ...bone, bones: [f('fthigh'), 'chest'], blend: 0.03 });
+      s.blob([x * 0.33, 1.42, 0.78], [0.05, 0.055, 0.06], { ...bone, bones: [f('fthigh')], blend: 0.03 });
+      s.cone([x * 0.33, 1.42, 0.8], [x * 0.34, 1.07, 0.95], 0.04, 0.034, { ...bone, bones: [f('fthigh'), f('fknee')], blend: 0.03 });
+      s.blob([x * 0.34, 1.05, 0.96], [0.045, 0.05, 0.042], { ...bone, bones: [f('fknee')], blend: 0.025 });
+      s.cone([x * 0.34, 1.02, 0.95], [x * 0.34, 0.27, 0.9], 0.027, 0.024, { ...bone, bones: [f('fknee'), f('fankle')], blend: 0.025 });
+      s.blob([x * 0.34, 0.24, 0.9], [0.035, 0.038, 0.035], { ...bone, bones: [f('fankle')], blend: 0.02 });
+      s.cone([x * 0.34, 0.22, 0.9], [x * 0.34, 0.1, 0.95], 0.025, 0.022, { ...bone, bones: [f('fankle')], blend: 0.015 });
+      s.cone([x * 0.32, 1.95, -0.9], [x * 0.36, 1.44, -0.72], 0.07, 0.048, { ...bone, bones: [f('hthigh'), 'hips'], blend: 0.035 });
+      s.blob([x * 0.36, 1.43, -0.72], [0.05, 0.055, 0.05], { ...bone, bones: [f('hthigh')], blend: 0.03 });
+      s.cone([x * 0.36, 1.43, -0.73], [x * 0.34, 1.1, -1.1], 0.042, 0.032, { ...bone, bones: [f('hthigh'), f('hknee')], blend: 0.03 });
+      s.cone([x * 0.34, 1.12, -1.11], [x * 0.34, 1.16, -1.22], 0.03, 0.02, { ...bone, bones: [f('hknee')], blend: 0.02 });
+      s.blob([x * 0.34, 1.09, -1.11], [0.045, 0.05, 0.05], { ...bone, bones: [f('hknee')], blend: 0.025 });
+      s.cone([x * 0.34, 1.06, -1.1], [x * 0.34, 0.31, -0.93], 0.027, 0.024, { ...bone, bones: [f('hknee'), f('hankle')], blend: 0.025 });
+      s.blob([x * 0.34, 0.29, -0.92], [0.035, 0.038, 0.035], { ...bone, bones: [f('hankle')], blend: 0.02 });
+      s.cone([x * 0.34, 0.27, -0.92], [x * 0.34, 0.12, -0.87], 0.025, 0.022, { ...bone, bones: [f('hankle')], blend: 0.015 });
+    }
+    // Antlers: a main beam that sweeps up, out and back, a brow tine forward over the face, bez and
+    // trez tines rising from the beam, and a crown of tines at the top.
+    const ant = { color: '#3a3128', shade: '#7c6b56', surface: 'bark' as const, relief: 0.012, reliefFreq: 16, stretch: 0.5 };
+    for (const x of [1, -1]) {
+      const A = x > 0 ? 'antlerL' : 'antlerR', A2 = x > 0 ? 'antler2L' : 'antler2R';
+      const beam: V3[] = [[x * 0.11, 3.18, 1.45], [x * 0.3, 3.45, 1.32], [x * 0.52, 3.72, 1.14], [x * 0.78, 3.96, 0.96], [x * 1.0, 4.12, 0.86], [x * 1.12, 4.2, 0.84]];
+      s.chain(beam, [0.06, 0.05, 0.042, 0.034, 0.026, 0.012], { ...ant, bones: [A, A2], blend: 0.025 });
+      s.blob([x * 0.12, 3.19, 1.45], [0.07, 0.04, 0.07], { ...ant, bones: [A, 'head'], blend: 0.02 });
+      s.chain([[x * 0.2, 3.3, 1.4], [x * 0.28, 3.38, 1.6], [x * 0.3, 3.48, 1.8]], [0.032, 0.022, 0.006], { ...ant, bones: [A], blend: 0.02 });
+      s.chain([[x * 0.33, 3.48, 1.3], [x * 0.38, 3.7, 1.46], [x * 0.4, 3.9, 1.56]], [0.03, 0.02, 0.005], { ...ant, bones: [A, A2], blend: 0.018 });
+      s.chain([[x * 0.55, 3.75, 1.12], [x * 0.56, 4.02, 1.24], [x * 0.58, 4.25, 1.3]], [0.028, 0.018, 0.005], { ...ant, bones: [A2], blend: 0.016 });
+      s.chain([[x * 0.8, 3.98, 0.95], [x * 0.84, 4.25, 1.0], [x * 0.86, 4.46, 1.04]], [0.024, 0.016, 0.004], { ...ant, bones: [A2], blend: 0.014 });
+      s.chain([[x * 1.0, 4.12, 0.86], [x * 1.16, 4.36, 0.92], [x * 1.25, 4.5, 0.96]], [0.02, 0.013, 0.004], { ...ant, bones: [A2], blend: 0.012 });
+    }
+    b.sculpted(s, 0.022);
+    // The ribs (thin, separate bones) and the sternum they meet.
+    for (let i = 0; i < 9; i++) {
+      const z = 0.86 - i * 0.17, depth = 0.6 - Math.abs(i - 3) * 0.05, w = 0.44 - Math.abs(i - 3) * 0.025;
+      for (const x of [1, -1]) {
+        b.part(tube([[x * 0.05, 2.2, z], [x * w, 2.04, z + 0.03], [x * (w + 0.02), 1.78, z + 0.05], [x * w * 0.8, 2.2 - depth, z + 0.07], [x * 0.08, 2.2 - depth - 0.08, z + 0.09]], [0.028, 0.032, 0.028, 0.022, 0.016], { radial: 7, segments: 24 }),
+          { color: BONE, shade: BONE_DARK, surface: 'bone', bones: [i < 4 ? 'chest' : 'spine'], relief: 0.4 });
       }
     }
-    b.part(ellipsoid([0, 1.86, 0.55], [0.17, 0.2, 0.17]), { color: '#ffffff', surface: 'glow', glow: 1, bones: ['eyes', 'chest'] });
-    b.part(ellipsoid([0, 2.0, -0.95], [0.38, 0.2, 0.3]), { color: BONE, shade: BONE_DARK, surface: 'bone', bones: ['hips'] });
-    // Tattered hide still clinging over the haunches.
-    b.part(ellipsoid([0, 2.1, -0.6], [0.52, 0.22, 0.62], {
-      deform: (d, p) => { if (d.y < 0.2) { p.y -= 0.35 + Math.max(0, Math.sin(d.x * 11 + d.z * 7)) * 0.3; p.x *= 1.08; } },
-    }), { color: '#4a3e34', shade: '#1e1813', surface: 'fur', bones: ['hips', 'hide', 'spine'] });
-    // The skull, sockets of cold fire, and a crown of antlers with flame licking the tines.
-    b.part(ellipsoid([0, 3.0, 1.66], [0.17, 0.17, 0.36], { deform: (d, p) => { if (d.z > 0) { p.x *= 1 - 0.5 * d.z; p.y *= 1 - 0.4 * d.z; } } }),
-      { color: BONE, shade: BONE_DARK, surface: 'bone', bones: ['head'] });
-    b.part(ellipsoid([0, 2.86, 1.76], [0.1, 0.04, 0.25], { deform: (d, p) => { if (d.z > 0) p.x *= 1 - 0.4 * d.z; } }), { color: '#cfc3a8', surface: 'bone', bones: ['jaw'] });
-    for (const s of [1, -1]) {
-      b.part(ellipsoid([0.11 * s, 3.08, 1.72], [0.06, 0.05, 0.05]), { color: '#06080a', surface: 'dark', bones: ['head'] });
-      b.part(ellipsoid([0.11 * s, 3.08, 1.75], [0.03, 0.03, 0.015]), { color: '#ffffff', surface: 'glow', glow: 1, bones: ['eyes'] });
-    }
-    const antler = (pts: V3[], radii: number[], bones: string[], flame = false) => {
-      b.pair(tube(pts, radii, { radial: 7, wobble: 0.16 }), { color: '#3a3128', shade: '#7c6b56', surface: 'bark', bones });
-      if (flame) {
-        const tip = pts[pts.length - 1];
-        b.pair(tube([[tip[0], tip[1] - 0.05, tip[2]], [tip[0] + 0.02, tip[1] + 0.18, tip[2]], [tip[0] - 0.02, tip[1] + 0.34, tip[2] + 0.02]], [0.05, 0.03, 0.002], { radial: 6, flatten: { axis: [0, 0, 1], amount: 0.6 } }),
-          { color: COLDFIRE, surface: 'glow', glow: 0.85, bones: [bones[bones.length - 1]] });
+    b.part(tube([[0, 1.42, 0.98], [0, 1.4, 0.6], [0, 1.48, 0.15]], [0.04, 0.035, 0.025], { radial: 8 }), { color: BONE, shade: BONE_DARK, surface: 'bone', bones: ['chest', 'spine'] });
+    // A cold heart burning inside the cage, and teeth.
+    b.part(ellipsoid([0, 1.88, 0.5], [0.1, 0.12, 0.1]), { color: '#ffffff', surface: 'glow', glow: 1, bones: ['eyes', 'chest'] });
+    for (const x of [1, -1]) b.part(ellipsoid([x * 0.098, 3.07, 1.66], [0.026, 0.026, 0.014]), { color: '#ffffff', surface: 'glow', glow: 1, bones: ['eyes'] });
+    for (let i = 0; i < 6; i++) for (const x of [1, -1]) b.part(tube([[x * (0.04 - i * 0.002), 2.9, 1.66 + i * 0.045], [x * (0.04 - i * 0.002), 2.86, 1.665 + i * 0.045]], [0.012, 0.004], { radial: 5 }), { color: '#e8dfc8', surface: 'bone', bones: ['jaw'] });
+    // Tattered hide draped over the spine and haunches: a torn sheet, ragged at the hem, the bones
+    // showing through its holes.
+    {
+      const cols = 26, rows = 30, pos: number[] = [], idx: number[] = [];
+      for (let j = 0; j <= rows; j++) for (let i = 0; i <= cols; i++) {
+        const u = j / rows, v = i / cols, z = -1.32 + u * 1.25;
+        const a = (v - 0.5) * Math.PI * 1.25;
+        const r = 0.36 + Math.sin(u * Math.PI) * 0.1;
+        const torn = Math.max(0, Math.abs(a) - 0.95) * (0.9 + 0.7 * fbm3(u * 6, v * 9, 1.7));
+        pos.push(Math.sin(a) * r * (1 + torn * 0.2), 2.16 + Math.cos(a) * r - torn * 0.9 - (Math.abs(a) > 1 ? 0.1 : 0), z);
+        if (i < cols && j < rows) {
+          const k = j * (cols + 1) + i;
+          if (fbm3(u * 7 + 3, v * 7, 2) > 0.62) continue;
+          idx.push(k, k + cols + 1, k + 1, k + 1, k + cols + 1, k + cols + 2);
+        }
       }
-    };
-    antler([[0.1, 3.16, 1.48], [0.35, 3.48, 1.32], [0.6, 3.76, 1.1], [0.86, 4.0, 0.92], [1.12, 4.12, 0.82]], [0.065, 0.055, 0.042, 0.03, 0.008], ['antlerL', 'antler2L'], true);
-    antler([[0.25, 3.33, 1.4], [0.33, 3.55, 1.6], [0.38, 3.72, 1.78]], [0.035, 0.024, 0.005], ['antlerL'], true);
-    antler([[0.48, 3.62, 1.2], [0.5, 3.95, 1.32], [0.52, 4.2, 1.4]], [0.034, 0.022, 0.005], ['antler2L'], true);
-    antler([[0.75, 3.9, 1.0], [0.8, 4.22, 1.04], [0.82, 4.45, 1.08]], [0.03, 0.02, 0.004], ['antler2L'], true);
-    antler([[0.95, 4.05, 0.88], [1.15, 4.3, 0.95], [1.28, 4.45, 1.0]], [0.025, 0.016, 0.004], ['antler2L'], true);
-    // Long legs of bare bone, black hooves.
-    for (const leg of ['f', 'h'] as const) {
-      const z = leg === 'f' ? 0.9 : -0.9, k = leg === 'f' ? 0.96 : -1.12;
-      b.pair(tube([[0.32, 2.0, z], [0.34, 1.05, k], [0.34, 0.22, z]], [0.09, 0.05, 0.04], { radial: 8, wobble: 0.15 }),
-        { color: BONE, shade: BONE_DARK, surface: 'bone', bones: [`${leg}thighL`, `${leg}kneeL`, `${leg}ankleL`, leg === 'f' ? 'chest' : 'hips'] });
-      b.pair(ellipsoid([0.34, 0.08, z + 0.05], [0.07, 0.08, 0.09]), { color: '#141112', surface: 'chitin', bones: [`${leg}ankleL`] });
+      const sheet = new THREE.BufferGeometry();
+      sheet.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+      sheet.setIndex(idx);
+      sheet.computeVertexNormals();
+      b.part(sheet, { color: '#4f4237', shade: '#221b15', surface: 'fur', bones: ['hips', 'hide', 'spine'], relief: 0.6 });
     }
-    b.part(tube([[0, 2.02, -1.28], [0, 1.85, -1.4], [0, 1.66, -1.45]], [0.05, 0.035, 0.005], { radial: 6 }), { color: '#4a3e34', surface: 'fur', bones: ['tail'] });
+    b.part(tube([[0, 2.02, -1.28], [0, 1.88, -1.4], [0, 1.7, -1.46]], [0.04, 0.03, 0.008], { radial: 6 }), { color: BONE, surface: 'bone', bones: ['tail'] });
+    // Cold fire licking the antler tips, and split hooves.
+    for (const x of [1, -1]) {
+      const A2 = x > 0 ? 'antler2L' : 'antler2R', A = x > 0 ? 'antlerL' : 'antlerR';
+      for (const [tip, bn] of [[[x * 0.3, 3.48, 1.8], A], [[x * 0.4, 3.9, 1.56], A], [[x * 0.58, 4.25, 1.3], A2], [[x * 0.86, 4.46, 1.04], A2], [[x * 1.25, 4.5, 0.96], A2]] as Array<[V3, string]>) {
+        b.part(tube([[tip[0], tip[1] - 0.04, tip[2]], [tip[0] + 0.02, tip[1] + 0.16, tip[2]], [tip[0] - 0.02, tip[1] + 0.32, tip[2] + 0.02]], [0.045, 0.028, 0.002], { radial: 6, flatten: { axis: [0, 0, 1], amount: 0.6 } }),
+          { color: COLDFIRE, surface: 'glow', glow: 0.85, bones: [bn] });
+      }
+      for (const [z, leg] of [[0.96, 'fankle'], [-0.86, 'hankle']] as const) {
+        for (const dx of [-0.028, 0.028]) b.part(ellipsoid([x * 0.34 + dx, 0.05, z + 0.03], [0.026, 0.05, 0.055], { deform: (d, p) => { if (d.z > 0.3) p.y -= (d.z - 0.3) * 0.02; } }), { color: '#141112', surface: 'chitin', bones: [`${leg}${x > 0 ? 'L' : 'R'}`] });
+      }
+    }
   },
   animate(a: Anim) {
     const r = a.rig;
