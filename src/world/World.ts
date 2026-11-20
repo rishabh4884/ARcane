@@ -522,6 +522,20 @@ export class World {
     return true;
   }
 
+  /** Development: play a spell's effect at a point, outside any encounter (to judge the drawing of it). */
+  previewEffect(effect: SpellDef['effect'], target: THREE.Vector3, color = '#ff8a3d', from: HandSide = 'right'): void {
+    this.camera.updateMatrixWorld(true);
+    const origin = this.castOrigin(from).clone();
+    const cameraTarget = target.clone().applyMatrix4(this.camera.matrixWorldInverse);
+    const animation = createSpellAnimation(effect, origin, target.clone(), new THREE.Color(color), undefined, {
+      groundY: terrainHeight(target.x, target.z), cameraQuaternion: this.camera.quaternion, cameraPosition: this.camera.position,
+      depth: Math.max(0.5, -cameraTarget.z), hand: from, fov: this.camera.fov, particles: this.particles, mist: this.mist,
+      screen: this.feedback, light: (position, c, intensity, duration, distance) => this.flashLight(position, c, intensity, duration, distance),
+    });
+    this.scene.add(animation.group);
+    this.spellAnimations.push(animation);
+  }
+
   /** Add camera trauma (0..1); shake falls off quadratically and decays in about half a second. */
   shake(amount: number): void {
     if (this.reducedMotion.matches) return;
