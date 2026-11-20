@@ -52,7 +52,7 @@ const wave = (side: 'L' | 'R', amount: number) => (a: Anim) => {
 /* ═══════════════════════════════════ INTRO ═══════════════════════════════════ */
 
 const INTRO: Script = {
-  id: 'intro', duration: 29, mood: 'edge', fadeIn: 3.5,
+  id: 'intro', region: 'edge', duration: 29, mood: 'edge', fadeIn: 3.5,
   camera: [
     { t: 0, p: G(0.5, 0.35, 15.2), l: G(1.2, 9, 6), fov: 58 },
     { t: 6, p: G(0.4, 0.45, 15.3), l: G(0.8, 7, 4), fov: 56, ease: 'linear' },
@@ -99,7 +99,7 @@ const INTRO: Script = {
 
 const TUCK_AT: [number, number] = [0.4, 12.6];
 const TUCK: Script = {
-  id: 'tuck', duration: 31, mood: 'edge',
+  id: 'tuck', region: 'edge', duration: 31, mood: 'edge',
   camera: [
     { t: 0, p: G(0, 1.85, 17), l: G(0.4, 0.6, 12.6), fov: 50 },
     { t: 8, p: G(0.3, 1.5, 16.2), l: G(0.8, 0.6, 12.5), fov: 46 },
@@ -153,7 +153,7 @@ const TUCK: Script = {
 /* ═══════════════════════════════════ THE MOTH MATRON ═══════════════════════════════════ */
 
 const MATRON: Script = {
-  id: 'matron', duration: 27, mood: 'edge',
+  id: 'matron', region: 'bower', duration: 27, mood: 'edge',
   camera: [
     { t: 0, p: G(-4, 1.3, 3), l: G(0, 7, -12), fov: 50 },
     { t: 8, p: G(-2.2, 1.6, -1.5), l: G(0, 5, -12), fov: 46 },
@@ -196,7 +196,7 @@ const MATRON: Script = {
 };
 
 const MATRON_FALL: Script = {
-  id: 'matron-fall', duration: 21, mood: 'edge',
+  id: 'matron-fall', region: 'bower', duration: 21, mood: 'edge',
   camera: [
     { t: 0, p: G(0, 1.7, -3), l: G(0, 2.6, -11), fov: 48 },
     { t: 6, p: G(0.5, 1.8, -4.5), l: G(0, 2.6, -11), fov: 42 },
@@ -236,7 +236,7 @@ const MATRON_FALL: Script = {
 /* ═══════════════════════════════════ THE LANTERN-FLOWERS ═══════════════════════════════════ */
 
 const FLOWERS: Script = {
-  id: 'flowers', duration: 27, mood: 'fen',
+  id: 'flowers', region: 'fen', duration: 27, mood: 'fen',
   camera: [
     { t: 0, p: G(-1.5, 1.2, 15), l: G(0.5, 0.5, 9), fov: 48 },
     { t: 8, p: G(-0.4, 1.0, 12.6), l: G(0.2, 0.55, 10.6), fov: 44 },
@@ -285,7 +285,7 @@ const FLOWERS: Script = {
 /* ═══════════════════════════════════ GRAEL ═══════════════════════════════════ */
 
 const GRAEL_SCENE: Script = {
-  id: 'grael', duration: 27, mood: 'fen',
+  id: 'grael', region: 'heartwood', duration: 27, mood: 'fen',
   camera: [
     { t: 0, p: G(-3, 1.2, 4), l: G(0, 3, -14), fov: 52 },
     { t: 7, p: G(-1.5, 1.0, 0), l: G(0, 5, -14), fov: 48 },
@@ -310,7 +310,7 @@ const GRAEL_SCENE: Script = {
 };
 
 const GRAEL_FALL: Script = {
-  id: 'grael-fall', duration: 23, mood: 'fen', toMood: { mood: 'edge', at: 9, seconds: 6 },
+  id: 'grael-fall', region: 'heartwood', duration: 23, mood: 'fen', toMood: { mood: 'edge', at: 9, seconds: 6 },
   camera: [
     { t: 0, p: G(0, 1.8, -3), l: G(0, 3, -12), fov: 50 },
     { t: 8, p: G(0, 1.5, -2), l: G(0, 6.5, -12), fov: 54 },
@@ -345,7 +345,7 @@ const GRAEL_FALL: Script = {
 /* ═══════════════════════════════════ VISIONS OF THE WARDEN ═══════════════════════════════════ */
 
 const NAME: Script = {
-  id: 'name', duration: 21, mood: 'deeps',
+  id: 'name', region: 'deeps', duration: 21, mood: 'deeps',
   camera: [
     { t: 0, p: G(0, 2.2, 14), l: G(0, 3, 6), fov: 46 },
     { t: 9, p: G(0, 2.4, 12), l: G(0, 3, 0), fov: 50 },
@@ -381,7 +381,7 @@ const NAME: Script = {
 };
 
 const WARDEN_SCENE: Script = {
-  id: 'warden', duration: 31, mood: 'edge', toMood: { mood: 'throne', at: 8, seconds: 18 },
+  id: 'warden', region: 'edge', duration: 31, mood: 'edge', toMood: { mood: 'throne', at: 8, seconds: 18 },
   camera: [
     { t: 0, p: G(0, 2.4, 10), l: G(-6, 2.6, -6), fov: 54 },
     { t: 14, p: G(0, 2.6, 8), l: G(0, 3.5, -6), fov: 52, ease: 'linear' },
@@ -431,7 +431,7 @@ const WARDEN_SCENE: Script = {
 /* ═══════════════════════════════════ THE LANTERN WIDOW ═══════════════════════════════════ */
 
 const WIDOW: Script = {
-  id: 'widow', duration: 27, mood: 'deeps',
+  id: 'widow', region: 'loom', duration: 27, mood: 'deeps',
   camera: [
     { t: 0, p: G(0, 1.6, 4), l: G(0, 8, -12), fov: 54 },
     { t: 9, p: G(-1, 1.7, 1), l: G(0, 3.6, -11), fov: 46 },
@@ -476,7 +476,7 @@ const WIDOW: Script = {
 };
 
 const WIDOW_FALL: Script = {
-  id: 'widow-fall', duration: 21, mood: 'deeps', toMood: { mood: 'edge', at: 10, seconds: 8 },
+  id: 'widow-fall', region: 'loom', duration: 21, mood: 'deeps', toMood: { mood: 'edge', at: 10, seconds: 8 },
   camera: [
     { t: 0, p: G(0, 1.8, 2), l: G(0, 3, -11), fov: 52 },
     { t: 9, p: G(0, 1.4, 1), l: G(0, 8, -14), fov: 58 },
@@ -516,7 +516,7 @@ const WIDOW_FALL: Script = {
 /* ═══════════════════════════════════ THE KINDLER ═══════════════════════════════════ */
 
 const KINDLER: Script = {
-  id: 'kindler', duration: 31, mood: 'throne',
+  id: 'kindler', region: 'origin', duration: 31, mood: 'throne',
   camera: [
     { t: 0, p: G(0, 1.1, 15.6), l: G(0, 0.6, 13), fov: 42 },
     { t: 9, p: G(0, 1.4, 16.4), l: G(0, 0.8, 13), fov: 48 },
@@ -567,7 +567,7 @@ const KINDLER: Script = {
 /* ═══════════════════════════════════ THE UNLIT KING ═══════════════════════════════════ */
 
 const KING: Script = {
-  id: 'king', duration: 31, mood: 'throne',
+  id: 'king', region: 'throne', duration: 31, mood: 'throne',
   camera: [
     { t: 0, p: G(0, 1.3, 8), l: G(0, 5, -16), fov: 50 },
     { t: 9, p: G(-1.2, 1.2, 2), l: G(0, 6, -16), fov: 46, ease: 'linear' },
@@ -608,7 +608,7 @@ const KING: Script = {
 /* ═══════════════════════════════════ THE ENDING ═══════════════════════════════════ */
 
 const ENDING: Script = {
-  id: 'ending', duration: 48, mood: 'throne', toMood: { mood: 'dawn', at: 11, seconds: 8 }, fadeOut: false,
+  id: 'ending', region: 'throne', duration: 48, mood: 'throne', toMood: { mood: 'dawn', at: 11, seconds: 8 }, fadeOut: false,
   camera: [
     { t: 0, p: G(0, 1.8, 2), l: G(0, 5, -12), fov: 50 },
     { t: 10, p: G(0, 2.6, 8), l: G(0, 9, -12), fov: 58 },

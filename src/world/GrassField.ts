@@ -44,11 +44,12 @@ export class GrassField {
 
   constructor(obstacles:readonly Obstacle[],private readonly lantern:LanternUniform=createLanternUniform()){
     this.group.name='Living geometry grass — curved individual blades';
-    this.material=new THREE.ShaderMaterial({side:THREE.DoubleSide,fog:true,uniforms:{...THREE.UniformsUtils.clone(THREE.UniformsLib.fog),grassTime:this.time,uLanterns:this.lantern,...SPELL_LIGHTS},
+    this.material=new THREE.ShaderMaterial({side:THREE.DoubleSide,fog:true,uniforms:{...THREE.UniformsUtils.clone(THREE.UniformsLib.fog),grassTime:this.time,uLanterns:this.lantern,uGrassTint:{value:new THREE.Color(1,1,1)},uGrassHeight:{value:1},...SPELL_LIGHTS},
       vertexShader:`
         attribute vec3 rootOffset; attribute vec4 grassParams; attribute vec3 grassGround;
         attribute vec2 bladeRoot;
         uniform float grassTime;
+        uniform float uGrassHeight;
         uniform vec4 uGust; uniform vec4 uGustState;
         varying float bladeHeight;varying float patchShade;varying vec3 bladeNormal;varying vec3 worldPoint;
         #include <fog_pars_vertex>
@@ -57,7 +58,7 @@ export class GrassField {
           mat2 rotation=mat2(c,-s,s,c);
           vec2 local=rotation*(position.xz*grassParams.y);
           vec2 root=rotation*(bladeRoot*grassParams.y);
-          vec3 p=vec3(local.x,position.y*grassParams.z,local.y);
+          vec3 p=vec3(local.x,position.y*grassParams.z*uGrassHeight,local.y);
           p.y+=dot(root,grassGround.xy);
           vec3 base=(modelMatrix*vec4(rootOffset,1.0)).xyz;
           float gust=sin(base.x*0.13+base.z*0.09-grassTime*0.8)*0.65+sin(base.x*0.31-base.z*0.21+grassTime*0.6)*0.35;
@@ -73,6 +74,7 @@ export class GrassField {
         }`,
       fragmentShader:`
         varying float bladeHeight;varying float patchShade;varying vec3 bladeNormal;varying vec3 worldPoint;
+        uniform vec3 uGrassTint;
         ${LANTERN_GLSL}
         #include <fog_pars_fragment>
         void main(){
@@ -88,7 +90,7 @@ export class GrassField {
           // silhouette, so the eye passes over it to the lit ground where the spirits walk.
           float nearness=1.0-smoothstep(3.0,11.0,distance(worldPoint,cameraPosition));
           color=mix(color,vec3(dot(color,vec3(.3,.59,.11)))*vec3(.55,.66,.62),nearness*.55)*(1.0-nearness*.5);
-          gl_FragColor=vec4(color,1.0);
+          gl_FragColor=vec4(color*uGrassTint,1.0);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>
           #include <fog_fragment>
@@ -114,6 +116,11 @@ export class GrassField {
     const source=this.geometries[lod];target.setIndex(source.index);
     for(const name of ['position','normal','uv','bladeRoot'])target.setAttribute(name,source.getAttribute(name));
   }
+  /** Region colour over every blade. */
+  setTint(color:THREE.Color):void{(this.material.uniforms.uGrassTint.value as THREE.Color).copy(color);}
+  /** 0 = no grass (water, a cave floor) … 1 = the full meadow. */
+  setHeight(height:number):void{this.material.uniforms.uGrassHeight.value=height;this.group.visible=height>0.02;}
+
   update(dt:number,camera:THREE.Camera,reducedMotion:boolean):void {
     if(!reducedMotion)this.time.value+=Math.max(0,dt);
     // Tile visibility is stable across adjacent frames; amortize the CPU culling pass.

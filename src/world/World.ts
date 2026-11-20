@@ -18,6 +18,7 @@ import { SPELL_LIGHTS, SPELL_LIGHT_COUNT } from './LanternLighting.ts';
 import type { LevelDef, Mood } from '../game/campaign.ts';
 import type { EncounterSnapshot } from './Encounter.ts';
 import { lerpMood, MOODS, moodState, type MoodState } from './moods.ts';
+import { namedRegion, regionFor, Regions } from './regions.ts';
 import type { ParticleSystem as Particles } from './particles.ts';
 import { DESIGNS } from './characters/index.ts';
 import { Character } from './rig/Character.ts';
@@ -144,6 +145,8 @@ export class World {
   private running = false;
   private disposed = false;
   private readonly encounter: Encounter;
+  /** The place the wood has become around the caster. */
+  private readonly regions: Regions;
   private readonly foreground = new Foreground();
   /**
    * The hush: every so often the whole wood holds its breath. Wind, grass, fog and fireflies run
@@ -191,6 +194,8 @@ export class World {
     this.mist = new ParticleSystem(1500, pixelRatio, THREE.NormalBlending);
     this.scene.add(this.particles.points, this.mist.points);
     this.scene.add(...createMoonShadows());
+    this.regions = new Regions(this.environment, this.particles, this.mist);
+    this.scene.add(this.regions.group);
     // A fixed pool of spell lights: adding or removing lights would recompile every lit shader.
     for (let i = 0; i < LIGHT_POOL; i++) {
       const light = new THREE.PointLight('#ffffff', 0, 10, 2);
@@ -356,12 +361,16 @@ export class World {
     this.controls.reset();
     this.clearStuckArrows();
     this.setMood(mood, 1.5);
+    this.regions.apply(regionFor(level));
     this.encounter.startLevel(level);
   }
 
   stopLevel(): void { this.encounter.stop(); this.clearStuckArrows(); }
 
   snapshot(): EncounterSnapshot { return this.encounter.snapshot(); }
+
+  /** Stage a named region (menus, cutscenes). */
+  setRegion(name: string): void { this.regions.apply(namedRegion(name)); }
 
   /** The menu's slow drift through the wood. */
   setAmbient(on: boolean): void {
@@ -695,6 +704,7 @@ export class World {
     const stillness = 1 - this.hush * 0.93;
     this.environment.update(dt * stillness, this.camera, this.reducedMotion.matches);
     this.foreground.update(dt * stillness, this.camera, this.reducedMotion.matches);
+    this.regions.update(dt * stillness);
     this.encounter.update(dt, paused, this.reducedMotion.matches);
     const simulationDt = paused ? 0 : dt;
     for (const side of SIDES) { if (this.cinematic || this.ambient) this.wisps[side].cursor = null; this.updateWisp(this.wisps[side], dt); }

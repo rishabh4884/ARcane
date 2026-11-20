@@ -79,7 +79,7 @@ export class Game {
       if (this.state === 'level') this.pauseGame();
       else if (this.state === 'paused') this.resume();
     });
-    document.addEventListener('visibilitychange', () => { if (document.hidden && this.state === 'level') this.pauseGame(); });
+    document.addEventListener('visibilitychange', () => { if (document.hidden && this.state === 'level' && !(window as unknown as { __arcaneStay?: boolean }).__arcaneStay) this.pauseGame(); });
     const tick = () => {
       const now = performance.now();
       const dt = Math.min(0.1, (now - this.last) / 1000);
@@ -134,6 +134,7 @@ export class Game {
     this.deps.world.stopLevel();
     this.deps.world.setAmbient(true);
     this.deps.world.setMood(this.progress.freed ? 'dawn' : 'edge', 2.5);
+    this.deps.world.setRegion(this.progress.freed ? 'dawn' : 'edge');
     this.setBody('menu');
     this.menu.show(this.progress, this.cameraState);
   }
@@ -241,7 +242,7 @@ export class Game {
       this.setBody('cutscene');
       await this.cutscenes.play(SCRIPTS[level.after]);
       this.progress.markSeen(level.after);
-      if (level.after === 'ending') this.deps.world.setMood('dawn', 0.01);
+      if (level.after === 'ending') { this.deps.world.setMood('dawn', 0.01); this.deps.world.setRegion('dawn'); }
     }
     this.hud.hide();
     this.deps.world.stopLevel();

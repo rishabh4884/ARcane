@@ -14,6 +14,10 @@ interface Cutout { mesh: THREE.InstancedMesh; sites: Array<{x:number; y:number; 
 export class ForestEnvironment {
   readonly group = new THREE.Group();
   readonly obstacles: Obstacle[] = [];
+  /** Materials a region may retint: near trees, far trees, the ground. */
+  private readonly treeMaterials: THREE.MeshBasicMaterial[] = [];
+  private distantMaterial: THREE.MeshBasicMaterial | null = null;
+  private groundMaterial: THREE.MeshBasicMaterial | null = null;
   private readonly art = new ArtResources();
   private readonly illustration = new Illustration();
   private readonly random = seededRandom(94187);
@@ -53,6 +57,7 @@ export class ForestEnvironment {
   private cutout(map: THREE.Texture, sites: Cutout['sites'], tint = '#ffffff', sway = 0.035): THREE.InstancedMesh {
     const geometry = this.art.geometry(new THREE.PlaneGeometry(1,1,1,5)); geometry.translate(0,0.5,0);
     const material = this.art.material(billboardMaterial(map,this.time,this.motion,sway)); material.color.set(tint);
+    if (map.name.startsWith('tree-')) { if (tint === '#ffffff') this.treeMaterials.push(material); else this.distantMaterial = material; }
     if(map.name.startsWith('tree-')){
       material.transparent=false;material.depthWrite=true;material.alphaTest=0.3;
       const slopeData:number[]=[];
@@ -129,7 +134,7 @@ export class ForestEnvironment {
       color.copy(dark).lerp(moss,patch*.55).lerp(soil,path*.58);color.toArray(colors,i*3);
     }
     geometry.setAttribute('color',new THREE.BufferAttribute(colors,3));geometry.computeVertexNormals();
-    const ground=this.art.material(new THREE.MeshBasicMaterial({vertexColors:true,fog:true}));ground.toneMapped=false;
+    const ground=this.art.material(new THREE.MeshBasicMaterial({vertexColors:true,fog:true}));ground.toneMapped=false;this.groundMaterial=ground;
     illuminateIllustration(ground,this.lantern.lanterns,.32);
     const field=new THREE.Mesh(geometry,ground);this.group.add(field);
   }
@@ -209,6 +214,18 @@ export class ForestEnvironment {
       fragmentShader:'varying float alpha;varying float fogDepth;void main(){float d=length(gl_PointCoord-.5)*2.;if(d>1.)discard;float fade=1.-smoothstep(36.,88.,fogDepth);gl_FragColor=vec4(.98,.84,.48,pow(1.-d,2.)*alpha*fade*.62);}'
     }));
     const points=new THREE.Points(geometry,material);points.frustumCulled=false;this.group.add(points);
+  }
+
+  /**
+   * Retint the wood for a region: near trunks (colours above 1 lighten the painting, for ash-pale
+   * birches), the far ring of trees, the soil, and the grass.
+   */
+  setTint(trees: THREE.Color, distant: THREE.Color, ground: THREE.Color, grass: THREE.Color, grassHeight = 1): void {
+    this.grass.setHeight(grassHeight);
+    for (const m of this.treeMaterials) m.color.copy(trees);
+    this.distantMaterial?.color.copy(distant);
+    this.groundMaterial?.color.copy(ground);
+    this.grass.setTint(grass);
   }
 
   intersect(ray:THREE.Ray,range:number):number|null {

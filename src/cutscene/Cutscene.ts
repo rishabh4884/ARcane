@@ -22,6 +22,8 @@ export interface Script {
   id: string;
   duration: number;
   mood: Mood;
+  /** The place it is staged in (see world/regions.ts). */
+  region?: string;
   /** Mood to settle into while it plays (the ending turns to dawn). */
   toMood?: { mood: Mood; at: number; seconds: number };
   lines: Line[];
@@ -199,6 +201,7 @@ export class CutscenePlayer {
     this.onUi?.('story');
     const stage = this.world.beginCinematic();
     stage.setMood(script.mood, 0.01);
+    this.world.setRegion(script.region ?? 'edge');
     const shot = new Shot(stage);
     script.build(shot);
     const fadeIn = script.fadeIn ?? 1.4;
