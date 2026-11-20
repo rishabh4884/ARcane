@@ -162,6 +162,10 @@ export interface DrapeOptions {
   surface?: Surface;
   glow?: number;
   bands?: readonly Band[];
+  /** A torn hem: for each place across (u), how far down (v) the cloth still reaches. */
+  tatter?: (u: number) => number;
+  /** Moth holes and rents: cells of the sheet that are missing. */
+  holes?: (u: number, v: number) => boolean;
   /** Bones the cloth may follow, chosen per vertex by distance. */
   bones: readonly string[];
   /** Bones by height: [y, bones][] from top down, overriding `bones` for vertices below each y. */
@@ -305,6 +309,8 @@ export function drape(o: DrapeOptions): Drape {
   for (let i = 0; i < N; i++) positions.set([px[i], py[i], pz[i]], i * 3);
   const index: number[] = [];
   for (let r = 0; r < rows - 1; r++) for (let c = 0; c < (closed ? W : W - 1); c++) {
+    const u = U(c + 0.5), v = V(r + 1);
+    if ((o.tatter && v > o.tatter(u)) || (o.holes && o.holes(u, V(r + 0.5)))) continue;
     const a = idx(r, c), b = idx(r, c + 1), d = idx(r + 1, c), f = idx(r + 1, c + 1);
     index.push(a, d, b, b, d, f);
   }
@@ -372,8 +378,30 @@ export function drape(o: DrapeOptions): Drape {
   if (closed) hem.push(hem[0]);
   for (let r = 0; r < rows; r++) { left.push(point(idx(r, 0))); right.push(point(idx(r, W - 1))); }
   const nearest = (u: number, v: number) => idx(Math.round(Math.min(1, Math.max(0, v)) * (rows - 1)), Math.round(Math.min(1, Math.max(0, u)) * (closed ? cols : cols - 1)));
+  // Torn away or holed: keep only the particles the remaining cloth uses.
+  let out = { geometry, colors, surf, bones, ao, curv };
+  if (o.tatter || o.holes) {
+    const used = new Int32Array(N).fill(-1);
+    const fin = geometry.getIndex()!.array;
+    let m = 0;
+    for (let t = 0; t < fin.length; t++) if (used[fin[t]] < 0) used[fin[t]] = m++;
+    const P = new Float32Array(m * 3), Nn = new Float32Array(m * 3), Cc = new Float32Array(m * 3), S = new Float32Array(m * 2), A = new Float32Array(m), K = new Float32Array(m);
+    const Bn: string[][] = new Array(m);
+    for (let i = 0; i < N; i++) {
+      const j = used[i];
+      if (j < 0) continue;
+      P.set([px[i], py[i], pz[i]], j * 3); Nn.set([n2.getX(i), n2.getY(i), n2.getZ(i)], j * 3);
+      Cc.set(colors.subarray(i * 3, i * 3 + 3), j * 3); S.set(surf.subarray(i * 2, i * 2 + 2), j * 2);
+      A[j] = ao[i]; K[j] = curv[i]; Bn[j] = bones[i];
+    }
+    const g2 = new THREE.BufferGeometry();
+    g2.setAttribute('position', new THREE.BufferAttribute(P, 3));
+    g2.setAttribute('normal', new THREE.BufferAttribute(Nn, 3));
+    g2.setIndex(Array.from(fin, (x) => used[x]));
+    out = { geometry: g2, colors: Cc, surf: S, bones: Bn, ao: A, curv: K };
+  }
   return {
-    geometry, colors, surf, bones, ao, curv, hem, left, right,
+    ...out, hem, left, right,
     at: (u, v) => point(nearest(u, v)),
     normalAt: (u, v) => { const i = nearest(u, v); return [n2.getX(i), n2.getY(i), n2.getZ(i)]; },
   };

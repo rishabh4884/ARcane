@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { ellipsoid, lathe, tube, type Body, type V3 } from '../rig/Body.ts';
 import type { Design } from '../rig/Character.ts';
+import { BodyProxy, drape } from '../rig/Cloth.ts';
+import { frame, ring, ropeStrands, strap, wrap } from '../rig/Gear.ts';
+import { Sculpt } from '../rig/Sculpt.ts';
 import { biped, blink, bump, clamp, idleLife, lookAt, smooth, TAU, type Anim } from '../rig/Rig.ts';
 
 /**
@@ -41,88 +44,232 @@ export const BRAMBLE_GOBLIN: Design = {
       .pairBone('kneeL', 'thighL', [0.15, 0.46, 0.1])
       .pairBone('ankleL', 'kneeL', [0.15, 0.12, -0.04])
       .pairBone('toeL', 'ankleL', [0.15, 0.04, 0.12], [0.15, 0.03, 0.22]);
-    // A hunched body: the back bulges, the belly sags.
-    b.part(ellipsoid([0, 1.1, 0.06], [0.25, 0.31, 0.21], {
-      deform: (d, p) => {
-        if (d.z < 0) p.z -= 0.07 * Math.max(0, d.y + 0.4);
-        if (d.z > 0 && d.y < 0) p.z += 0.05 * -d.y;
-        p.x *= 1 + 0.06 * Math.sin(d.y * 4);
-      },
-    }), { color: GOBLIN_SKIN, shade: GOBLIN_SHADE, surface: 'skin', bones: ['spine', 'chest', 'hips', 'neck'] });
-    // Ragged tunic, slumped at the hem.
-    b.part(lathe([[0.235, 1.12], [0.27, 1.0], [0.295, 0.88], [0.315, 0.76], [0.335, 0.64], [0.33, 0.6]], {
-      center: [0, 0, 0.04], scaleZ: 0.92, segments: 28,
-      deform: (o, a, t) => {
-        o.multiplyScalar(1 + Math.sin(a * 6 + 1) * 0.04);
-        if (t > 0.7) o.y += (Math.sin(a * 7) * 0.035 + Math.sin(a * 17) * 0.018) * (t - 0.7) / 0.3;
-      },
-    }), { color: TUNIC, shade: '#2c2219', surface: 'cloth', bones: ['hips', 'spine', 'thighL', 'thighR'], falloff: 3 });
-    b.part(lathe([[0.262, 0.92], [0.27, 0.885], [0.262, 0.85]], { center: [0, 0, 0.04], scaleZ: 0.93, segments: 28 }),
-      { color: '#2b2018', surface: 'skin', bones: ['hips', 'spine'] });
-    b.part(ellipsoid([0, 0.885, 0.3], [0.04, 0.035, 0.02]), { color: '#8d7a4f', surface: 'metal', bones: ['hips'] });
-    // The head: a heavy brow, sunken temples, cheeks falling into a long jaw.
-    b.part(ellipsoid([0, 1.5, 0.32], [0.17, 0.155, 0.18], {
-      deform: (d, p) => {
-        p.x *= 1 + 0.18 * Math.exp(-((d.y + 0.25) ** 2) / 0.05);
-        if (d.z < -0.2) p.y += 0.02 * -d.z;
-        p.x *= 1 - 0.1 * Math.exp(-((d.y - 0.35) ** 2) / 0.04) * Math.max(0, d.z);
-      },
-    }), { color: GOBLIN_SKIN, shade: GOBLIN_SHADE, surface: 'skin', bones: ['head'] });
-    // The neck joins head to body: a thick sinewy column bent forward under the skull.
-    b.part(tube([[0, 1.22, 0.06], [0, 1.34, 0.16], [0, 1.44, 0.26], [0, 1.5, 0.3]], [0.11, 0.085, 0.078, 0.08], { radial: 12 }),
-      { color: GOBLIN_SKIN, shade: GOBLIN_SKIN, surface: 'skin', bones: ['chest', 'neck', 'head'] });
-    for (const sx of [1, -1]) b.part(tube([[0.06 * sx, 1.27, 0.1], [0.05 * sx, 1.38, 0.2], [0.07 * sx, 1.46, 0.28]], [0.022, 0.02, 0.014], { radial: 6 }),
-      { color: GOBLIN_SKIN, surface: 'skin', bones: ['chest', 'neck', 'head'] });
-    b.part(tube([[-0.12, 1.575, 0.43], [0, 1.56, 0.475], [0.12, 1.575, 0.43]], [0.032, 0.042, 0.032], { radial: 8 }),
-      { color: '#59634a', surface: 'skin', bones: ['head'] });
-    b.part(tube([[0, 1.53, 0.47], [0, 1.5, 0.56], [0.012, 1.44, 0.625]], [0.046, 0.034, 0.016], { radial: 9, wobble: 0.08 }),
-      { color: GOBLIN_SKIN, shade: '#7d6e55', surface: 'skin', bones: ['head'] });
-    for (const s of [1, -1]) {
-      b.part(ellipsoid([0.07 * s, 1.525, 0.44], [0.052, 0.036, 0.03]), { color: '#100d0a', surface: 'dark', bones: ['head'] });
-      b.part(ellipsoid([0.07 * s, 1.525, 0.462], [0.032, 0.024, 0.016]), { color: '#ffffff', surface: 'glow', glow: 1, bones: ['eyes'] });
-      b.part(ellipsoid([0.07 * s, 1.525, 0.477], [0.007, 0.019, 0.005]), { color: '#0a0805', surface: 'dark', bones: ['eyes'] });
-      // Heavy upper lids half over the eyes: the goblin always looks like it is sizing you up.
-      b.part(ellipsoid([0.07 * s, 1.543, 0.458], [0.044, 0.018, 0.03], { deform: (d, p) => { p.y -= Math.max(0, d.x * s) * 0.006; } }),
-        { color: '#5d6649', surface: 'skin', bones: ['head'], relief: 0.5 });
-      b.part(ellipsoid([0.014 * s, 1.445, 0.62], [0.008, 0.006, 0.006]), { color: '#120d0a', surface: 'dark', bones: ['head'] });
+
+    // ── The body, sculpted muscle by muscle: wiry, hunched, pot-bellied, every rib showing. ──
+    const s = new Sculpt();
+    s.scale = b.scale;
+    const skin = { color: GOBLIN_SKIN, shade: GOBLIN_SHADE, surface: 'skin' as const, relief: 0.0022, reliefFreq: 45 };
+    const claw = { color: '#2a2219', shade: '#6b5a44', surface: 'bone' as const };
+    s.blob([0, 0.86, 0.02], [0.14, 0.09, 0.11], { ...skin, bones: ['hips'], blend: 0 });
+    s.blob([0, 0.97, 0.1], [0.15, 0.13, 0.13], { ...skin, bones: ['spine', 'hips'], blend: 0.06 });
+    s.blob([0, 1.14, 0.07], [0.172, 0.16, 0.14], { ...skin, bones: ['chest', 'spine'], blend: 0.07 }, [0.35, 0, 0]);
+    s.blob([0, 1.22, -0.02], [0.16, 0.12, 0.11], { ...skin, bones: ['chest'], blend: 0.06 });
+    s.carveBlob([0, 0.952, 0.226], [0.008, 0.012, 0.012], 0.006);
+    for (const x of [1, -1]) {
+      const S = x > 0 ? 'L' : 'R';
+      s.blob([x * 0.1, 1.2, -0.08], [0.06, 0.07, 0.028], { ...skin, bones: ['chest'], blend: 0.04 }, [0, x * 0.3, 0]);
+      s.blob([x * 0.075, 1.21, 0.165], [0.072, 0.045, 0.032], { ...skin, bones: ['chest'], blend: 0.04 }, [0.3, 0, 0]);
+      s.cone([x * 0.03, 1.285, 0.175], [x * 0.2, 1.31, 0.1], 0.016, 0.014, { ...skin, bones: ['chest'], blend: 0.025 });
+      s.cone([x * 0.04, 1.34, 0.1], [x * 0.2, 1.3, 0.07], 0.05, 0.035, { ...skin, bones: ['chest', 'neck'], blend: 0.05 });
+      // Ribs: grooves along the flanks of a starved body.
+      for (let k = 0; k < 4; k++) s.carveCone([x * 0.11, 1.07 + k * 0.045, 0.15], [x * 0.17, 1.05 + k * 0.045, 0.02], 0.007, 0.006, 0.012);
+      // Arm: deltoid, biceps and triceps on a thin bone, a knobbed elbow, a ropey forearm.
+      s.blob([x * 0.235, 1.275, 0.1], [0.058, 0.068, 0.062], { ...skin, bones: [`shoulder${S}`, 'chest'], blend: 0.04 });
+      s.cone([x * 0.24, 1.27, 0.1], [x * 0.355, 1.03, 0.14], 0.042, 0.03, { ...skin, bones: [`shoulder${S}`], blend: 0.03 });
+      s.blob([x * 0.3, 1.15, 0.148], [0.032, 0.055, 0.034], { ...skin, bones: [`shoulder${S}`], blend: 0.03 }, [0, 0, x * 0.45]);
+      s.blob([x * 0.3, 1.16, 0.098], [0.033, 0.06, 0.03], { ...skin, bones: [`shoulder${S}`], blend: 0.03 }, [0, 0, x * 0.45]);
+      s.blob([x * 0.36, 1.02, 0.112], [0.027, 0.029, 0.025], { ...skin, bones: [`elbow${S}`], blend: 0.02 });
+      s.cone([x * 0.36, 1.02, 0.14], [x * 0.42, 0.775, 0.22], 0.036, 0.024, { ...skin, bones: [`elbow${S}`, `wrist${S}`], blend: 0.03 });
+      s.blob([x * 0.375, 0.95, 0.163], [0.032, 0.058, 0.03], { ...skin, bones: [`elbow${S}`], blend: 0.03 }, [0.3, 0, x * 0.25]);
+      s.blob([x * 0.428, 0.77, 0.214], [0.019, 0.018, 0.019], { ...skin, bones: [`wrist${S}`], blend: 0.015 });
+      // A long-fingered hand: palm, knuckles, three phalanges a finger, dark hooked claws.
+      const D: V3 = [0.077 * x, -0.92, 0.38], N: V3 = [-x, 0, 0], A: V3 = [0, 0.38, 0.92];
+      const add = (p: V3, ...t: Array<[V3, number]>): V3 => t.reduce<V3>((q, [d, k]) => [q[0] + d[0] * k, q[1] + d[1] * k, q[2] + d[2] * k], p);
+      const palm: V3 = add([x * 0.436, 0.722, 0.24], [D, 0.035]);
+      s.cone([x * 0.428, 0.778, 0.214], add(palm, [D, -0.03]), 0.022, 0.019, { ...skin, bones: [`wrist${S}`, `hand${S}`], blend: 0.015 });
+      s.box(palm, [0.013, 0.036, 0.034], 0.012, { ...skin, bones: [`hand${S}`, `wrist${S}`], blend: 0.02 }, frame(N, D));
+      for (const [off, k] of [[0.026, 1], [0.009, 1.1], [-0.009, 1.0], [-0.026, 0.8]] as const) {
+        const k0 = add(palm, [D, 0.034], [A, off]);
+        const p1 = add(k0, [D, 0.044 * k], [N, 0.006]);
+        const p2 = add(p1, [D, 0.03 * k], [N, 0.013 * k]);
+        const p3 = add(p2, [D, 0.017 * k], [N, 0.018 * k]);
+        s.chain([k0, p1, p2, p3], [0.0105, 0.0088, 0.0075, 0.0062], { ...skin, bones: [`hand${S}`], blend: 0.008 });
+        for (const [kn, r] of [[k0, 0.0125], [p1, 0.0102], [p2, 0.0088]] as const) s.blob(kn, [r, r, r], { ...skin, bones: [`hand${S}`], blend: 0.006 });
+        s.cone(p3, add(p3, [D, 0.008], [N, 0.016]), 0.0055, 0.001, { ...claw, bones: [`hand${S}`], blend: 0.004 });
+      }
+      const t0 = add(palm, [A, 0.03], [N, 0.012], [D, -0.012]);
+      const t1 = add(t0, [A, 0.022], [D, 0.022], [N, 0.012]);
+      const t2 = add(t1, [A, 0.008], [D, 0.022], [N, 0.016]);
+      s.chain([t0, t1, t2], [0.013, 0.0095, 0.0075], { ...skin, bones: [`hand${S}`], blend: 0.01 });
+      s.cone(t2, add(t2, [D, 0.01], [N, 0.014]), 0.0065, 0.001, { ...claw, bones: [`hand${S}`], blend: 0.004 });
+      // Legs: buttocks, a lean thigh, a bony knee, a hard calf, a long foot with three clawed toes.
+      s.blob([x * 0.085, 0.84, -0.065], [0.068, 0.07, 0.058], { ...skin, bones: ['hips', `thigh${S}`], blend: 0.04 });
+      s.cone([x * 0.13, 0.82, 0.0], [x * 0.15, 0.47, 0.1], 0.064, 0.04, { ...skin, bones: [`thigh${S}`], blend: 0.04 });
+      s.blob([x * 0.142, 0.68, 0.07], [0.048, 0.088, 0.043], { ...skin, bones: [`thigh${S}`], blend: 0.03 }, [-0.27, 0, 0]);
+      s.blob([x * 0.135, 0.66, 0.0], [0.043, 0.08, 0.038], { ...skin, bones: [`thigh${S}`], blend: 0.03 }, [-0.27, 0, 0]);
+      s.blob([x * 0.15, 0.465, 0.125], [0.032, 0.03, 0.026], { ...skin, bones: [`knee${S}`], blend: 0.02 });
+      s.cone([x * 0.15, 0.46, 0.1], [x * 0.15, 0.13, -0.04], 0.036, 0.024, { ...skin, bones: [`knee${S}`, `ankle${S}`], blend: 0.03 });
+      s.blob([x * 0.15, 0.36, 0.035], [0.034, 0.068, 0.036], { ...skin, bones: [`knee${S}`], blend: 0.03 }, [0.4, 0, 0]);
+      s.blob([x * 0.15, 0.12, -0.04], [0.023, 0.023, 0.023], { ...skin, bones: [`ankle${S}`], blend: 0.015 });
+      s.blob([x * 0.15, 0.065, -0.068], [0.025, 0.027, 0.03], { ...skin, bones: [`ankle${S}`], blend: 0.02 });
+      s.cone([x * 0.15, 0.075, -0.05], [x * 0.15, 0.038, 0.12], 0.028, 0.024, { ...skin, bones: [`ankle${S}`, `toe${S}`], blend: 0.02 });
+      for (const k of [-1, 0, 1]) {
+        const t1: V3 = [x * (0.15 + k * 0.022), 0.033, 0.12], t2: V3 = [x * (0.15 + k * 0.028), 0.028, 0.168], t3: V3 = [x * (0.15 + k * 0.032), 0.018, 0.205 - Math.abs(k) * 0.015];
+        s.chain([t1, t2, t3], [0.014, 0.01, 0.0075], { ...skin, bones: [`toe${S}`], blend: 0.01 });
+        s.blob(t2, [0.011, 0.01, 0.011], { ...skin, bones: [`toe${S}`], blend: 0.006 });
+        s.cone(t3, [t3[0], t3[1] - 0.012, t3[2] + 0.014], 0.006, 0.001, { ...claw, bones: [`toe${S}`], blend: 0.004 });
+      }
     }
-    // Jaw, the dark slash of a mouth and two pale tusks.
-    b.part(ellipsoid([0, 1.4, 0.38], [0.13, 0.055, 0.12]), { color: GOBLIN_SKIN, shade: GOBLIN_SHADE, surface: 'skin', bones: ['jaw'] });
-    b.part(ellipsoid([0, 1.43, 0.45], [0.085, 0.018, 0.035]), { color: '#1a0e0b', surface: 'dark', bones: ['jaw', 'head'] });
-    b.pair(tube([[0.05, 1.41, 0.47], [0.062, 1.462, 0.5], [0.05, 1.505, 0.49]], [0.017, 0.012, 0.002], { radial: 7 }),
-      { color: '#e6dcc2', shade: '#b9a98a', surface: 'bone', bones: ['jaw'] });
-    // Ears: long leaves of skin, thin enough for the moon to shine through their edges.
-    b.pair(tube([[0.12, 1.55, 0.27], [0.3, 1.6, 0.19], [0.46, 1.64, 0.1], [0.62, 1.67, 0.02]], [0.07, 0.085, 0.05, 0.005], {
-      radial: 12, segments: 22, flatten: { axis: [0.1, 0.4, 1], amount: 0.8 },
-    }), { color: GOBLIN_SKIN, shade: '#8f6c5c', surface: 'skin', bones: ['earL', 'ear2L', 'head'] });
-    // Arms with a bramble wound about the forearm.
-    b.pair(tube([[0.2, 1.3, 0.09], [0.29, 1.16, 0.12], [0.36, 1.02, 0.14], [0.39, 0.9, 0.18], [0.42, 0.77, 0.22]], [0.085, 0.074, 0.05, 0.058, 0.04], { radial: 12, segments: 30 }),
-      { color: GOBLIN_SKIN, shade: GOBLIN_SHADE, surface: 'skin', bones: ['shoulderL', 'elbowL', 'wristL', 'chest'] });
-    // Knobbled elbows and knuckles.
-    b.pair(ellipsoid([0.355, 1.02, 0.12], [0.04, 0.038, 0.035]), { color: GOBLIN_SKIN, surface: 'skin', bones: ['elbowL'] });
+    // The neck: a sinewy column thrust forward, tendons standing out, an apple at the throat.
+    s.cone([0, 1.26, 0.1], [0, 1.47, 0.29], 0.068, 0.056, { ...skin, bones: ['chest', 'neck', 'head'], blend: 0.05 });
+    for (const x of [1, -1]) s.cone([x * 0.062, 1.465, 0.272], [x * 0.024, 1.29, 0.17], 0.013, 0.011, { ...skin, bones: ['neck', 'chest'], blend: 0.02 });
+    s.blob([0, 1.375, 0.272], [0.014, 0.018, 0.013], { ...skin, bones: ['neck'], blend: 0.012 });
+    // Knobs of spine down the hunched back, thorns growing out of them.
+    for (let i = 0; i < 7; i++) {
+      const y = 1.36 - i * 0.075, hit = s.cast([0, y, -0.6], [0, 0, 1], 1);
+      if (!hit) continue;
+      const [px, py, pz] = hit.point;
+      s.blob([px, py, pz + 0.004], [0.016, 0.014, 0.014], { ...skin, bones: [i < 4 ? 'chest' : 'spine'], blend: 0.01 });
+      if (i < 6) b.part(tube([[px, py, pz + 0.004], [px, py + 0.04, pz - 0.075 - (i % 2) * 0.025]], [0.016, 0.0015], { radial: 6 }),
+        { color: '#3b2c1f', shade: '#8a7656', surface: 'bark', bones: [i < 4 ? 'chest' : 'spine'] });
+    }
+    b.sculpted(s, 0.0072);
+
+    // ── The face: a heavy brow over hooded eyes, a hooked and warty nose, a wide lipped mouth. ──
+    const h = new Sculpt();
+    h.scale = b.scale;
+    const face = { ...skin, relief: 0.0015, reliefFreq: 70, bones: ['head'] as string[] };
+    const jaw = { ...face, bones: ['jaw'] as string[] };
+    h.blob([0, 1.535, 0.3], [0.122, 0.112, 0.132], { ...face, blend: 0 });
+    h.blob([0, 1.51, 0.2], [0.1, 0.095, 0.08], { ...face, blend: 0.05 });
+    h.blob([0, 1.57, 0.38], [0.098, 0.058, 0.07], { ...face, blend: 0.05 });
+    for (const x of [1, -1]) {
+      h.cone([x * 0.012, 1.561, 0.452], [x * 0.115, 1.578, 0.388], 0.025, 0.017, { ...face, blend: 0.024 });
+      h.carveBlob([x * 0.115, 1.54, 0.38], [0.028, 0.038, 0.038], 0.03);
+      h.cone([x * 0.058, 1.494, 0.444], [x * 0.118, 1.5, 0.37], 0.023, 0.015, { ...face, blend: 0.028 });
+      h.blob([x * 0.064, 1.503, 0.451], [0.031, 0.011, 0.015], { ...face, blend: 0.014 });
+      h.carveBlob([x * 0.09, 1.455, 0.428], [0.034, 0.028, 0.028], 0.03);
+      h.carveBlob([x * 0.065, 1.527, 0.449], [0.035, 0.025, 0.034], 0.012);
+      h.blob([x * 0.085, 1.41, 0.36], [0.03, 0.04, 0.045], { ...jaw, blend: 0.03 });
+      h.blob([x * 0.017 + 0.005, 1.452, 0.589], [0.013, 0.011, 0.015], { ...face, blend: 0.012 });
+      h.carveBlob([x * 0.011 + 0.008, 1.441, 0.597], [0.0055, 0.004, 0.008], 0.004);
+    }
+    h.blob([0, 1.455, 0.44], [0.074, 0.04, 0.064], { ...face, blend: 0.034 });
+    h.chain([[0, 1.55, 0.466], [0, 1.515, 0.523], [0.004, 1.476, 0.583], [0.01, 1.45, 0.61]], [0.023, 0.025, 0.019, 0.013], { ...face, blend: 0.02 });
+    h.blob([0.01, 1.447, 0.608], [0.017, 0.015, 0.017], { ...face, blend: 0.012 });
+    for (const [w, r] of [[[0.022, 1.5, 0.546], 0.0065], [[-0.014, 1.485, 0.565], 0.005], [[0.1, 1.468, 0.42], 0.006], [[-0.09, 1.585, 0.39], 0.007], [[0.05, 1.6, 0.36], 0.005]] as Array<[V3, number]>) h.blob(w, [r, r * 0.8, r], { ...face, blend: 0.004 });
+    // Lips over a long jaw, the corners turned down.
+    h.chain([[0.068, 1.424, 0.438], [0, 1.428, 0.494], [-0.068, 1.424, 0.438]], [0.011, 0.013, 0.011], { ...face, blend: 0.014 });
+    h.cone([0, 1.43, 0.31], [0, 1.394, 0.452], 0.06, 0.039, { ...jaw, blend: 0.03 });
+    h.blob([0, 1.381, 0.46], [0.03, 0.022, 0.024], { ...jaw, blend: 0.02 });
+    h.chain([[0.06, 1.41, 0.442], [0, 1.407, 0.484], [-0.06, 1.41, 0.442]], [0.01, 0.0115, 0.01], { ...jaw, blend: 0.012 });
+    h.carveCone([0.071, 1.412, 0.44], [0, 1.418, 0.497], 0.006, 0.0065, 0.006);
+    h.carveCone([0, 1.418, 0.497], [-0.071, 1.412, 0.44], 0.0065, 0.006, 0.006);
+    // Forehead creases.
+    for (let k = 0; k < 3; k++) h.carveCone([-0.06, 1.592 + k * 0.014, 0.427 - k * 0.008], [0.06, 1.594 + k * 0.014, 0.427 - k * 0.008], 0.0035, 0.0035, 0.004);
+    b.sculpted(h, 0.0042);
+    // Eyes sunk under the brow: dark wet sockets, yellow glow, slit pupils, heavy lids.
+    for (const x of [1, -1]) {
+      b.part(ellipsoid([x * 0.065, 1.525, 0.438], [0.034, 0.023, 0.02]), { color: '#100d0a', surface: 'dark', bones: ['head'] });
+      b.part(ellipsoid([x * 0.065, 1.525, 0.452], [0.025, 0.019, 0.013]), { color: '#ffffff', surface: 'glow', glow: 1, bones: ['eyes'] });
+      b.part(ellipsoid([x * 0.065, 1.525, 0.464], [0.0055, 0.016, 0.004]), { color: '#0a0805', surface: 'dark', bones: ['eyes'] });
+      b.part(ellipsoid([x * 0.065, 1.539, 0.456], [0.031, 0.012, 0.02], { deform: (_d, p) => { p.y -= Math.max(0, (p.x - x * 0.065) * x) * 0.12; } }), { color: '#5d6649', surface: 'skin', bones: ['head'] });
+    }
+    // A mouth full of crooked teeth, two tusks from the jaw.
+    b.part(ellipsoid([0, 1.418, 0.445], [0.06, 0.011, 0.04]), { color: '#1a0e0b', surface: 'dark', bones: ['jaw', 'head'] });
+    for (let i = 0; i < 7; i++) {
+      const x = (i / 6 - 0.5) * 0.08, z = 0.488 - x * x * 7, len = 0.008 + ((i * 7) % 3) * 0.003;
+      b.part(tube([[x, 1.427, z - 0.004], [x + Math.sin(i * 3) * 0.003, 1.427 - len, z]], [0.0042, 0.0008], { radial: 5 }), { color: '#d9cfae', shade: '#8f8064', surface: 'bone', bones: ['head'] });
+    }
+    b.pair(tube([[0.048, 1.405, 0.462], [0.06, 1.448, 0.49], [0.05, 1.49, 0.482]], [0.0135, 0.0095, 0.0015], { radial: 7 }), { color: '#e6dcc2', shade: '#9d8d6c', surface: 'bone', bones: ['jaw'] });
+    // Ears: long leaves of skin with a ridge inside, thin enough for the moon to light their edges;
+    // brass rings through the left one, the right one torn.
+    b.pair(tube([[0.12, 1.55, 0.27], [0.3, 1.6, 0.19], [0.46, 1.64, 0.1], [0.62, 1.67, 0.02]], [0.07, 0.085, 0.05, 0.005], { radial: 12, segments: 24, flatten: { axis: [0.1, 0.4, 1], amount: 0.82 } }),
+      { color: GOBLIN_SKIN, shade: '#8f6c5c', surface: 'skin', bones: ['earL', 'ear2L', 'head'] });
+    b.pair(tube([[0.15, 1.555, 0.268], [0.3, 1.598, 0.2], [0.45, 1.635, 0.115]], [0.012, 0.016, 0.004], { radial: 6, segments: 14, flatten: { axis: [0.1, 0.4, 1], amount: 0.5 } }),
+      { color: '#7c6a55', surface: 'skin', bones: ['earL', 'ear2L'] });
+    for (const [px, py, pz] of [[0.24, 1.548, 0.225], [0.29, 1.556, 0.205]] as V3[]) b.part(ring([px, py, pz], [0.1, 0.4, 1], 0.012, 0.0024), { color: '#a88a4a', shade: '#5a4a28', surface: 'metal', bones: ['earL'] });
+    // A scrag of wiry hair on the crown.
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 8 - 0.5) * 1.6, base: V3 = [Math.sin(a) * 0.06, 1.645 - Math.abs(a) * 0.02, 0.27 - Math.cos(a) * 0.03];
+      b.part(tube([base, [base[0] * 1.6, base[1] + 0.03, base[2] - 0.05], [base[0] * 2.2 + Math.sin(i) * 0.02, base[1] + 0.01, base[2] - 0.1]], [0.0035, 0.0025, 0.0008], { radial: 4, segments: 8 }),
+        { color: '#2a2620', shade: '#4a4236', surface: 'hair', bones: ['head'] });
+    }
+
+    // ── What it wears: a torn kilt of sacking, a ratty capelet, rope, leather and charms. ──
+    const body = new BodyProxy()
+      .ellipsoid([0, 1.14, 0.07], [0.185, 0.17, 0.15]).ellipsoid([0, 0.97, 0.1], [0.16, 0.14, 0.14])
+      .ellipsoid([0, 0.86, 0.02], [0.15, 0.1, 0.12]).ellipsoid([0, 1.22, -0.02], [0.17, 0.13, 0.12])
+      .capsule([-0.24, 1.28, 0.09], [0.24, 1.28, 0.09], 0.065).capsule([0, 1.26, 0.1], [0, 1.46, 0.29], 0.07);
+    for (const x of [1, -1]) body.capsule([x * 0.24, 1.27, 0.1], [x * 0.355, 1.03, 0.14], 0.05).capsule([x * 0.13, 0.82, 0], [x * 0.15, 0.47, 0.1], 0.072).ellipsoid([x * 0.085, 0.84, -0.065], [0.07, 0.072, 0.06]);
+    const noise = (u: number, k: number) => Math.sin(u * 37 + k) * 0.5 + Math.sin(u * 91 + k * 2) * 0.3 + Math.sin(u * 13 + k * 3) * 0.2;
+    const kilt = drape({
+      cols: 60, rows: 26, closed: true, profile: [[0.2, 0.93], [0.24, 0.8], [0.27, 0.6]], extra: 0.02, depth: 0.86, center: [0, 0.04],
+      sew: (u, _v, p) => { const a = u * TAU; p.set(Math.sin(a) * 0.168, 0.93 + Math.cos(a) * 0.012, 0.04 + Math.cos(a) * 0.145); },
+      collider: body, thickness: 0.008, folds: 8, foldDepth: 0.08, seed: 21, stiffness: 0.3, steps: 80,
+      tatter: (u) => 0.78 + 0.2 * (0.5 + 0.5 * noise(u, 1)),
+      holes: (u, v) => v > 0.4 && noise(u * 1.7 + v, 4) > 0.86,
+      color: TUNIC, shade: '#2c2219', surface: 'fabric',
+      bones: ['hips', 'spine'], bonesByHeight: [[0.86, ['hips', 'thighL', 'thighR']]],
+    });
+    b.draped(kilt);
+    const capelet = drape({
+      cols: 64, rows: 18, closed: true, profile: [[0.14, 1.36], [0.3, 1.28], [0.36, 1.12], [0.38, 1.02]], depth: 0.82, center: [0, 0.08],
+      sew: (u, _v, p) => { const a = u * TAU; p.set(Math.sin(a) * 0.095, 1.355 - Math.cos(a) * 0.02, 0.12 + Math.cos(a) * 0.085); },
+      collider: body, thickness: 0.009, folds: 7, foldDepth: 0.06, seed: 8, stiffness: 0.35, steps: 80,
+      tatter: (u) => 0.72 + 0.26 * (0.5 + 0.5 * noise(u, 7)),
+      holes: (u, v) => v > 0.3 && noise(u * 2.3 + v * 1.3, 9) > 0.9,
+      color: '#3b4129', shade: '#23271a', surface: 'fabric',
+      bands: [{ where: (_u, v) => v < 0.12, color: MOSS, shade: '#33431f', surface: 'moss' }],
+      bones: ['chest', 'neck'], bonesByHeight: [[1.27, ['chest', 'shoulderL', 'shoulderR']]],
+    });
+    b.draped(capelet);
+    // A rope belt knotted at the front, its ends hanging.
+    const belt: V3[] = [];
+    for (let i = 0; i <= 40; i++) { const a = (i / 40) * TAU; belt.push([Math.sin(a) * 0.178, 0.928 + Math.cos(a) * 0.012 - Math.max(0, Math.cos(a)) * 0.012, 0.04 + Math.cos(a) * 0.155]); }
+    for (const strand of ropeStrands(belt, 0.011, 3, 70)) b.part(tube(strand, [0.0055], { radial: 5, segments: strand.length * 2 }), { color: '#8a7556', shade: '#5a4a35', surface: 'fabric', bones: ['hips', 'spine'] });
+    b.part(ellipsoid([0.03, 0.915, 0.198], [0.02, 0.018, 0.016]), { color: '#7d6a4d', surface: 'fabric', bones: ['hips'] });
+    for (const [x0, len] of [[0.025, 0.12], [0.04, 0.09]] as const) {
+      const end: V3[] = [[x0, 0.91, 0.2], [x0 + 0.01, 0.86, 0.212], [x0 + 0.005, 0.91 - len, 0.205]];
+      for (const strand of ropeStrands(end, 0.009, 3, 70)) b.part(tube(strand, [0.0045], { radial: 4, segments: strand.length * 2 }), { color: '#8a7556', shade: '#5a4a35', surface: 'fabric', bones: ['hips', 'thighL'] });
+    }
+    // Two leather pouches on the hips, a tiny skull on a cord between them.
+    const gear = new Sculpt();
+    gear.scale = b.scale;
+    const leather = { color: '#4a3020', shade: '#2a1a10', surface: 'cloth' as const, relief: 0.0015, reliefFreq: 60 };
+    for (const [ang, size] of [[1.15, 1], [-1.0, 0.85]] as const) {
+      const x = Math.sin(ang) * 0.2, z = 0.04 + Math.cos(ang) * 0.18, c: V3 = [x, 0.865, z];
+      const rot: V3 = [0.12, ang, 0];
+      gear.box(c, [0.034 * size, 0.04 * size, 0.017 * size], 0.012, { ...leather, bones: ['hips'], blend: 0 }, rot);
+      gear.box([c[0] + Math.sin(ang) * 0.004, c[1] + 0.022 * size, c[2] + Math.cos(ang) * 0.004], [0.037 * size, 0.016 * size, 0.019 * size], 0.006, { ...leather, color: '#563826', bones: ['hips'], blend: 0.002 }, rot);
+      gear.blob([c[0] + Math.sin(ang) * 0.022 * size, c[1] + 0.008, c[2] + Math.cos(ang) * 0.022 * size], [0.006, 0.01, 0.006], { color: '#d6cbb0', shade: '#8f7f62', surface: 'bone', bones: ['hips'], blend: 0.001 });
+    }
+    const sk: V3 = [-0.05, 0.835, 0.205];
+    const bone = { color: '#d6cbb0', shade: '#8f7f62', surface: 'bone' as const, bones: ['hips'] as string[] };
+    gear.blob(sk, [0.017, 0.016, 0.019], { ...bone, blend: 0 });
+    gear.cone([sk[0], sk[1] - 0.006, sk[2] + 0.008], [sk[0], sk[1] - 0.012, sk[2] + 0.032], 0.011, 0.006, { ...bone, blend: 0.006 });
+    for (const x of [1, -1]) gear.carveBlob([sk[0] + x * 0.007, sk[1] + 0.002, sk[2] + 0.016], [0.0055, 0.005, 0.006], 0.002);
+    b.part(tube([[-0.05, 0.92, 0.19], [-0.052, 0.88, 0.2], [sk[0], sk[1] + 0.015, sk[2]]], [0.0018], { radial: 4 }), { color: '#3a2a1c', surface: 'fabric', bones: ['hips'] });
+    // A bandolier from the left shoulder to the right hip, a buckle at the chest, a vial of green light.
+    const path: V3[] = [], pn: V3[] = [];
+    for (let i = 0; i <= 8; i++) {
+      const t = i / 8, x = 0.17 - t * 0.33, y = 1.3 - t * 0.38, hit = s.cast([x, y, 0.6], [0, 0, -1], 0.8);
+      if (hit) { path.push([hit.point[0] + hit.normal[0] * 0.004, hit.point[1] + hit.normal[1] * 0.004, hit.point[2] + hit.normal[2] * 0.004]); pn.push(hit.normal); }
+    }
+    if (path.length > 2) {
+      b.part(strap(path, pn, 0.032, 0.006), { color: '#3a2618', shade: '#24170e', surface: 'cloth', bones: ['chest', 'spine'] });
+      const m = path[3], mn = pn[3];
+      gear.box([m[0] + mn[0] * 0.008, m[1] + mn[1] * 0.008, m[2] + mn[2] * 0.008], [0.02, 0.016, 0.004], 0.003, { color: '#8d7a4f', shade: '#4a3d22', surface: 'metal', bones: ['chest'], blend: 0 }, [0, 0, 0.75]);
+      const v = path[5], vn = pn[5], vc: V3 = [v[0] + vn[0] * 0.022, v[1], v[2] + vn[2] * 0.022];
+      b.part(lathe([[0.012, -0.022], [0.014, -0.012], [0.013, 0.008], [0.006, 0.016], [0.006, 0.024]], { center: vc, segments: 12, closeTop: true, closeBottom: true }), { color: '#9ef27a', surface: 'glow', glow: 0.55, bones: ['spine', 'chest'] });
+      b.part(ellipsoid([vc[0], vc[1] + 0.028, vc[2]], [0.0065, 0.007, 0.0065]), { color: '#6a4a2a', surface: 'bark', bones: ['spine', 'chest'] });
+    }
+    b.sculpted(gear, 0.0035);
+    // Bindings: rag wound round the forearms and shins, a bramble about the right arm.
+    for (const x of [1, -1]) {
+      const S = x > 0 ? 'L' : 'R';
+      b.part(wrap([x * 0.375, 0.94, 0.165], [x * 0.418, 0.79, 0.216], 0.033, 0.026, { turns: 4.5, width: 0.03, seed: x > 0 ? 3 : 5 }), { color: '#5c4b36', shade: '#3a2e20', surface: 'fabric', bones: [`elbow${S}`, `wrist${S}`] });
+      b.part(wrap([x * 0.15, 0.4, 0.075], [x * 0.15, 0.16, -0.025], 0.036, 0.026, { turns: 5, width: 0.032, seed: x > 0 ? 7 : 9 }), { color: '#4f4030', shade: '#2f261b', surface: 'fabric', bones: [`knee${S}`, `ankle${S}`] });
+    }
     const vine: V3[] = [];
-    for (let i = 0; i <= 10; i++) {
-      const u = i / 10, a = u * TAU * 1.3;
-      vine.push([0.365 + 0.055 * u + Math.cos(a) * 0.05, 0.98 - u * 0.2, 0.15 + 0.07 * u + Math.sin(a) * 0.05]);
+    for (let i = 0; i <= 12; i++) {
+      const u = i / 12, a = u * TAU * 1.6;
+      vine.push([-(0.36 + 0.055 * u) - Math.cos(a) * 0.045, 1.0 - u * 0.2, 0.15 + 0.07 * u + Math.sin(a) * 0.045]);
     }
-    b.part(tube(vine, [0.014, 0.016, 0.012], { radial: 6, segments: 48, wobble: 0.25 }), { color: '#35271a', surface: 'bark', bones: ['elbowL', 'wristL'] });
-    b.pair(ellipsoid([0.44, 0.69, 0.25], [0.05, 0.062, 0.042]), { color: GOBLIN_SKIN, shade: GOBLIN_SHADE, surface: 'skin', bones: ['wristL', 'handL'] });
-    for (const [dx, dz] of [[-0.03, 0.02], [0, 0.03], [0.03, 0.015]] as const) {
-      b.pair(tube([[0.44 + dx, 0.66, 0.27 + dz], [0.45 + dx, 0.58, 0.31 + dz], [0.44 + dx, 0.52, 0.34 + dz]], [0.016, 0.012, 0.003], { radial: 6 }),
-        { color: GOBLIN_SKIN, shade: '#ddd0b2', surface: 'skin', bones: ['handL'] });
-    }
-    // Bent, digitigrade legs and long feet.
-    b.pair(tube([[0.13, 0.84, 0], [0.14, 0.65, 0.06], [0.15, 0.46, 0.1], [0.15, 0.3, 0.035], [0.15, 0.12, -0.04]], [0.095, 0.088, 0.058, 0.062, 0.042], { radial: 12, segments: 30 }),
-      { color: GOBLIN_SKIN, shade: GOBLIN_SHADE, surface: 'skin', bones: ['thighL', 'kneeL', 'ankleL', 'hips'] });
-    b.pair(tube([[0.15, 0.11, -0.07], [0.15, 0.05, 0.08], [0.15, 0.035, 0.2]], [0.052, 0.045, 0.016], { radial: 9 }),
-      { color: GOBLIN_SKIN, shade: '#c9bb99', surface: 'skin', bones: ['ankleL', 'toeL'] });
-    // Moss on the shoulders and thorns down the spine.
-    b.pair(ellipsoid([0.19, 1.33, 0.08], [0.13, 0.065, 0.13], { deform: (d, p) => p.multiplyScalar(1 + Math.sin(d.x * 9 + d.z * 7) * 0.12) }),
-      { color: MOSS, shade: '#33431f', surface: 'moss', bones: ['chest', 'shoulderL'] });
-    for (let i = 0; i < 6; i++) {
-      const y = 1.36 - i * 0.1, z = -0.1 - Math.sin((i / 5) * Math.PI) * 0.06;
-      b.part(tube([[0, y, z], [0, y + 0.05, z - 0.09 - (i % 2) * 0.03]], [0.026, 0.002], { radial: 6 }),
-        { color: '#3b2c1f', shade: '#8a7656', surface: 'bark', bones: [i < 3 ? 'chest' : 'spine'] });
+    b.part(tube(vine, [0.009, 0.011, 0.008], { radial: 6, segments: 56, wobble: 0.25 }), { color: '#35271a', surface: 'bark', bones: ['elbowR', 'wristR'] });
+    for (let i = 1; i < vine.length - 1; i += 2) {
+      const [vx, vy, vz] = vine[i], ox = vx * 1.06, oz = vz + (i % 4 ? 0.02 : -0.02);
+      b.part(tube([[vx, vy, vz], [ox, vy + 0.012, oz]], [0.004, 0.0005], { radial: 4 }), { color: '#2a1e15', shade: '#8a7656', surface: 'bark', bones: ['elbowR', 'wristR'] });
     }
   },
   animate(a: Anim) {
