@@ -103,6 +103,51 @@ def world_noise(P: np.ndarray, scale_m: float, seed: int, octaves: int = 3, exte
     return ndi.map_coordinates(tex, [v.ravel(), u.ravel()], order=1, mode='reflect').reshape(P.shape[:2])
 
 
+_SKY_TEX: dict = {}
+
+
+def sky_noise(rays: np.ndarray, key: str, seed: int, scale: float, octaves: int, aniso: tuple = (1.0, 1.0)) -> np.ndarray:
+    """Noise fixed to directions in the sky (azimuth, elevation), so every painting of the place, from
+    whatever camera, shares the same clouds and stars."""
+    if key not in _SKY_TEX:
+        _SKY_TEX[key] = noise2(1024, 4096, scale, seed, octaves, aniso)
+    tex = _SKY_TEX[key]
+    az = np.arctan2(rays[..., 0], -rays[..., 2])
+    el = np.arcsin(np.clip(rays[..., 1], -1, 1))
+    u = (az + np.pi) / (2 * np.pi) * 4095
+    v = np.clip((el + 0.3) / 1.9, 0, 1) * 1023
+    return ndi.map_coordinates(tex, [v.ravel(), u.ravel()], order=1, mode='wrap').reshape(rays.shape[:2])
+
+
+def sky_stars(rays: np.ndarray, focal: float, seed: int = 3) -> np.ndarray:
+    """Stars at fixed directions, drawn as small dots of a size that suits the painting's resolution."""
+    rng = np.random.default_rng(seed)
+    n = 2600
+    dirs = rng.normal(size=(n, 3))
+    dirs[:, 1] = np.abs(dirs[:, 1])
+    dirs /= np.linalg.norm(dirs, axis=1, keepdims=True)
+    mag = rng.random(n) ** 3
+    H, W = rays.shape[:2]
+    out = np.zeros((H, W), np.float32)
+    # project each star into this painting through its rays: find the pixel whose ray is closest
+    flat = rays.reshape(-1, 3)
+    centre = rays[H // 2, W // 2]
+    fwd = centre / np.linalg.norm(centre)
+    right = np.cross(fwd, [0, 1, 0]); right /= np.linalg.norm(right)
+    up = np.cross(right, fwd)
+    tl, br = rays[0, 0], rays[-1, -1]
+    tx0, tx1 = (tl @ right) / (tl @ fwd), (br @ right) / (br @ fwd)
+    ty0, ty1 = (tl @ up) / (tl @ fwd), (br @ up) / (br @ fwd)
+    z = dirs @ fwd
+    ok = z > 0.1
+    sx = ((dirs @ right) / np.where(ok, z, 1) - tx0) / (tx1 - tx0) * (W - 1)
+    sy = ((dirs @ up) / np.where(ok, z, 1) - ty0) / (ty1 - ty0) * (H - 1)
+    ok &= (sx >= 0) & (sx < W - 1) & (sy >= 0) & (sy < H - 1)
+    out[sy[ok].astype(int), sx[ok].astype(int)] = mag[ok] * 3.0
+    del flat
+    return blur(out, max(0.6, focal / 1100)) * (focal / 1100 + 0.5)
+
+
 def _hash3(c: np.ndarray, seed: int) -> np.ndarray:
     c = c.astype(np.int64)
     h = (c[:, 0] * 73856093) ^ (c[:, 1] * 19349663) ^ (c[:, 2] * 83492791) ^ (seed * 2654435761)
@@ -358,7 +403,7 @@ def design(ps: Passes, d: Direction, log=print) -> tuple[np.ndarray, dict]:
     # Ground mist: banks thickening toward the treeline and in the hollows, thin on the play plane.
     h = np.where(solid, P[..., 1] - ps.ground_h, 0)
     hollow = smooth(0.6, -1.4, ps.ground_h)
-    banks = noise2(H, W, W / 6, 31, 3, aniso=(1.0, 0.3))
+    banks = world_noise(P, 11.0, 31, 3)
     dens = smooth(16, 75, depth) * (0.4 + 0.6 * banks) * (0.6 + 0.5 * hollow) * np.exp(-np.maximum(h, 0) / 1.8)
     dens = np.where(solid, np.clip(dens, 0, 0.8), 0)
     mist = c(d.mist) * (0.8 + glow[..., None] * 0.5)
@@ -374,8 +419,8 @@ def design(ps: Passes, d: Direction, log=print) -> tuple[np.ndarray, dict]:
     sk = mix(sk, c(d.sky_zenith), smooth(16, 44, elev))
     halo = np.exp(-(ang / 3.0) ** 2) * 0.5 + np.exp(-(ang / 10) ** 2) * 0.22 + np.exp(-(ang / 28) ** 2) * 0.1
     sk = sk + (moon_light - sk) * np.clip(halo, 0, 0.85)[..., None]
-    cl = noise2(H, W, W / 4, 77, 4, aniso=(1.0, 0.4))
-    cl2 = noise2(H, W, W / 11, 78, 3, aniso=(1.0, 0.5))
+    cl = sky_noise(ps.rays, 'cl', 77, 1024 / 4, 4, aniso=(1.0, 0.45))
+    cl2 = sky_noise(ps.rays, 'cl2', 78, 1024 / 11, 3, aniso=(1.0, 0.55))
     cloud = smooth(0.58, 0.8, cl * 0.72 + cl2 * 0.38) * smooth(3, 10, elev) * (1 - smooth(28, 46, elev) * 0.7)
     above = np.vstack([np.repeat(cloud[:1], 6, 0), cloud[:-6]])
     cloud_top = np.clip(cloud - above, 0, 1)
@@ -386,20 +431,15 @@ def design(ps: Passes, d: Direction, log=print) -> tuple[np.ndarray, dict]:
     disc = smooth(r + 0.05, r - 0.05, ang)
     maria = 0.9 + 0.1 * noise2(H, W, max(4.0, ps.focal * math.radians(r) / 2), 5, 2)
     sk = mix(sk, c(d.moon_disc) * maria[..., None], disc * (1 - cloud * 0.5))
-    rng = np.random.default_rng(3)
-    stars = np.zeros((H, W), np.float32)
-    n_st = int(W * H / 7000)
-    sy, sx = rng.integers(0, H, n_st), rng.integers(0, W, n_st)
-    stars[sy, sx] = rng.random(n_st) ** 3 * 3.0
-    stars = blur(stars, max(0.6, W / 4000)) * (W / 3072 + 0.5)
+    stars = sky_stars(ps.rays, ps.focal)
     stars *= smooth(12, 30, elev) * (1 - cloud) * smooth(8, 25, ang)
-    sk = sk + moon_light * stars[..., None] * 0.6
     C = np.where(sky[..., None], sk, C)
+    stars = np.where(sky, stars, 0)          # laid on after the painting, so no brush smears them
 
     D = np.clip(C, 0, 1).astype(np.float32)
     edge_light = lit * np.isin(K, (TRUNK, LEAF, ROCK, GATE, LANTERN))
     masks = {'mist': dens, 'near': near, 'halo': halo, 'edge_light': edge_light, 'cloud': cloud, 'elev': elev, 'ang': ang,
-             'lit': lit, 'pool': pool, 'path': on_path}
+             'lit': lit, 'pool': pool, 'path': on_path, 'stars': stars}
     log(f'[paint] designed in {time.time() - t0:.0f}s')
     return D, masks
 
@@ -823,5 +863,7 @@ def paint(ps: Passes, d: Direction, seed: int = 7, log=print, quick: bool = Fals
         fern(p, 0.995 * W, 1.0 * H, 0.3 * H, -0.6, 4)
     log(f'[paint] {n} tufts in {time.time() - t:.0f}s')
     out = finish(p.canvas.array(), seed)
+    # The stars, pricked in last.
+    out = np.clip(out + hexc(d.moon_light) * (masks['stars'] * 0.6)[..., None] * (1 - out), 0, 1)
     log(f'[paint] painted in {time.time() - t0:.0f}s')
     return out, D

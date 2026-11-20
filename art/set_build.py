@@ -1,7 +1,7 @@
 """
 Lay out a painted set and gather what its painter needs:
 
-    blender -b --factory-startup -P art/set_build.py -- edge [--scale 0.5] [--proxies-only]
+    blender -b --factory-startup -P art/set_build.py -- edge [--scale 0.5] [--proxies-only] [--shots | --shot <name>…] [--main]
 
 1. compose the place from art/sets/<set>_layout.json (written by `npx vite-node tools/dump-set.ts`)
 2. render its passes through the game camera (setscene.py) into art/build/sets/<set>/ as .npy
@@ -100,6 +100,26 @@ def export_proxies(path: str, scene: dict) -> None:
                               export_materials='NONE', export_vertex_color='NONE', export_normals=True, export_texcoords=False)
 
 
+def render_shot(shot: dict, build: str, public: str, scale: float, moon) -> None:
+    """One cutscene shot's passes, through its own camera, at a size that matches its field of view."""
+    W, H = int(2560 * scale), int(1280 * scale)
+    cam = setscene.paint_camera(shot['position'], shot['lookAt'], shot['fov'], W, H)
+    out = os.path.join(build, 'shots', shot['name'])
+    t = time.time()
+    rig = {'moon': bpy.data.objects['moon'], 'lamps': [o for o in bpy.data.objects if o.name.startswith('lamp-')]}
+    for path in setscene.render_passes(os.path.join(out, 'exr'), rig):
+        key = os.path.splitext(os.path.basename(path))[0]
+        np.save(os.path.join(out, f'{key}.npy'), setscene.read_exr(path).astype(np.float32 if key in ('position', 'ids') else np.float16))
+    meta = {'name': shot['name'], 'script': shot['script'], 'key': shot['key'], 'position': shot['position'], 'lookAt': shot['lookAt'],
+            'fov': math.degrees(cam.data.angle_y), 'aspect': W / H, 'near': cam.data.clip_start, 'far': cam.data.clip_end,
+            'width': W, 'height': H, 'depthMax': DEPTH_MAX, 'moon': moon}
+    for d in (out, os.path.join(public, 'shots', shot['name'])):
+        os.makedirs(d, exist_ok=True)
+        with open(os.path.join(d, 'meta.json'), 'w') as f:
+            json.dump(meta, f, indent=2)
+    print(f"[set] shot {shot['name']} in {time.time() - t:.0f}s", flush=True)
+
+
 def main() -> None:
     argv = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
     name = next((a for a in argv if not a.startswith('--')), 'edge')
@@ -110,6 +130,17 @@ def main() -> None:
     public = os.path.join(ROOT, 'public', 'art', 'sets', name)
     t0 = time.time()
     scene = compose(layout, W, H)
+    if '--shots' in argv or '--shot' in argv:
+        wanted = {argv[i + 1] for i, a in enumerate(argv) if a == '--shot'}
+        for shot in layout.get('shots', []):
+            if wanted and shot['name'] not in wanted:
+                continue
+            render_shot(shot, build, public, scale, layout['moon'])
+        print(f'[set] {name} shots rendered in {time.time() - t0:.0f}s', flush=True)
+        if '--main' not in argv:
+            return
+        cam = setscene.game_camera(layout, W, H)
+        scene['camera'] = cam
     if '--proxies-only' in argv:
         export_proxies(os.path.join(public, 'proxies.glb'), scene)
         print(f'[set] {name} proxies written in {time.time() - t0:.0f}s', flush=True)

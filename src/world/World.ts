@@ -522,6 +522,10 @@ export class World {
     return true;
   }
 
+  /** Load a cutscene's painted backgrounds (the shots painted for its camera keys). */
+  preparePaintedShots(script: string): Promise<void> { return this.environment.prepareShots(script); }
+  releasePaintedShots(): void { this.environment.releaseShots(); }
+
   /** Development: play a spell's effect at a point, outside any encounter (to judge the drawing of it). */
   previewEffect(effect: SpellDef['effect'], target: THREE.Vector3, color = '#ff8a3d', from: HandSide = 'right'): void {
     this.camera.updateMatrixWorld(true);

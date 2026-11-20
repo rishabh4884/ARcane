@@ -1,0 +1,206 @@
+[
+ {
+  "name": "intro-0",
+  "script": "intro",
+  "key": 0,
+  "position": [
+   0.5,
+   1.877,
+   15.2
+  ],
+  "lookAt": [
+   1.2,
+   9.662,
+   6
+  ],
+  "fov": 68.43999812514517,
+  "aspect": 2.0
+ },
+ {
+  "name": "intro-1",
+  "script": "intro",
+  "key": 1,
+  "position": [
+   0.4,
+   1.966,
+   15.3
+  ],
+  "lookAt": [
+   0.8,
+   7.37,
+   4
+  ],
+  "fov": 66.0799970121765,
+  "aspect": 2.0
+ },
+ {
+  "name": "intro-2",
+  "script": "intro",
+  "key": 2,
+  "position": [
+   0.3,
+   2.568,
+   15.8
+  ],
+  "lookAt": [
+   0,
+   2.026,
+   14.4
+  ],
+  "fov": 63.720002729397024,
+  "aspect": 2.0
+ },
+ {
+  "name": "intro-4",
+  "script": "intro",
+  "key": 4,
+  "position": [
+   0,
+   3.331,
+   16
+  ],
+  "lookAt": [
+   4,
+   2.2,
+   -10
+  ],
+  "fov": 68.43999812514517,
+  "aspect": 2.0
+ },
+ {
+  "name": "tuck-0",
+  "script": "tuck",
+  "key": 0,
+  "position": [
+   0,
+   3.359,
+   17
+  ],
+  "lookAt": [
+   0.4,
+   2.004,
+   12.6
+  ],
+  "fov": 59.00000050345972,
+  "aspect": 2.0
+ },
+ {
+  "name": "tuck-1",
+  "script": "tuck",
+  "key": 1,
+  "position": [
+   0.3,
+   3.03,
+   16.2
+  ],
+  "lookAt": [
+   0.8,
+   2.053,
+   12.5
+  ],
+  "fov": 54.280005107711574,
+  "aspect": 2.0
+ },
+ {
+  "name": "tuck-2",
+  "script": "tuck",
+  "key": 2,
+  "position": [
+   1.1,
+   2.639,
+   14.6
+  ],
+  "lookAt": [
+   1.6,
+   2.098,
+   12.3
+  ],
+  "fov": 47.199998353711024,
+  "aspect": 2.0
+ },
+ {
+  "name": "tuck-3",
+  "script": "tuck",
+  "key": 3,
+  "position": [
+   0.6,
+   2.734,
+   15
+  ],
+  "lookAt": [
+   1.2,
+   2.108,
+   12.5
+  ],
+  "fov": 51.92000057964833,
+  "aspect": 2.0
+ },
+ {
+  "name": "warden-0",
+  "script": "warden",
+  "key": 0,
+  "position": [
+   0,
+   3.501,
+   10
+  ],
+  "lookAt": [
+   -6,
+   2.6,
+   -6
+  ],
+  "fov": 63.720002729397024,
+  "aspect": 2.0
+ },
+ {
+  "name": "warden-1",
+  "script": "warden",
+  "key": 1,
+  "position": [
+   0,
+   3.436,
+   8
+  ],
+  "lookAt": [
+   0,
+   3.5,
+   -6
+  ],
+  "fov": 61.36000161642837,
+  "aspect": 2.0
+ },
+ {
+  "name": "warden-2",
+  "script": "warden",
+  "key": 2,
+  "position": [
+   0,
+   2.898,
+   7
+  ],
+  "lookAt": [
+   4,
+   5,
+   -6
+  ],
+  "fov": 59.00000050345972,
+  "aspect": 2.0
+ },
+ {
+  "name": "warden-3",
+  "script": "warden",
+  "key": 3,
+  "position": [
+   0,
+   2.164,
+   6
+  ],
+  "lookAt": [
+   4,
+   6.4,
+   -6
+  ],
+  "fov": 51.92000057964833,
+  "aspect": 2.0
+ }
+]

@@ -199,6 +199,8 @@ export class CutscenePlayer {
     this.lines.replaceChildren();
     this.title.replaceChildren();
     this.onUi?.('story');
+    // The scene's own painted backgrounds start loading at once; the opening fade covers them.
+    const backgrounds = Promise.race([this.world.preparePaintedShots(script.id), new Promise<void>((r) => window.setTimeout(r, 4000))]);
     const stage = this.world.beginCinematic();
     stage.setMood(script.mood, 0.01);
     this.world.setRegion(script.region ?? 'edge');
@@ -217,6 +219,7 @@ export class CutscenePlayer {
         this.fade.style.opacity = '1';
         window.setTimeout(() => {
           shot.dispose();
+          this.world.releasePaintedShots();
           this.world.endCinematic();
           this.el.hidden = true;
           this.fade.style.opacity = '0';
@@ -270,7 +273,9 @@ export class CutscenePlayer {
         }
         raf = requestAnimationFrame(loop);
       };
-      loop();
+      // Held in black until the scene's backgrounds are in.
+      this.fade.style.opacity = '1';
+      void backgrounds.then(() => { last = performance.now(); loop(); });
     });
   }
 }

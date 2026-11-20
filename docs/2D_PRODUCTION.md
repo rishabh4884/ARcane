@@ -1,5 +1,10 @@
 # Arcane — 2D Animated Series Production Plan
 
+> **Superseded in part (2026-11-21).** This plan assumed a team of artists. The look is now being
+> made entirely in this repository: ink-and-paint characters from the sculpted models, brush-painted
+> sets projected in the game, drawn effects. See [PAINTED_SETS.md](PAINTED_SETS.md). The standard
+> below still holds.
+
 **The standard:** Arcane should play like an episode of a beautifully produced 2D animated series
 that answers the player's hands. Characters are drawn and act through poses, faces, hands and fluid
 movement (frame-by-frame, replacement drawings where pose or perspective changes, 2D rigs only where

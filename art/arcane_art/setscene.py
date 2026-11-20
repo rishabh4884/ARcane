@@ -266,14 +266,22 @@ def pool_object(p: dict) -> bpy.types.Object:
 
 def game_camera(layout: dict, width: int, height: int, fov_pad: float = 1.06) -> bpy.types.Object:
     c = layout['camera']
-    cam = bpy.data.cameras.new('game')
+    return paint_camera(c['position'], c['lookAt'], c['fov'] * fov_pad, width, height)
+
+
+def paint_camera(position, look_at, fov: float, width: int, height: int, name: str = 'game') -> bpy.types.Object:
+    """The camera a painting is made from (game coordinates in, vertical field of view in degrees)."""
+    old = bpy.data.objects.get(name)
+    if old is not None:
+        bpy.data.objects.remove(old)
+    cam = bpy.data.cameras.new(name)
     cam.sensor_fit = 'VERTICAL'
-    cam.angle_y = math.radians(c['fov'] * fov_pad)
+    cam.angle_y = math.radians(fov)
     cam.clip_start = 0.15
     cam.clip_end = 400
-    co = bpy.data.objects.new('game', cam)
+    co = bpy.data.objects.new(name, cam)
     bpy.context.scene.collection.objects.link(co)
-    p = c['position']; t = c['lookAt']
+    p = position; t = look_at
     co.location = (p[0], -p[2], p[1])
     d = Vector((t[0], -t[2], t[1])) - co.location
     co.rotation_euler = d.to_track_quat('-Z', 'Y').to_euler()

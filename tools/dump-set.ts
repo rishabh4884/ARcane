@@ -7,6 +7,8 @@
 import { writeFileSync } from 'node:fs';
 import { MOON_DIRECTION } from '../src/world/Atmosphere.ts';
 import { lanternSites } from '../src/world/LanternGrove.ts';
+import { SCRIPTS } from '../src/cutscene/scripts.ts';
+import { planShots } from '../src/world/paintedShots.ts';
 import { EYE_HEIGHT, SPAWN, forestLayout, pathX, terrainHeight } from '../src/world/spatial.ts';
 import { GROUND, gateSite, groundData, rockPlacements, treePlacements } from '../src/world/woodlandLayout.ts';
 
@@ -19,8 +21,11 @@ for (let k = 0; k < ground.positions.length / 3; k++) {
   heights.push(r(ground.positions[k * 3 + 1]));
   colors.push(r(ground.colors[k * 3]), r(ground.colors[k * 3 + 1]), r(ground.colors[k * 3 + 2]));
 }
+const eye: [number, number, number] = [SPAWN.x, r(terrainHeight(SPAWN.x, SPAWN.z) + EYE_HEIGHT), SPAWN.z];
 const layout = {
-  camera: { position: [SPAWN.x, r(terrainHeight(SPAWN.x, SPAWN.z) + EYE_HEIGHT), SPAWN.z], lookAt: [0, 1.2, -12], fov: 64 },
+  camera: { position: eye, lookAt: [0, 1.2, -12], fov: 64 },
+  // Cutscene shots the gameplay painting cannot hold get paintings of their own.
+  shots: planShots(Object.values(SCRIPTS), 'edge', { name: 'edge', position: eye, lookAt: [0, 1.2, -12], fov: 64 * 1.06, aspect: 2 }),
   moon: [r(MOON_DIRECTION.x), r(MOON_DIRECTION.y), r(MOON_DIRECTION.z)],
   ground: { size: GROUND.size, seg: GROUND.seg, heights, colors },
   trees: treePlacements(sites).map((t) => ({ ...t, x: r(t.x), y: r(t.y), z: r(t.z), scale: r(t.scale), yaw: r(t.yaw) })),
@@ -32,4 +37,4 @@ const layout = {
   path: Array.from({ length: 61 }, (_, i) => { const z = 20 - i * 2; return [r(pathX(z)), z]; }),
 };
 writeFileSync('art/sets/edge_layout.json', JSON.stringify(layout));
-console.log(`edge layout: ${layout.trees.length} trees, ${layout.rocks.length} rocks, ${layout.lanterns.length} lanterns, ${heights.length} ground points`);
+console.log(`edge layout: ${layout.trees.length} trees, ${layout.rocks.length} rocks, ${layout.lanterns.length} lanterns, ${layout.shots.length} cutscene shots, ${heights.length} ground points`);

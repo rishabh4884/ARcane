@@ -1,36 +1,51 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { SPELL_LIGHT_GLSL, SPELL_LIGHTS } from './LanternLighting.ts';
+import { type PaintCamera, viewScore } from './paintedShots.ts';
 import { forestLayout } from './spatial.ts';
 import { groundData, rockPlacements, treePlacements } from './woodlandLayout.ts';
 
 /**
  * THE PAINTED SET
  * ───────────────
- * A place painted the way an animated series paints its backgrounds — composed through the game's own
- * camera and repainted stroke by stroke (art/set_build.py) — and stood up in the game by projecting the
- * painting from the camera it was painted from onto simple stand-ins for the ground, the trunks and the
- * stones. From the casting spot the wood looks exactly like the painting; creatures walk on the painted
- * ground and pass behind painted trunks because those trunks have depth; a shake of the camera keeps
- * the parallax true. Surfaces the painting never saw fall back to a plain painted tone, and the sky
- * beyond the painting's frame is the live sky behind it.
+ * A place painted the way an animated series paints its backgrounds — composed through a camera and
+ * repainted stroke by stroke (art/set_build.py, art/set_paint.py) — and stood up in the game by
+ * projecting the painting from the camera it was painted from onto simple stand-ins for the ground, the
+ * trunks, the stones, the gate and the lanterns. From that camera the wood looks exactly like the
+ * painting; creatures walk on the painted ground and pass behind painted trunks because those trunks
+ * have depth; a shake of the camera keeps the parallax true.
+ *
+ * Like a series, the set has a painting for every shot: the gameplay view's, and one for each cutscene
+ * camera key that strays from it. Two paintings are projected at once; each frame the two that best
+ * serve the camera are chosen and weighed, and each surface takes them in proportion to how well each
+ * saw it, so a camera moving from one key to the next passes from one painting into the next. Surfaces
+ * no painting saw fall back to a plain painted tone, and the sky beyond every frame is the live sky.
  */
 
-interface SetMeta { position: number[]; lookAt: number[]; fov: number; aspect: number; near: number; far: number; width: number; height: number; depthMax: number }
+interface SetMeta { position: [number, number, number]; lookAt: [number, number, number]; fov: number; aspect: number; near: number; far: number; width: number; height: number; depthMax: number; script?: string }
+
+interface Painting { name: string; camera: PaintCamera; script?: string; paint: THREE.Texture; depth: THREE.Texture; vp: THREE.Matrix4; eye: THREE.Vector3 }
 
 type Surface = 'ground' | 'tree' | 'rock' | 'sky';
 
 const BASE = `${import.meta.env.BASE_URL ?? '/'}art/sets/`;
 
-function projectedMaterial(paint: THREE.Texture, depth: THREE.Texture, paintVP: THREE.Matrix4, paintCam: THREE.Vector3, depthMax: number, surface: Surface, fallback: THREE.Color, tint: { value: THREE.Color }): THREE.ShaderMaterial {
+/** The two projected paintings and their weighing, shared by every surface of the set. */
+function slotUniforms() {
+  return {
+    tPaintA: { value: null as THREE.Texture | null }, tDepthA: { value: null as THREE.Texture | null }, uPaintVPA: { value: new THREE.Matrix4() }, uPaintCamA: { value: new THREE.Vector3() },
+    tPaintB: { value: null as THREE.Texture | null }, tDepthB: { value: null as THREE.Texture | null }, uPaintVPB: { value: new THREE.Matrix4() }, uPaintCamB: { value: new THREE.Vector3() },
+    uMix: { value: 0 }, uDepthMax: { value: 400 },
+  };
+}
+type Slots = ReturnType<typeof slotUniforms>;
+
+function projectedMaterial(slots: Slots, surface: Surface, fallback: THREE.Color, tint: { value: THREE.Color }, time: { value: number }): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     defines: { SKY: surface === 'sky' ? 1 : 0, SWAY: surface === 'tree' ? 1 : 0 },
     side: surface === 'sky' ? THREE.BackSide : THREE.FrontSide,
     depthWrite: surface !== 'sky',
-    uniforms: {
-      tPaint: { value: paint }, tDepth: { value: depth }, uPaintVP: { value: paintVP }, uPaintCam: { value: paintCam },
-      uDepthMax: { value: depthMax }, uFallback: { value: fallback }, uTint: tint, uTime: { value: 0 }, ...SPELL_LIGHTS,
-    },
+    uniforms: { ...slots, uFallback: { value: fallback }, uTint: tint, uTime: time, ...SPELL_LIGHTS },
     vertexShader: /* glsl */`
       uniform float uTime;
       varying vec3 vRestWorld;
@@ -54,8 +69,9 @@ function projectedMaterial(paint: THREE.Texture, depth: THREE.Texture, paintVP: 
         gl_Position = projectionMatrix * viewMatrix * world;
       }`,
     fragmentShader: /* glsl */`
-      uniform sampler2D tPaint; uniform sampler2D tDepth; uniform mat4 uPaintVP; uniform vec3 uPaintCam; uniform float uDepthMax; uniform vec3 uFallback; uniform vec3 uTint;
-      uniform float uTime;
+      uniform sampler2D tPaintA; uniform sampler2D tDepthA; uniform mat4 uPaintVPA; uniform vec3 uPaintCamA;
+      uniform sampler2D tPaintB; uniform sampler2D tDepthB; uniform mat4 uPaintVPB; uniform vec3 uPaintCamB;
+      uniform float uMix; uniform float uDepthMax; uniform vec3 uFallback; uniform vec3 uTint; uniform float uTime;
       varying vec3 vRestWorld;
       varying vec3 vNormalW;
       ${SPELL_LIGHT_GLSL}
@@ -70,24 +86,35 @@ function projectedMaterial(paint: THREE.Texture, depth: THREE.Texture, paintVP: 
         float n = psNoise(q) * 0.65 + psNoise(q * 2.3 + 4.1) * 0.35;
         return 1.0 - 0.09 * smoothstep(0.42, 0.78, n);
       }
-      void main() {
-        vec4 clip = uPaintVP * vec4(vRestWorld, 1.0);
+      // One painting's view of this point: its colour, and how surely it saw it (0 if not at all).
+      vec3 project(sampler2D tPaint, sampler2D tDepth, mat4 vp, vec3 cam, out float seen) {
+        vec4 clip = vp * vec4(vRestWorld, 1.0);
         vec2 uv = clip.xy / clip.w * 0.5 + 0.5;
-        bool inside = clip.w > 0.0 && uv.x > 0.0 && uv.x < 1.0 && uv.y > 0.0 && uv.y < 1.0;
-        #if SKY
-          // Beyond the painting's frame the live sky shows through.
-          if (!inside) discard;
-          vec3 col = texture2D(tPaint, uv).rgb * uTint;
-        #else
-          float seen = 0.0;
-          if (inside) {
+        vec2 inner = min(uv, 1.0 - uv);
+        seen = clip.w > 0.0 ? smoothstep(0.0, 0.02, min(inner.x, inner.y)) : 0.0;
+        #if !SKY
+          if (seen > 0.0) {
             vec2 dRG = texture2D(tDepth, uv).rg;
             float painted = (dRG.r * 255.0 * 256.0 + dRG.g * 255.0) / 65535.0 * uDepthMax;
-            seen = step(distance(vRestWorld, uPaintCam), painted * 1.03 + 0.35);
+            seen *= step(distance(vRestWorld, cam), painted * 1.03 + 0.35);
           }
-          // Unseen by the painting: a plain painted tone, lit from above.
+        #endif
+        return texture2D(tPaint, uv).rgb;
+      }
+      void main() {
+        float seenA, seenB;
+        vec3 a = project(tPaintA, tDepthA, uPaintVPA, uPaintCamA, seenA);
+        vec3 b = project(tPaintB, tDepthB, uPaintVPB, uPaintCamB, seenB);
+        float wA = (1.0 - uMix) * seenA, wB = uMix * seenB;
+        float w = wA + wB;
+        #if SKY
+          // Beyond every painting's frame the live sky shows through.
+          if (w < 0.002) discard;
+          vec3 col = (a * wA + b * wB) / w * uTint;
+        #else
           float shade = 0.6 + 0.4 * max(vNormalW.y, 0.0);
-          vec3 col = mix(uFallback * shade, texture2D(tPaint, uv).rgb, seen) * uTint * cloudShade(vRestWorld);
+          vec3 painted = w > 0.0 ? (a * wA + b * wB) / max(w, 1e-4) : uFallback;
+          vec3 col = mix(uFallback * shade, painted, clamp(w * 8.0, 0.0, 1.0)) * uTint * cloudShade(vRestWorld);
           col += col * spellIllumination(vRestWorld) * 1.2;
         #endif
         gl_FragColor = vec4(col, 1.0);
@@ -96,28 +123,56 @@ function projectedMaterial(paint: THREE.Texture, depth: THREE.Texture, paintVP: 
   });
 }
 
+async function loadPainting(dir: string, name: string): Promise<Painting> {
+  const [meta, paint, depth] = await Promise.all([
+    fetch(`${dir}/meta.json`).then((r) => { if (!r.ok) throw new Error(`no painting at ${dir} (${r.status})`); return r.json() as Promise<SetMeta>; }),
+    new THREE.TextureLoader().loadAsync(`${dir}/paint.webp`),
+    new THREE.TextureLoader().loadAsync(`${dir}/depth.png`),
+  ]);
+  paint.colorSpace = THREE.SRGBColorSpace;
+  paint.anisotropy = 8;
+  depth.colorSpace = THREE.NoColorSpace;
+  depth.minFilter = THREE.NearestFilter; depth.magFilter = THREE.NearestFilter; depth.generateMipmaps = false;
+  const cam = new THREE.PerspectiveCamera(meta.fov, meta.aspect, meta.near, meta.far);
+  cam.position.fromArray(meta.position);
+  cam.lookAt(new THREE.Vector3().fromArray(meta.lookAt));
+  cam.updateMatrixWorld(true);
+  return {
+    name, script: meta.script, paint, depth, eye: cam.position.clone(),
+    vp: new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse),
+    camera: { name, position: meta.position, lookAt: meta.lookAt, fov: meta.fov, aspect: meta.aspect },
+  };
+}
+
 export class PaintedSet {
   readonly group = new THREE.Group();
   private readonly materials: THREE.ShaderMaterial[] = [];
   private readonly geometries: THREE.BufferGeometry[] = [];
-  private readonly textures: THREE.Texture[] = [];
+  private readonly slots = slotUniforms();
   /** A region not yet painted borrows this painting, retinted. */
   private readonly tint = { value: new THREE.Color(1, 1, 1) };
-  private time = 0;
+  private readonly time = { value: 0 };
+  private readonly shots = new Map<string, Painting>();
+  private manifest: Array<{ name: string; script: string }> = [];
+  private slotA: Painting | null = null;
+  private slotB: Painting | null = null;
+  private readonly eye = new THREE.Vector3();
+  private readonly dir = new THREE.Vector3();
 
-  private constructor() { this.group.name = 'Painted set'; }
+  private constructor(private readonly name: string, private readonly gameplay: Painting) { this.group.name = 'Painted set'; }
 
   /** Load a painted set by name, or null if it has not been built. */
   static async load(name: string): Promise<PaintedSet | null> {
     try {
-      const [meta, paint, depth, proxies] = await Promise.all([
-        fetch(`${BASE}${name}/meta.json`).then((r) => { if (!r.ok) throw new Error(`no set (${r.status})`); return r.json() as Promise<SetMeta>; }),
-        new THREE.TextureLoader().loadAsync(`${BASE}${name}/paint.webp`),
-        new THREE.TextureLoader().loadAsync(`${BASE}${name}/depth.png`),
+      const [painting, proxies, manifest] = await Promise.all([
+        loadPainting(`${BASE}${name}`, name),
         new GLTFLoader().loadAsync(`${BASE}${name}/proxies.glb`),
+        fetch(`${BASE}${name}/shots.json`).then((r) => (r.ok ? r.json() : [])).catch(() => []),
       ]);
-      const set = new PaintedSet();
-      set.build(meta, paint, depth, proxies.scene);
+      const set = new PaintedSet(name, painting);
+      set.manifest = Array.isArray(manifest) ? manifest : [];
+      set.build(proxies.scene);
+      set.assign(painting, painting, 0);
       return set;
     } catch (error) {
       console.info(`[arcane] painted set "${name}" is not available; the cut-out wood stands instead`, error);
@@ -125,20 +180,9 @@ export class PaintedSet {
     }
   }
 
-  private build(meta: SetMeta, paint: THREE.Texture, depth: THREE.Texture, proxies: THREE.Object3D): void {
-    paint.colorSpace = THREE.SRGBColorSpace;
-    paint.anisotropy = 8;
-    paint.generateMipmaps = true;
-    depth.colorSpace = THREE.NoColorSpace;
-    depth.minFilter = THREE.NearestFilter; depth.magFilter = THREE.NearestFilter; depth.generateMipmaps = false;
-    this.textures.push(paint, depth);
-    const cam = new THREE.PerspectiveCamera(meta.fov, meta.aspect, meta.near, meta.far);
-    cam.position.fromArray(meta.position);
-    cam.lookAt(new THREE.Vector3().fromArray(meta.lookAt));
-    cam.updateMatrixWorld(true);
-    const vp = new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
+  private build(proxies: THREE.Object3D): void {
     const make = (surface: Surface, fallback: string) => {
-      const m = projectedMaterial(paint, depth, vp, cam.position.clone(), meta.depthMax, surface, new THREE.Color(fallback), this.tint);
+      const m = projectedMaterial(this.slots, surface, new THREE.Color(fallback), this.tint, this.time);
       this.materials.push(m);
       return m;
     };
@@ -193,28 +237,61 @@ export class PaintedSet {
       placed.name = `Painted ${m.name.slice(7)}`;
       this.group.add(placed);
     }
-    // The sky: a dome the painting's sky lands on, in front of the live sky.
+    // The sky: a dome the paintings' sky lands on, in front of the live sky.
     const domeGeo = new THREE.SphereGeometry(200, 48, 24);
     this.geometries.push(domeGeo);
     const sky = new THREE.Mesh(domeGeo, make('sky', '#5e7b7a'));
-    sky.position.fromArray(meta.position);
+    sky.position.copy(this.gameplay.eye);
     sky.renderOrder = -9;
     sky.frustumCulled = false;
     sky.name = 'Painted sky';
     this.group.add(sky);
   }
 
+  private assign(a: Painting, b: Painting, mix: number): void {
+    const s = this.slots;
+    if (this.slotA !== a) { s.tPaintA.value = a.paint; s.tDepthA.value = a.depth; s.uPaintVPA.value.copy(a.vp); s.uPaintCamA.value.copy(a.eye); this.slotA = a; }
+    if (this.slotB !== b) { s.tPaintB.value = b.paint; s.tDepthB.value = b.depth; s.uPaintVPB.value.copy(b.vp); s.uPaintCamB.value.copy(b.eye); this.slotB = b; }
+    s.uMix.value = mix;
+  }
+
+  /** Load a cutscene's own backgrounds (the shots its camera keys were painted for). */
+  async prepareShots(script: string): Promise<void> {
+    const wanted = this.manifest.filter((m) => m.script === script && !this.shots.has(m.name));
+    const loaded = await Promise.all(wanted.map((m) => loadPainting(`${BASE}${this.name}/shots/${m.name}`, m.name).catch(() => null)));
+    for (const p of loaded) if (p) this.shots.set(p.name, p);
+  }
+
+  /** Let the cutscene's backgrounds go; the gameplay painting stays. */
+  releaseShots(): void {
+    this.assign(this.gameplay, this.gameplay, 0);
+    for (const p of this.shots.values()) { p.paint.dispose(); p.depth.dispose(); }
+    this.shots.clear();
+  }
+
   setTint(color: THREE.Color): void { this.tint.value.copy(color); }
 
-  update(dt: number): void {
-    this.time += dt;
-    for (const m of this.materials) m.uniforms.uTime.value = this.time;
+  update(dt: number, camera?: THREE.PerspectiveCamera): void {
+    this.time.value += dt;
+    if (!camera || !this.shots.size) {
+      if (this.slotA !== this.gameplay || this.slots.uMix.value !== 0) this.assign(this.gameplay, this.gameplay, 0);
+      return;
+    }
+    // The two paintings that best serve this camera, weighed by how well each does.
+    const scored = [this.gameplay, ...this.shots.values()].map((p) => ({ p, s: viewScore(p.camera, camera, this.eye, this.dir) + 1e-6 }));
+    scored.sort((x, y) => y.s - x.s);
+    const [first, second] = scored;
+    // Keep each painting in the slot it already holds, so the weighing never jumps.
+    let a = first, b = second;
+    if (this.slotB === first.p || this.slotA === second.p) { a = second; b = first; }
+    this.assign(a.p, b.p, b.s / (a.s + b.s));
   }
 
   dispose(): void {
     for (const m of this.materials) m.dispose();
     for (const g of this.geometries) g.dispose();
-    for (const t of this.textures) t.dispose();
+    this.gameplay.paint.dispose(); this.gameplay.depth.dispose();
+    for (const p of this.shots.values()) { p.paint.dispose(); p.depth.dispose(); }
     this.group.removeFromParent();
   }
 }

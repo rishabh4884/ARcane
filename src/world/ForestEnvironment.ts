@@ -279,6 +279,10 @@ export class ForestEnvironment {
     this.grass?.setTint(grass);
   }
 
+  /** A cutscene's own painted backgrounds (none in the cut-out wood). */
+  prepareShots(script: string): Promise<void> { return this.painted?.prepareShots(script) ?? Promise.resolve(); }
+  releaseShots(): void { this.painted?.releaseShots(); }
+
   /** Stand the authored assets once their models are loaded. */
   populate(): void { this.woodland?.populate(); }
 
@@ -286,6 +290,6 @@ export class ForestEnvironment {
     let nearest=intersectTerrain(ray,range);
     for(const obstacle of this.obstacles){const d=intersectObstacle(ray,obstacle,nearest??range);if(d!==null&&(nearest===null||d<nearest))nearest=d;}return nearest;
   }
-  update(dt:number,camera:THREE.Camera,reducedMotion:boolean):void {this.motion.value=reducedMotion?0:1;if(!reducedMotion)this.time.value+=dt;this.sky.position.copy(camera.position);this.lantern.update(dt,reducedMotion);this.grass?.update(dt,camera,reducedMotion);this.painted?.update(reducedMotion?0:dt);this.fog.update(dt,camera,reducedMotion);}
+  update(dt:number,camera:THREE.Camera,reducedMotion:boolean):void {this.motion.value=reducedMotion?0:1;if(!reducedMotion)this.time.value+=dt;this.sky.position.copy(camera.position);this.lantern.update(dt,reducedMotion);this.grass?.update(dt,camera,reducedMotion);this.painted?.update(reducedMotion?0:dt,camera as THREE.PerspectiveCamera);this.fog.update(dt,camera,reducedMotion);}
   dispose():void {if(this.disposed)return;this.disposed=true;this.woodland?.dispose();this.painted?.dispose();this.lantern.dispose();this.fog.dispose();this.grass?.dispose();this.mist.dispose();this.wisps.dispose();this.shafts.dispose();this.watchers.dispose();this.scene.remove(this.group);this.art.dispose();this.illustration.dispose();}
 }
