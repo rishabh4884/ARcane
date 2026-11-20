@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { AUTHORED_WORLD, PAINTED_WORLD } from './authored.ts';
-import { LANTERN_GLSL, SPELL_LIGHTS, type LanternUniform } from './LanternLighting.ts';
+import { LANTERN_GLSL, SPELL_LIGHTS, type LanternUniform, MIST_TINT } from './LanternLighting.ts';
 import { SPAWN, seededRandom, terrainHeight } from './spatial.ts';
 
 /** Where the moon hangs: up and to the left of the casting view, above the canopy gap. */
@@ -26,7 +26,7 @@ export class GroundMist {
     this.group.name = 'Creeping ground mist';
     this.material = new THREE.ShaderMaterial({
       transparent: true, depthWrite: false, side: THREE.DoubleSide,
-      uniforms: { uTime: time, uMotion: motion, uLanterns: lanterns, ...SPELL_LIGHTS },
+      uniforms: { uTime: time, uMotion: motion, uLanterns: lanterns, uMistTint: MIST_TINT, ...SPELL_LIGHTS },
       vertexShader: `
         uniform float uTime; uniform float uMotion; attribute float aLayer;
         varying vec3 vWorld; varying float vDepth; varying float vLayer;
@@ -39,7 +39,7 @@ export class GroundMist {
           gl_Position = projectionMatrix * mv;
         }`,
       fragmentShader: `
-        uniform float uTime; varying vec3 vWorld; varying float vDepth; varying float vLayer;
+        uniform float uTime; uniform vec3 uMistTint; varying vec3 vWorld; varying float vDepth; varying float vLayer;
         ${LANTERN_GLSL}
         ${NOISE_GLSL}
         void main(){
@@ -56,7 +56,7 @@ export class GroundMist {
           float alpha = mist * near * far * (0.2 - vLayer * 0.05);
           if (alpha < 0.004) discard;
           float lamp = lanternIllumination(vWorld);
-          vec3 c = mix(vec3(0.17, 0.23, 0.24), vec3(0.3, 0.37, 0.4), mist * 0.6) + vec3(0.48, 0.27, 0.1) * lamp * 0.8 + spellIllumination(vWorld) * 0.3;
+          vec3 c = mix(vec3(0.17, 0.23, 0.24), vec3(0.3, 0.37, 0.4), mist * 0.6) * uMistTint + vec3(0.48, 0.27, 0.1) * lamp * 0.8 + spellIllumination(vWorld) * 0.3;
           gl_FragColor = vec4(c, alpha);
           #include <tonemapping_fragment>
           #include <colorspace_fragment>

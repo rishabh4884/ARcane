@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { seededRandom, terrainHeight } from './spatial.ts';
-import { createLanternUniform, LANTERN_GLSL, SPELL_LIGHTS, type LanternUniform } from './LanternLighting.ts';
+import { createLanternUniform, LANTERN_GLSL, MIST_TINT, SPELL_LIGHTS, type LanternUniform } from './LanternLighting.ts';
 
 /** Several depth-separated, softly-lit fog volumes drift independently through the fixed forest. */
 export class VolumetricFog {
@@ -45,7 +45,7 @@ export class VolumetricFog {
     geometry.setAttribute('fogShade',new THREE.InstancedBufferAttribute(new Float32Array(colors),1));geometry.instanceCount=this.cloudCount;
     source.dispose();
     const material=new THREE.ShaderMaterial({
-      transparent:true,depthWrite:false,depthTest:true,side:THREE.DoubleSide,uniforms:{uTime:this.time,uMotion:this.motion,uLanterns:this.lanterns,...SPELL_LIGHTS},
+      transparent:true,depthWrite:false,depthTest:true,side:THREE.DoubleSide,uniforms:{uTime:this.time,uMotion:this.motion,uLanterns:this.lanterns,uMistTint:MIST_TINT,...SPELL_LIGHTS},
       vertexShader:`attribute vec4 fogOrigin;attribute vec2 fogSize;attribute float fogShade;uniform float uTime;uniform float uMotion;
         varying vec2 vUv;varying vec3 vWorld;varying float vDepth;varying float vShade;
         void main(){vUv=uv;vShade=fogShade;
@@ -58,7 +58,7 @@ export class VolumetricFog {
           world.x+=sin(uTime*.07+fogOrigin.w)*2.2*uMotion;
           vWorld=world;vec4 mv=viewMatrix*vec4(world,1.0);vDepth=-mv.z;gl_Position=projectionMatrix*mv;
         }`,
-       fragmentShader:`varying vec2 vUv;varying vec3 vWorld;varying float vDepth;varying float vShade;uniform float uTime;
+       fragmentShader:`varying vec2 vUv;varying vec3 vWorld;varying float vDepth;varying float vShade;uniform float uTime;uniform vec3 uMistTint;
          ${LANTERN_GLSL}
         float hash(vec2 p){return fract(sin(dot(p,vec2(127.1,311.7)))*43758.5453123);}
         float noise(vec2 p){vec2 i=floor(p),f=fract(p);f=f*f*(3.0-2.0*f);return mix(mix(hash(i),hash(i+vec2(1.,0.)),f.x),mix(hash(i+vec2(0.,1.)),hash(i+vec2(1.,1.)),f.x),f.y);}
@@ -80,7 +80,7 @@ export class VolumetricFog {
           float reveal=smoothstep(2.,8.,vDepth);
           float alpha=density*depth*mix(.15,.36,smoothstep(12.,56.,vDepth))*reveal*mix(.5,1.25,vShade);
           if(alpha<.009)discard;
-          vec3 shadowFog=vec3(.11,.17,.19),litFog=vec3(.24,.31,.31),moonFog=vec3(.30,.37,.42);
+          vec3 shadowFog=vec3(.11,.17,.19)*uMistTint,litFog=vec3(.24,.31,.31)*uMistTint,moonFog=vec3(.30,.37,.42)*uMistTint;
           float innerLight=vUv.y*.16+pow(max(0.,sin(vWorld.x*.035+uTime*.05)),3.0)*.07;
            float lantern=lanternIllumination(vWorld);
            vec3 color=mix(shadowFog,litFog,clamp(innerLight*vShade+.08,0.,.38));

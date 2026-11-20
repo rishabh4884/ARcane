@@ -43,6 +43,7 @@ export class ForestEnvironment {
   readonly woodland: Woodland | null = null;
   private painted: PaintedSet | null = null;
   private readonly paintTint = new THREE.Color(1, 1, 1);
+  private paintRegionKey = 'edge';
 
   constructor(private readonly scene: THREE.Scene) {
     this.group.name = 'The Hushwood — an illustrated world';
@@ -126,6 +127,7 @@ export class ForestEnvironment {
       if (!set) { this.obstacles.splice(start, added); this.makeCarpet(); this.makeTrees(); this.makeRocks(); return; }
       this.painted = set;
       set.setTint(this.paintTint);
+      void set.useRegion(this.paintRegionKey);
       this.group.add(set.group);
     });
   }
@@ -271,12 +273,18 @@ export class ForestEnvironment {
    */
   setTint(trees: THREE.Color, distant: THREE.Color, ground: THREE.Color, grass: THREE.Color, grassHeight = 1): void {
     this.grass?.setHeight(grassHeight);
-    this.paintTint.copy(trees);
-    this.painted?.setTint(trees);
     for (const m of this.treeMaterials) m.color.copy(trees);
     this.distantMaterial?.color.copy(distant);
     this.groundMaterial?.color.copy(ground);
     this.grass?.setTint(grass);
+  }
+
+  /** Show a region's own painting of the wood (its light, its dressing), a little darker deeper in. */
+  paintRegion(key: string, darken: number): void {
+    this.paintRegionKey = key;
+    this.paintTint.setScalar(darken);
+    this.painted?.setTint(this.paintTint);
+    void this.painted?.useRegion(key);
   }
 
   /** A cutscene's own painted backgrounds (none in the cut-out wood). */

@@ -282,6 +282,25 @@ class Direction:
     frame_dark: float = 0.5           # how dark the foreground frame goes
     focus: tuple = (0.5, 0.58)        # where the eye goes, in screen fractions (x, y)
     corner_ferns: bool = False        # paint ferns into the bottom corners (for stills; the game has its own)
+    # the floor: moss, leaf litter, humus, the path; how much colour night takes out of it
+    ground: tuple = ('#4f5d34', '#64553a', '#2c3527', '#5e5444')
+    night_grey: str = '#9fb2ad'
+    night_take: float = 0.45
+    # the sky: 'moon', 'sun' (a low sun behind the treeline) or 'veiled' (no disc, the canopy closed)
+    sky_mode: str = 'moon'
+    stars: float = 1.0
+    mist_gain: float = 1.0
+    mist_height: float = 1.8
+    lamp_gain: float = 1.0
+    # what a region adds by hand: standing black water and reeds, glowing fungi, flowers
+    water: float = 0.0
+    water_col: str = '#0a1514'
+    reeds: float = 0.0
+    fungi: float = 0.0
+    fungi_col: str = '#5fe0d0'
+    flowers: float = 0.0
+    flower_cols: tuple = ('#e8a5b0', '#ffe7a3')
+    grass_gain: float = 1.0
 
 
 def design(ps: Passes, d: Direction, log=print) -> tuple[np.ndarray, dict]:
@@ -335,15 +354,17 @@ def design(ps: Passes, d: Direction, log=print) -> tuple[np.ndarray, dict]:
     # Ground hue: moss where it is green, earth on the path.
     hue = np.where((ground & (on_path > 0))[..., None], mix(hue, c(d.earth) / luma(c(d.earth)), on_path * 0.7), hue)
 
+    hollow_pre = smooth(0.6, -1.4, ps.ground_h)
     # The woodland floor, designed in patches fixed to the ground: moss, leaf litter, pale lichen, dark
     # humus under the trees, the earth of the path; mottled small.
     g1, g2, g3 = world_noise(P, 7.0, 101), world_noise(P, 2.4, 102), world_noise(P, 0.6, 103)
-    gcol = mix(c('#4f5d34'), c('#64553a'), smooth(0.45, 0.72, g1))
+    gm, gl, gh, gp = (c(x) for x in d.ground)
+    gcol = mix(gm, gl, smooth(0.45, 0.72, g1))
     gcol = mix(gcol, c(d.lichen), smooth(0.68, 0.9, g2) * 0.45)
-    gcol = mix(gcol, c('#2c3527'), smooth(0.6, 0.88, 1 - g2) * 0.4)
-    gcol = mix(gcol, c('#5e5444'), on_path * 0.8)
+    gcol = mix(gcol, gh, smooth(0.6, 0.88, 1 - g2) * 0.4)
+    gcol = mix(gcol, gp, on_path * 0.8)
     gcol = gcol * (0.9 + 0.2 * g3)[..., None]
-    gcol = mix(luma(gcol)[..., None] * c('#9fb2ad') / luma(c('#9fb2ad')), gcol, 0.55)   # night takes the colour out
+    gcol = mix(gcol, luma(gcol)[..., None] * c(d.night_grey) / luma(c(d.night_grey)), d.night_take)   # night takes the colour out
     hue = np.where(ground[..., None], gcol / np.maximum(luma(gcol), 1e-3)[..., None], hue)
 
     # Foliage in clumps: every leaf mass lit along its edge toward the moon, dark in the gaps between.
@@ -374,9 +395,24 @@ def design(ps: Passes, d: Direction, log=print) -> tuple[np.ndarray, dict]:
     pane = mix(c(d.lamp) * 0.7, c(d.lamp_core) * 0.92, core)
     C = np.where(glass[..., None], pane, C)
     lamp = 1 - np.exp(-np.clip(ps.lamp, 0, 50) * 1.4)
-    C = C + c(d.lamp) * hue.clip(0.6, 1.6) * (lamp * 0.32 * solid * ~glass)[..., None]
+    C = C + c(d.lamp) * hue.clip(0.6, 1.6) * (lamp * 0.32 * d.lamp_gain * solid * ~glass)[..., None]
     halo_l = blur(glass.astype(np.float32), 5 * W / 3072 + 1) * 1.5
-    C = C + c(d.lamp) * np.clip(halo_l, 0, 1)[..., None] * 0.35
+    C = C + c(d.lamp) * np.clip(halo_l, 0, 1)[..., None] * 0.35 * min(d.lamp_gain, 1.4)
+
+    # Standing black water (the fen): pools in the low ground off the path, mirroring the sky's light,
+    # a pale line where the water meets the bank.
+    water = np.zeros((H, W), np.float32)
+    if d.water > 0:
+        wn = world_noise(P, 8.0, 211, 3)
+        wmask = (wn * 0.85 + hollow_pre * 0.5) - (1 - d.water) * 0.75 - on_path * 0.8 - pool * 0.25
+        water = np.where(ground, smooth(0.3, 0.36, wmask), 0)
+        grazing = np.clip(1 - np.abs(ps.rays[..., 1]) * 4, 0, 1)
+        # Still water shows the sky: pale where it mirrors the low sky, a ripple of streaks across it.
+        streak = 0.9 + 0.1 * noise2(H, W, max(3.0, W / 500), 213, 2, aniso=(1.0, 0.15))
+        refl = mix(c(d.water_col), c(d.sky_horizon) * 0.8, 0.5 + 0.35 * grazing) * streak[..., None]
+        C = mix(C, refl, water)
+        bank = np.clip(blur(water, 3 * W / 3072 + 0.8) - water, 0, 1) * 2.5
+        C = mix(C, c(d.water_col) * 0.8, np.clip(bank, 0, 0.7))
 
     # The air: haze toward the region's air with distance, glowing toward the moon.
     mdir = ps.extra['moon_dir']
@@ -404,8 +440,8 @@ def design(ps: Passes, d: Direction, log=print) -> tuple[np.ndarray, dict]:
     h = np.where(solid, P[..., 1] - ps.ground_h, 0)
     hollow = smooth(0.6, -1.4, ps.ground_h)
     banks = world_noise(P, 11.0, 31, 3)
-    dens = smooth(16, 75, depth) * (0.4 + 0.6 * banks) * (0.6 + 0.5 * hollow) * np.exp(-np.maximum(h, 0) / 1.8)
-    dens = np.where(solid, np.clip(dens, 0, 0.8), 0)
+    dens = smooth(16, 75, depth) * (0.4 + 0.6 * banks) * (0.6 + 0.5 * hollow) * np.exp(-np.maximum(h, 0) / d.mist_height)
+    dens = np.where(solid, np.clip(dens * d.mist_gain, 0, 0.85), 0)
     mist = c(d.mist) * (0.8 + glow[..., None] * 0.5)
     C = mix(C, mist, dens * 0.7)
 
@@ -418,6 +454,10 @@ def design(ps: Passes, d: Direction, log=print) -> tuple[np.ndarray, dict]:
     sk = mix(c(d.sky_horizon), c(d.sky_mid), smooth(0, 16, elev))
     sk = mix(sk, c(d.sky_zenith), smooth(16, 44, elev))
     halo = np.exp(-(ang / 3.0) ** 2) * 0.5 + np.exp(-(ang / 10) ** 2) * 0.22 + np.exp(-(ang / 28) ** 2) * 0.1
+    if d.sky_mode == 'sun':
+        halo = halo * 1.3 + np.exp(-(ang / 55) ** 2) * 0.25
+    elif d.sky_mode == 'veiled':
+        halo = halo * 0.35
     sk = sk + (moon_light - sk) * np.clip(halo, 0, 0.85)[..., None]
     cl = sky_noise(ps.rays, 'cl', 77, 1024 / 4, 4, aniso=(1.0, 0.45))
     cl2 = sky_noise(ps.rays, 'cl2', 78, 1024 / 11, 3, aniso=(1.0, 0.55))
@@ -430,8 +470,12 @@ def design(ps: Passes, d: Direction, log=print) -> tuple[np.ndarray, dict]:
     r = d.moon_size_deg / 2
     disc = smooth(r + 0.05, r - 0.05, ang)
     maria = 0.9 + 0.1 * noise2(H, W, max(4.0, ps.focal * math.radians(r) / 2), 5, 2)
-    sk = mix(sk, c(d.moon_disc) * maria[..., None], disc * (1 - cloud * 0.5))
-    stars = sky_stars(ps.rays, ps.focal)
+    if d.sky_mode == 'moon':
+        sk = mix(sk, c(d.moon_disc) * maria[..., None], disc * (1 - cloud * 0.5))
+    elif d.sky_mode == 'sun':
+        sun_disc = smooth(r * 1.5 + 0.1, r * 1.5 - 0.1, ang)
+        sk = mix(sk, c(d.moon_disc), sun_disc * (1 - cloud * 0.4))
+    stars = sky_stars(ps.rays, ps.focal) * d.stars
     stars *= smooth(12, 30, elev) * (1 - cloud) * smooth(8, 25, ang)
     C = np.where(sky[..., None], sk, C)
     stars = np.where(sky, stars, 0)          # laid on after the painting, so no brush smears them
@@ -439,7 +483,7 @@ def design(ps: Passes, d: Direction, log=print) -> tuple[np.ndarray, dict]:
     D = np.clip(C, 0, 1).astype(np.float32)
     edge_light = lit * np.isin(K, (TRUNK, LEAF, ROCK, GATE, LANTERN))
     masks = {'mist': dens, 'near': near, 'halo': halo, 'edge_light': edge_light, 'cloud': cloud, 'elev': elev, 'ang': ang,
-             'lit': lit, 'pool': pool, 'path': on_path, 'stars': stars}
+             'lit': lit, 'pool': pool, 'path': on_path, 'stars': stars, 'water': water}
     log(f'[paint] designed in {time.time() - t0:.0f}s')
     return D, masks
 
@@ -691,6 +735,104 @@ def grass(p: Painter, density: float = 1.0) -> int:
     return n
 
 
+def floor_places(p: Painter) -> dict:
+    """Where things grow on the floor: the clearing's rim, round the roots, off the path."""
+    if 'floor' in p.masks:
+        return p.masks['floor']
+    ps = p.ps
+    P = ps.P
+    clear_r = np.hypot(P[..., 0], P[..., 2] + 12)
+    rim = smooth(8, 13, clear_r) * (1 - smooth(22, 34, clear_r))
+    roots = np.zeros(P.shape[:2], np.float32)
+    for t in ps.layout['trees']:
+        dd = np.hypot(P[..., 0] - t['x'], P[..., 2] - t['z'])
+        roots = np.maximum(roots, smooth(t['scale'] * 3.2, t['scale'] * 0.9, dd))
+    p.masks['floor'] = {'rim': rim, 'roots': roots, 'path': p.masks['path']}
+    return p.masks['floor']
+
+
+def _scatter(p: Painter, want: np.ndarray, n: int, near: float, far: float) -> list:
+    ps, rng = p.ps, p.rng
+    cand = (ps.K == GROUND) & (ps.depth > near) & (ps.depth < far) & (want > 0.01)
+    ys, xs = np.nonzero(cand)
+    if not len(ys) or n <= 0:
+        return []
+    prob = want[ys, xs] * np.maximum(ps.depth[ys, xs], 1) ** 1.5
+    prob /= prob.sum()
+    pick = rng.choice(len(ys), size=n, p=prob)
+    pick = pick[np.argsort(-ps.depth[ys[pick], xs[pick]])]
+    return [(int(ys[i]), int(xs[i])) for i in pick]
+
+
+def dressing(p: Painter, d: 'Direction') -> int:
+    """What a region adds by hand on its floor."""
+    ps, rng, cv = p.ps, p.rng, p.canvas
+    scale = p.W / 3072
+    places = floor_places(p)
+    n_total = 0
+    if d.reeds > 0:
+        # Reeds stand at the water's edge and in the wet hollows: tall, straight, a seed head on some.
+        water = p.masks.get('water', np.zeros_like(ps.depth))
+        shore = np.clip(blur(water, 6 * scale + 1) * 3 - water * 2, 0, 1)
+        want = shore + smooth(0.4, -1.2, ps.ground_h) * 0.25
+        for (y, x) in _scatter(p, want, int(700 * d.reeds * scale), 2.5, 45):
+            hpx = (0.6 + 0.7 * rng.random()) * ps.focal / ps.depth[y, x]
+            if hpx < 3:
+                continue
+            base = p.D[y, x] * 0.7
+            reed = mix(base, hexc('#8a7a4a') * (luma(p.D[y, x]) / 0.3 + 0.2), 0.35)
+            lean = (rng.random() - 0.5) * 0.25
+            for b in range(3 + int(rng.random() * 4)):
+                a = lean + rng.normal() * 0.12
+                L = hpx * (0.55 + 0.45 * rng.random())
+                tt = np.linspace(0, 1, 8)
+                pts = np.stack([x + (rng.random() - 0.5) * hpx * 0.15 + np.sin(a) * L * tt + a * L * 0.15 * tt ** 2, y - np.cos(a) * L * tt], 1)
+                cv.blade(pts, max(0.5, hpx * 0.018), reed * (0.85 + 0.25 * rng.random()), 0.95)
+                if rng.random() < 0.35:
+                    tip = pts[-2]
+                    w, h = max(1.0, hpx * 0.025), max(2.0, hpx * 0.09)
+                    cv.draw.ellipse([((tip[0] - w) * cv.ss, (tip[1] - h) * cv.ss), ((tip[0] + w) * cv.ss, (tip[1] + h * 0.4) * cv.ss)], fill=tuple(int(v * 255) for v in np.clip(base * 0.8, 0, 1)) + (240,))
+            n_total += 1
+    if d.fungi > 0:
+        # Decay light: small caps glowing cold teal at the roots, very restrained.
+        glow_col = hexc(d.fungi_col)
+        clusters = smooth(0.6, 0.85, world_noise(ps.P, 1.6, 401, 2))      # in little colonies, not strings
+        for (y, x) in _scatter(p, places['roots'] ** 4 * clusters, int(150 * d.fungi * scale), 2.5, 40):
+            r = (0.035 + 0.05 * rng.random()) * ps.focal / ps.depth[y, x]
+            if r < 1.0:
+                continue
+            for k, (rr, a) in enumerate(((3.0, 0.035), (1.9, 0.06), (1.25, 0.1))):
+                cc = tuple(int(v * 255) for v in glow_col) + (int(a * 255),)
+                cv.draw.ellipse([((x - r * rr) * cv.ss, (y - r * rr * 0.8) * cv.ss), ((x + r * rr) * cv.ss, (y + r * rr * 0.6) * cv.ss)], fill=cc)
+            cap = mix(glow_col, np.ones(3), 0.2) * (0.75 + 0.3 * rng.random())
+            cv.draw.chord([((x - r) * cv.ss, (y - r * 0.9) * cv.ss), ((x + r) * cv.ss, (y + r * 0.5) * cv.ss)], 180, 360, fill=tuple(int(v * 255) for v in cap) + (255,))
+            n_total += 1
+    if d.flowers > 0:
+        # Freed light: blossoms and lit lantern-flowers in the grass.
+        cols = [hexc(h) for h in d.flower_cols]
+        patches = smooth(0.55, 0.8, world_noise(ps.P, 2.5, 307, 3))      # flowers grow in drifts, not evenly
+        want = (places['rim'] + places['roots'] * 0.6) * patches
+        for (y, x) in _scatter(p, want, int(380 * d.flowers * scale), 2.5, 35):
+            r = (0.022 + 0.026 * rng.random()) * ps.focal / ps.depth[y, x]
+            if r < 0.7:
+                continue
+            col = mix(cols[int(rng.random() * len(cols))], p.D[y, x], 0.15 + 0.2 * rng.random()) * (0.85 + 0.2 * rng.random())
+            if r < 1.6 or rng.random() < 0.35:
+                # far off, or half hidden: a single dab of colour
+                cv.draw.ellipse([((x - r) * cv.ss, (y - r * 1.6) * cv.ss), ((x + r) * cv.ss, (y - r * 0.2) * cv.ss)], fill=tuple(int(v * 255) for v in np.clip(col, 0, 1)) + (225,))
+                n_total += 1
+                continue
+            stem = np.array([[x, y], [x + (rng.random() - 0.5) * r, y - r * 3]])
+            cv.blade(stem, max(0.4, r * 0.15), p.D[y, x] * 0.7, 0.9)
+            cx, cy = stem[1]
+            for k in range(5):
+                a = k / 5 * 2 * math.pi + rng.random() * 0.4
+                px_, py_ = cx + math.cos(a) * r * 0.6, cy + math.sin(a) * r * 0.45
+                cv.draw.ellipse([((px_ - r * 0.45) * cv.ss, (py_ - r * 0.35) * cv.ss), ((px_ + r * 0.45) * cv.ss, (py_ + r * 0.35) * cv.ss)], fill=tuple(int(v * 255) for v in np.clip(col, 0, 1)) + (235,))
+            n_total += 1
+    return n_total
+
+
 def canopy_edges(p: Painter, density: float = 1.0) -> int:
     """Foliage silhouettes are drawn, not rendered: along every canopy edge that meets something farther
     away, little clusters of leaves are dabbed outward past the edge, and here and there the sky shows
@@ -856,7 +998,8 @@ def paint(ps: Passes, d: Direction, seed: int = 7, log=print, quick: bool = Fals
     log(f'[paint] {n} leaf dabs along the canopy edges in {time.time() - t:.0f}s')
     t = time.time()
     litter(p)
-    n = grass(p)
+    n = grass(p, d.grass_gain)
+    n += dressing(p, d)
     W, H = p.W, p.H
     if d.corner_ferns:     # in the game the living foreground layer hangs its own fronds into the corners
         fern(p, 0.01 * W, 1.0 * H, 0.36 * H, 0.55, 3)

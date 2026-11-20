@@ -158,6 +158,9 @@ export class PaintedSet {
   private slotB: Painting | null = null;
   private readonly eye = new THREE.Vector3();
   private readonly dir = new THREE.Vector3();
+  /** The gameplay view painted in each region's light (the same view, so only the painting differs). */
+  private readonly regionPaints = new Map<string, THREE.Texture>();
+  private region = '';
 
   private constructor(private readonly name: string, private readonly gameplay: Painting) { this.group.name = 'Painted set'; }
 
@@ -271,6 +274,24 @@ export class PaintedSet {
 
   setTint(color: THREE.Color): void { this.tint.value.copy(color); }
 
+  /** Paint the gameplay view in a region's own light; a region not yet painted keeps the set's own. */
+  async useRegion(key: string): Promise<void> {
+    if (key === this.region) return;
+    this.region = key;
+    if (!this.regionPaints.has(this.name)) this.regionPaints.set(this.name, this.gameplay.paint);
+    let paint = this.regionPaints.get(key);
+    if (!paint) {
+      paint = await new THREE.TextureLoader().loadAsync(`${BASE}${this.name}/regions/${key}/paint.webp`).catch(() => this.regionPaints.get(this.name)!);
+      paint.colorSpace = THREE.SRGBColorSpace;
+      paint.anisotropy = 8;
+      this.regionPaints.set(key, paint);
+    }
+    if (this.region !== key) return;          // a later region was asked for meanwhile
+    this.gameplay.paint = paint;
+    if (this.slotA === this.gameplay) this.slots.tPaintA.value = paint;
+    if (this.slotB === this.gameplay) this.slots.tPaintB.value = paint;
+  }
+
   update(dt: number, camera?: THREE.PerspectiveCamera): void {
     this.time.value += dt;
     if (!camera || !this.shots.size) {
@@ -291,6 +312,7 @@ export class PaintedSet {
     for (const m of this.materials) m.dispose();
     for (const g of this.geometries) g.dispose();
     this.gameplay.paint.dispose(); this.gameplay.depth.dispose();
+    for (const t of new Set(this.regionPaints.values())) t.dispose();
     for (const p of this.shots.values()) { p.paint.dispose(); p.depth.dispose(); }
     this.group.removeFromParent();
   }

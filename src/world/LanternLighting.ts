@@ -82,3 +82,7 @@ export function illuminateIllustration(material: THREE.MeshBasicMaterial, lanter
   const key = material.customProgramCacheKey.bind(material);
   material.customProgramCacheKey = () => `${key()}-lantern-lit-v2-${ambient}`;
 }
+
+/** The colour of the wood's mist and fog in the current region (set when the region changes). */
+export const MIST_TINT = { value: new THREE.Color(1, 1, 1) };
+

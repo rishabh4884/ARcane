@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { PAINTED_WORLD } from './authored.ts';
+import { MIST_TINT } from './LanternLighting.ts';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { butterflies, flowerField, hangingLantern, lanternFlower, rootThrone } from '../cutscene/cast.ts';
 import type { LevelDef, Mood } from '../game/campaign.ts';
@@ -120,6 +121,8 @@ function placeInstances(mesh: THREE.InstancedMesh, points: THREE.Vector3[], rng:
 
 /* ─────────────────────────────── the region set ─────────────────────────────── */
 
+const MIST_TINTS: Record<RegionKey, string> = { edge: '#ffffff', fen: '#f2fff0', deeps: '#6f8a94', throne: '#e8e4f0', dawn: '#ffe6c4' };
+
 export class Regions {
   readonly group = new THREE.Group();
   private current = '';
@@ -147,6 +150,14 @@ export class Regions {
     const rng = mulberry(spec.seed);
     const build = { edge: this.edge, fen: this.fen, deeps: this.deeps, throne: this.throne, dawn: this.dawn }[spec.key];
     build.call(this, rng, spec.depth);
+    if (PAINTED_WORLD) {
+      // Each region is painted, its dressing in the painting: the built props step aside, the living
+      // things (glowworms, butterflies, the emitters) stay.
+      this.dropProps();
+      this.env.paintRegion(spec.key, darken);
+    }
+    // The mist takes the region's air: near-black teal in the Deeps, warm and pale at dawn.
+    MIST_TINT.value.set(MIST_TINTS[spec.key]);
     if (spec.set) this.set(spec.set, rng);
   }
 
@@ -169,6 +180,15 @@ export class Regions {
   }
 
   private add<T extends THREE.Object3D>(o: T): T { this.group.add(o); return o; }
+
+  private dropProps(): void {
+    for (const o of [...this.group.children]) {
+      if (!(o instanceof THREE.Mesh)) continue;
+      this.group.remove(o);
+      o.geometry.dispose();
+      (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => m.dispose());
+    }
+  }
 
   private merged(parts: THREE.BufferGeometry[], material: THREE.Material): THREE.Mesh | null {
     if (!parts.length) return null;

@@ -143,6 +143,7 @@ export class World {
   private readonly basePosition = new THREE.Vector3();
   private readonly baseQuaternion = new THREE.Quaternion();
   private readonly shakeEuler = new THREE.Euler();
+  private readonly paintGrade = { tint: new THREE.Vector3(1, 1, 1), lift: new THREE.Vector3() };
   private readonly shakeQuaternion = new THREE.Quaternion();
 
   private idleTime = 0;
@@ -808,7 +809,15 @@ export class World {
     if (fog) { fog.color.copy(m.fog); fog.density = m.density; }
     if (this.scene.background instanceof THREE.Color) this.scene.background.copy(m.sky);
     this.renderer.setClearColor(m.sky);
-    this.post.setGrade(m.tint, m.lift, m.saturation, m.exposure, m.vignette);
+    if (PAINTED_WORLD) {
+      // The painting already carries its region's light: the grade only leans the way the mood does.
+      const k = 0.35;
+      this.paintGrade.tint.set(1 + (m.tint.x - 1) * k, 1 + (m.tint.y - 1) * k, 1 + (m.tint.z - 1) * k);
+      this.paintGrade.lift.copy(m.lift).multiplyScalar(k);
+      this.post.setGrade(this.paintGrade.tint, this.paintGrade.lift, 1 + (m.saturation - 1) * k, 1 + (m.exposure - 1) * k, m.vignette);
+    } else {
+      this.post.setGrade(m.tint, m.lift, m.saturation, m.exposure, m.vignette);
+    }
     const dark = this.encounter.player.darkness > 0 && this.encounter.active ? 1 : 0;
     this.darkLevel += (dark - this.darkLevel) * Math.min(1, dt * (dark ? 1.2 : 2.5));
     this.post.setDark(this.darkLevel);
