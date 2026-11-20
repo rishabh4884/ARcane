@@ -11,7 +11,9 @@
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "setup:assets": "node scripts/setup-assets.mjs",
-    "art": "${BLENDER:-/Applications/Blender.app/Contents/MacOS/Blender} -b --factory-startup -P art/build.py --"
+    "art": "${BLENDER:-/Applications/Blender.app/Contents/MacOS/Blender} -b --factory-startup -P art/build.py --",
+    "set": "sh -c '${BLENDER:-/Applications/Blender.app/Contents/MacOS/Blender} -b --factory-startup -P art/set_build.py -- \"$@\" && python3 art/set_paint.py \"$@\"' set",
+    "set:paint": "python3 art/set_paint.py"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "0.10.35",

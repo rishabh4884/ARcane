@@ -6,7 +6,26 @@ import { createLanternUniform, type LanternUniform, LANTERN_COUNT } from './Lant
 
 interface Lamp { root: THREE.Group; light: THREE.PointLight | null; halo: THREE.Sprite; x:number; z:number; height:number; strength:number; phase:number }
 
-/** Warm, staggered pools of light; their exact positions drive every surface shader. */
+export interface LanternSite { index: number; x: number; z: number; scale: number; strength: number; /** the lamp hangs from an arm this far along +x, this high, both before scaling */ arm: number; lampHeight: number }
+
+/** Where the lanterns stand along the path: shared by the grove and the painted sets. */
+export function lanternSites(): LanternSite[] {
+  const route = [
+    { z: 6.5, side: 1, scale: 1, strength: 1 },
+    { z: -9, side: -1, scale: .82, strength: .8 },
+    { z: -25, side: 1, scale: .72, strength: .69 },
+    { z: -42, side: -1, scale: .66, strength: .62 },
+    { z: -60, side: 1, scale: .55, strength: .52 },
+    { z: -79, side: -1, scale: .49, strength: .46 },
+  ];
+  return route.map((site, index) => ({ index, x: pathX(site.z) + site.side * (4.5 + (index % 2) * .35), z: site.z, scale: site.scale, strength: site.strength, arm: .92, lampHeight: 3.29 }));
+}
+
+/**
+ * Warm, staggered pools of light; their exact positions drive every surface shader. In a painted set
+ * the lanterns themselves are in the painting: the grove keeps only their living part (the light, the
+ * breathing halo, the motes).
+ */
 export class LanternGrove {
   readonly group = new THREE.Group();
   readonly lanterns: LanternUniform = createLanternUniform();
@@ -17,20 +36,9 @@ export class LanternGrove {
   private readonly time={value:0};
   private disposed=false;
 
-  constructor(){
+  constructor(painted = false){
     this.group.name='Lanterns along the Hushwood path';
-    const route = [
-      { z: 6.5, side: 1, scale: 1, strength: 1 },
-      { z: -9, side: -1, scale: .82, strength: .8 },
-      { z: -25, side: 1, scale: .72, strength: .69 },
-      { z: -42, side: -1, scale: .66, strength: .62 },
-      { z: -60, side: 1, scale: .55, strength: .52 },
-      { z: -79, side: -1, scale: .49, strength: .46 },
-    ];
-    route.forEach((site,i)=>{
-      const x=pathX(site.z)+site.side*(4.5+(i%2)*.35);
-      this.buildLantern(x,site.z,site.scale,site.strength,i);
-    });
+    for (const site of lanternSites()) this.buildLantern(site.x, site.z, site.scale, site.strength, site.index, painted);
     const count=160,positions=new Float32Array(count*3),seeds=new Float32Array(count*4);
     for(let i=0;i<count;i++){
       const lamp=this.lamps[Math.min(LANTERN_COUNT-1,Math.floor(i/(count/LANTERN_COUNT)))];
@@ -53,13 +61,13 @@ export class LanternGrove {
     this.update(0,true);
   }
 
-  private buildLantern(x:number,z:number,scale:number,strength:number,index:number):void{
+  private buildLantern(x:number,z:number,scale:number,strength:number,index:number,painted:boolean):void{
     const base=terrainHeight(x,z),root=new THREE.Group();root.position.set(x,base,z);root.scale.setScalar(scale);this.group.add(root);
     const timber=this.art.paint('#564c3b',{roughness:.96});
     const bronze=this.art.paint('#756344',{roughness:.66,metalness:.12});
     const wick=this.art.paint('#f6cc83',{emissive:'#f5a145',emissiveIntensity:1.5});
     const make=(geometry:THREE.BufferGeometry,material:THREE.Material,px:number,py:number,pz:number)=>{
-      const mesh=new THREE.Mesh(this.art.geometry(geometry),material);mesh.position.set(px,py,pz);mesh.castShadow=false;mesh.receiveShadow=true;root.add(mesh);return mesh;
+      const mesh=new THREE.Mesh(this.art.geometry(geometry),material);mesh.position.set(px,py,pz);mesh.castShadow=false;mesh.receiveShadow=true;mesh.visible=!painted;root.add(mesh);return mesh;
     };
     make(new THREE.CylinderGeometry(.14,.29,.27,10),timber,0,.1,0);
     make(sweptShape(vectors([[0,.12,0],[.04,1.15,0],[.11,2.7,0],[.16,4.14,0],[.13,4.61,0]]),[.15,.12,.09,.075,.055],10,20),timber,0,0,0);

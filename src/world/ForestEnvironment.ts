@@ -8,9 +8,11 @@ import { GrassField } from './GrassField.ts';
 import { ArtResources } from './storybook.ts';
 import { forestLayout, intersectObstacle, intersectTerrain, pathX, seededRandom, terrainHeight, type Obstacle } from './spatial.ts';
 import { Woodland } from './Woodland.ts';
+import { PaintedSet } from './PaintedSet.ts';
+import { gateSite, rockPlacements } from './woodlandLayout.ts';
 
-import { AUTHORED_WORLD } from './authored.ts';
-export { AUTHORED_WORLD };
+import { AUTHORED_WORLD, PAINTED_WORLD } from './authored.ts';
+export { AUTHORED_WORLD, PAINTED_WORLD };
 
 interface Cutout { mesh: THREE.InstancedMesh; sites: Array<{x:number; y:number; z:number; width:number; height:number}>; sorted: number[] }
 
@@ -30,7 +32,7 @@ export class ForestEnvironment {
   private readonly dummy = new THREE.Object3D();
   private readonly cutouts: Cutout[] = [];
   private readonly sky: THREE.Mesh;
-  private readonly grass:GrassField;
+  private readonly grass:GrassField|null;
   private readonly fog:VolumetricFog;
   private readonly lantern:LanternGrove;
   private readonly mist:GroundMist;
@@ -39,6 +41,7 @@ export class ForestEnvironment {
   private readonly watchers:Watchers;
   private disposed = false;
   readonly woodland: Woodland | null = null;
+  private painted: PaintedSet | null = null;
 
   constructor(private readonly scene: THREE.Scene) {
     this.group.name = 'The Hushwood — an illustrated world';
@@ -49,7 +52,7 @@ export class ForestEnvironment {
     // loam (the moon, the key, comes from World; the caster's warm fill is added below).
     const ambient = AUTHORED_WORLD ? new THREE.HemisphereLight('#4f6f70', '#1c2218', 1.35) : new THREE.HemisphereLight('#789591', '#192824', 1.15);
     const sun = new THREE.DirectionalLight('#97aebc', AUTHORED_WORLD ? 0 : .38); sun.position.set(-20,32,-35);
-    this.lantern=new LanternGrove();this.group.add(this.lantern.group);
+    this.lantern=new LanternGrove(PAINTED_WORLD);this.group.add(this.lantern.group);
     this.group.add(ambient,sun);
     this.sky = this.makeSky();
     if (AUTHORED_WORLD) {
@@ -60,12 +63,15 @@ export class ForestEnvironment {
       fill.position.set(3, 7, 32);
       fill.target.position.set(0, 0.5, -10);
       this.group.add(fill, fill.target);
+    } else if (PAINTED_WORLD) {
+      this.standPaintedSet('edge');
     } else {
       this.makeCarpet(); this.makeTrees(); this.makeRocks();
     }
     this.makeLandmarks(); this.makeAtmosphere();
     this.fog=new VolumetricFog(this.lantern.lanterns);this.group.add(this.fog.group);
-    this.grass=new GrassField(this.obstacles,this.lantern.lanterns);this.group.add(this.grass.group);
+    // A painted set paints its own grass; the living blades belong to the cut-out world.
+    this.grass=PAINTED_WORLD?null:new GrassField(this.obstacles,this.lantern.lanterns);if(this.grass)this.group.add(this.grass.group);
     this.mist=new GroundMist(this.lantern.lanterns,this.time,this.motion);this.group.add(this.mist.group);
     this.wisps=new FogWisps(this.time,this.motion);this.group.add(this.wisps.group);
     this.shafts=new MoonShafts(this.time,this.motion);this.group.add(this.shafts.group);
@@ -99,6 +105,27 @@ export class ForestEnvironment {
     sites.forEach((site,i)=>{this.dummy.position.set(site.x,site.y,site.z);this.dummy.rotation.set(0,0,0);this.dummy.scale.set(site.width,site.height,1);this.dummy.updateMatrix();mesh.setMatrixAt(i,this.dummy.matrix);});
     mesh.instanceMatrix.needsUpdate=true;this.group.add(mesh);
     return mesh;
+  }
+
+  /**
+   * Stand a painted set: the trunks and stones block and catch spells at once (the layout is known),
+   * and the painting arrives when its files have loaded. If the set has not been built, the wood
+   * falls back to its cut-outs.
+   */
+  private standPaintedSet(name: string): void {
+    const sites = forestLayout();
+    const start = this.obstacles.length;
+    for (const t of sites) this.obstacles.push({ ...t, radius: t.scale * 0.66, height: t.scale * 12 });
+    for (const r of rockPlacements(sites)) this.obstacles.push({ x: r.x, z: r.z, radius: r.scale[0] * 0.7, height: r.scale[1] * 0.9 });
+    const gate = gateSite();
+    for (const side of [-1, 1]) this.obstacles.push({ x: gate.x + Math.cos(gate.yaw) * gate.span * side, z: gate.z - Math.sin(gate.yaw) * gate.span * side, radius: 0.75, height: 6.5 });
+    const added = this.obstacles.length - start;
+    void PaintedSet.load(name).then((set) => {
+      if (this.disposed) { set?.dispose(); return; }
+      if (!set) { this.obstacles.splice(start, added); this.makeCarpet(); this.makeTrees(); this.makeRocks(); return; }
+      this.painted = set;
+      this.group.add(set.group);
+    });
   }
 
   private makeSky(): THREE.Mesh {
@@ -202,7 +229,7 @@ export class ForestEnvironment {
       ctx.strokeStyle='#789477';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(266,982);ctx.lineTo(282,403);ctx.bezierCurveTo(290,137,751,148,756,407);ctx.stroke();
       ctx.fillStyle='#355d46';for(let i=0;i<60;i++){const a=this.random()*Math.PI,x=512+Math.cos(a)*300,y=390-Math.sin(a)*220;ctx.beginPath();ctx.ellipse(x,y,13+this.random()*20,5+this.random()*6,-a,0,Math.PI*2);ctx.fill();}
     });
-    if (!AUTHORED_WORLD) {
+    if (!AUTHORED_WORLD && !PAINTED_WORLD) {
       this.cutout(gateMap,[{x:-25,y:terrainHeight(-25,-30)-0.1,z:-30,width:8,height:8}],'#ffffff',0);
       this.obstacles.push({x:-28,z:-30,radius:0.8,height:5},{x:-22,z:-30,radius:0.8,height:5});
     }
@@ -220,7 +247,7 @@ export class ForestEnvironment {
         #include <colorspace_fragment>
       }`,
     }));
-    const water=new THREE.Mesh(geometry,material);water.position.set(25,waterY,-15);this.group.add(water);this.obstacles.push({x:25,z:-15,radius:7.8,height:0.5});
+    const water=new THREE.Mesh(geometry,material);water.position.set(25,waterY,-15);water.visible=!PAINTED_WORLD;this.group.add(water);this.obstacles.push({x:25,z:-15,radius:7.8,height:0.5});
   }
 
   private makeAtmosphere():void {
@@ -241,11 +268,11 @@ export class ForestEnvironment {
    * birches), the far ring of trees, the soil, and the grass.
    */
   setTint(trees: THREE.Color, distant: THREE.Color, ground: THREE.Color, grass: THREE.Color, grassHeight = 1): void {
-    this.grass.setHeight(grassHeight);
+    this.grass?.setHeight(grassHeight);
     for (const m of this.treeMaterials) m.color.copy(trees);
     this.distantMaterial?.color.copy(distant);
     this.groundMaterial?.color.copy(ground);
-    this.grass.setTint(grass);
+    this.grass?.setTint(grass);
   }
 
   /** Stand the authored assets once their models are loaded. */
@@ -255,6 +282,6 @@ export class ForestEnvironment {
     let nearest=intersectTerrain(ray,range);
     for(const obstacle of this.obstacles){const d=intersectObstacle(ray,obstacle,nearest??range);if(d!==null&&(nearest===null||d<nearest))nearest=d;}return nearest;
   }
-  update(dt:number,camera:THREE.Camera,reducedMotion:boolean):void {this.motion.value=reducedMotion?0:1;if(!reducedMotion)this.time.value+=dt;this.sky.position.copy(camera.position);this.lantern.update(dt,reducedMotion);this.grass.update(dt,camera,reducedMotion);this.fog.update(dt,camera,reducedMotion);}
-  dispose():void {if(this.disposed)return;this.disposed=true;this.woodland?.dispose();this.lantern.dispose();this.fog.dispose();this.grass.dispose();this.mist.dispose();this.wisps.dispose();this.shafts.dispose();this.watchers.dispose();this.scene.remove(this.group);this.art.dispose();this.illustration.dispose();}
+  update(dt:number,camera:THREE.Camera,reducedMotion:boolean):void {this.motion.value=reducedMotion?0:1;if(!reducedMotion)this.time.value+=dt;this.sky.position.copy(camera.position);this.lantern.update(dt,reducedMotion);this.grass?.update(dt,camera,reducedMotion);this.painted?.update(reducedMotion?0:dt);this.fog.update(dt,camera,reducedMotion);}
+  dispose():void {if(this.disposed)return;this.disposed=true;this.woodland?.dispose();this.painted?.dispose();this.lantern.dispose();this.fog.dispose();this.grass?.dispose();this.mist.dispose();this.wisps.dispose();this.shafts.dispose();this.watchers.dispose();this.scene.remove(this.group);this.art.dispose();this.illustration.dispose();}
 }

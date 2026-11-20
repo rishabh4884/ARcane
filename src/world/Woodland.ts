@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { hasModel, model } from './render/models.ts';
 import { propMaterial, stylizedLights } from './render/StylizedMaterial.ts';
-import { forestLayout, pathX, seededRandom, terrainHeight, type Obstacle, type TreeSite } from './spatial.ts';
+import { forestLayout, type Obstacle, type TreeSite } from './spatial.ts';
+import { groundData, rockPlacements, TREE_KINDS, treePlacements, type TreePlacement } from './woodlandLayout.ts';
 
 /**
  * THE WOODLAND
@@ -15,10 +16,6 @@ import { forestLayout, pathX, seededRandom, terrainHeight, type Obstacle, type T
 
 export const WOODLAND_MODELS = ['oak_edge_a', 'oak_edge_b', 'birch_edge_a', 'snag_edge_a', 'rock_edge_a'];
 
-/** Where the caster stands: detail falls off with distance from here. */
-const EYE = new THREE.Vector2(0, 17);
-const FULL = 30, MID = 58;
-const SECTORS = 10;
 
 export class Woodland {
   readonly group = new THREE.Group();
@@ -44,39 +41,11 @@ export class Woodland {
   }
 
   private makeGround(): THREE.Mesh {
-    const size = 220, seg = 220;
-    const g = new THREE.PlaneGeometry(size, size, seg, seg).rotateX(-Math.PI / 2);
-    const p = g.attributes.position as THREE.BufferAttribute;
-    const col = new Float32Array(p.count * 3);
-    const humus = new THREE.Color('#1c2219'), litter = new THREE.Color('#4a3c2a'), soil = new THREE.Color('#5c4d3a');
-    const moss = new THREE.Color('#2f3f22'), trampled = new THREE.Color('#463b2c'), grassy = new THREE.Color('#2c3a24');
-    const c = new THREE.Color();
-    const rnd = seededRandom(771);
-    const roots = this.sites.map((s) => [s.x, s.z, s.scale] as const);
-    const noise = (x: number, z: number, f: number) => Math.sin(x * f + Math.sin(z * f * 0.7) * 1.3) * 0.5 + Math.sin(z * f * 1.3 + Math.sin(x * f * 0.6 + 2.0)) * 0.5;
-    for (let i = 0; i < p.count; i++) {
-      const x = p.getX(i), z = p.getZ(i);
-      // A little relief beyond the gameplay terrain: roots and hummocks near trees, never in the lanes.
-      let near = 99;
-      for (const [tx, tz, s] of roots) { const d = Math.hypot(x - tx, z - tz) / (s * 2.2); if (d < near) near = d; }
-      const bump = Math.max(0, 1 - near) * 0.35 * (0.6 + 0.4 * noise(x, z, 1.9));
-      p.setY(i, terrainHeight(x, z) + bump);
-      // Paint with intent: worn path, the trampled clearing, litter under the canopy, moss at roots,
-      // grassy patches in the open, dark humus where the wood closes in.
-      const path = 1 - THREE.MathUtils.smoothstep(Math.abs(x - pathX(z)), 0.9, 2.6);
-      const clearing = 1 - THREE.MathUtils.smoothstep(Math.hypot(x, z + 12), 8, 17);
-      const edge = THREE.MathUtils.smoothstep(Math.hypot(x, z + 8), 22, 48);
-      const patch = noise(x, z, 0.21) * 0.5 + 0.5;
-      c.copy(grassy).lerp(litter, THREE.MathUtils.smoothstep(0.35, 0.75, patch));
-      c.lerp(humus, edge * 0.8);
-      c.lerp(moss, Math.max(0, 1 - near * 0.9) * 0.85);
-      c.lerp(trampled, clearing * 0.7);
-      c.lerp(soil, path * 0.75);
-      const v = 0.85 + rnd() * 0.15;
-      c.toArray(col, i * 3);
-      col[i * 3] *= v; col[i * 3 + 1] *= v; col[i * 3 + 2] *= v;
-    }
-    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    const data = groundData(this.sites);
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(data.positions, 3));
+    g.setAttribute('color', new THREE.BufferAttribute(data.colors, 3));
+    g.setIndex(new THREE.BufferAttribute(data.index, 1));
     g.computeVertexNormals();
     const m = new THREE.MeshStandardMaterial({ vertexColors: true, roughness: 0.95, metalness: 0 });
     m.onBeforeCompile = (shader) => {
@@ -124,25 +93,14 @@ export class Woodland {
    * eye is culled; only the nearest trees cast the moon's shadows.
    */
   private placeTrees(): void {
-    const species = ['oak_edge_a', 'oak_edge_b', 'birch_edge_a', 'snag_edge_a'].filter(hasModel);
+    const species = TREE_KINDS.filter(hasModel);
     if (!species.length) return;
-    const rnd = seededRandom(4471);
     type Lod = 0 | 1 | 2;
-    const buckets = new Map<string, Array<{ s: TreeSite; scale: number; yaw: number }>>();
-    let snags = 0;
-    for (const s of this.sites) {
-      const d = Math.hypot(s.x - EYE.x, s.z - EYE.y);
-      const lod: Lod = d < FULL ? 0 : d < MID ? 1 : 2;
-      const h = (Math.sin(s.x * 12.9898 + s.z * 78.233) * 43758.5453) % 1;
-      const r = Math.abs(h);
-      const birchGroup = Math.sin(s.x * 0.09 + 1.3) * Math.cos(s.z * 0.07) > 0.55;
-      let kind = birchGroup ? 'birch_edge_a' : r < 0.55 ? 'oak_edge_a' : 'oak_edge_b';
-      if (lod < 2 && r > 0.93 && snags < 5) { kind = 'snag_edge_a'; snags++; }
-      if (!hasModel(kind)) kind = species[0];
-      const sector = Math.floor(((Math.atan2(s.x, s.z + 12) / (Math.PI * 2) + 1) % 1) * SECTORS);
-      const key = `${kind}|${lod}|${sector}`;
+    const buckets = new Map<string, TreePlacement[]>();
+    for (const t of treePlacements(this.sites, hasModel)) {
+      const key = `${t.kind}|${t.lod}|${t.sector}`;
       if (!buckets.has(key)) buckets.set(key, []);
-      buckets.get(key)!.push({ s, scale: 0.8 + s.scale * 0.32 + (kind === 'birch_edge_a' ? -0.1 : 0), yaw: rnd() * Math.PI * 2 });
+      buckets.get(key)!.push(t);
     }
     const materials = new Map<string, THREE.Material>();
     const dummy = new THREE.Object3D();
@@ -158,8 +116,8 @@ export class Woodland {
       let material = materials.get(kind);
       if (!material) { material = propMaterial(full.material as THREE.Material, data.fx); materials.set(kind, material); }
       const inst = new THREE.InstancedMesh(geometry, material, items.length);
-      items.forEach(({ s, scale, yaw }, i) => {
-        dummy.position.set(s.x, terrainHeight(s.x, s.z) - 0.05, s.z);
+      items.forEach(({ x, y, z, scale, yaw }, i) => {
+        dummy.position.set(x, y, z);
         dummy.rotation.set(0, yaw, 0);
         dummy.scale.setScalar(scale);
         dummy.updateMatrix();
@@ -182,23 +140,13 @@ export class Woodland {
     if (!mesh) return;
     const m = mesh as THREE.Mesh;
     const material = propMaterial(m.material as THREE.Material, data.fx);
-    const rnd = seededRandom(9932);
-    const spots: Array<[number, number, number]> = [];
-    // Stones gather: a few clusters near trees and at the clearing's edge, none in the lanes.
-    for (let i = 0; i < 400 && spots.length < 26; i++) {
-      const a = rnd() * Math.PI * 2, r = 12 + rnd() * 50;
-      const x = Math.sin(a) * r, z = Math.cos(a) * r - 10;
-      if (Math.abs(x - pathX(z)) < 4 || Math.hypot(x, z + 12) < 11 || Math.hypot(x, z - 17) < 7) continue;
-      if (this.sites.some((s) => Math.hypot(s.x - x, s.z - z) < s.scale * 1.6)) continue;
-      const cluster = rnd() < 0.6 ? 1 + Math.floor(rnd() * 3) : 1;
-      for (let k = 0; k < cluster; k++) spots.push([x + (rnd() - 0.5) * 2.4, z + (rnd() - 0.5) * 2.4, 0.5 + rnd() * (k ? 0.5 : 1.1)]);
-    }
+    const spots = rockPlacements(this.sites);
     const inst = new THREE.InstancedMesh(m.geometry, material, spots.length);
     const dummy = new THREE.Object3D();
-    spots.forEach(([x, z, s], i) => {
-      dummy.position.set(x, terrainHeight(x, z) - 0.12 * s, z);
-      dummy.rotation.set((rnd() - 0.5) * 0.2, rnd() * Math.PI * 2, (rnd() - 0.5) * 0.2);
-      dummy.scale.set(s, s * (0.8 + rnd() * 0.4), s);
+    spots.forEach((r, i) => {
+      dummy.position.set(r.x, r.y, r.z);
+      dummy.rotation.set(...r.rotation);
+      dummy.scale.set(...r.scale);
       dummy.updateMatrix();
       inst.setMatrixAt(i, dummy.matrix);
     });

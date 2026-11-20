@@ -71,6 +71,26 @@ export function inspector(world: World) {
       cam.lookAt(0, g + y, z0);
       cam.fov = fov; cam.updateProjectionMatrix(); cam.updateMatrixWorld(true);
     },
+    /**
+     * The casting spot's own view of the wood (the view a painted set is painted from), with figures
+     * standing at distance `at` metres up the path, walking toward the eye if `walk`.
+     */
+    spot(kinds: string[] = [], at = 14, walk = false) {
+      clear(); stage();
+      const cam = world.stage().camera;
+      cam.position.set(0, terrainHeight(0, 17) + 1.85, 17); cam.lookAt(0, 1.2, -12); cam.fov = 64; cam.updateProjectionMatrix(); cam.updateMatrixWorld(true);
+      kinds.forEach((k, i) => {
+        const f = new Character(all[k], 0.3 + i * 0.17);
+        const z = 17 - at - i * 1.5, x = (i - (kinds.length - 1) / 2) * 2.2;
+        f.group.position.set(x, terrainHeight(x, z), z);
+        world.stage().scene.add(f.group);
+        figures.push(f);
+      });
+      run((f) => {
+        if (walk) { f.group.position.z += 0.016; f.group.position.y = terrainHeight(f.group.position.x, f.group.position.z); }
+        return walk ? { pose: 'walk' as CreaturePose, progress: 0, velocity: new THREE.Vector3(0, 0, 1) } : { pose: 'idle' as CreaturePose, progress: 0 };
+      });
+    },
     /** Turn every staged figure to a heading (radians; 0 faces the camera). */
     turn(yaw: number) { for (const f of figures) f.setYaw(yaw); },
     clear() { clear(); world.endCinematic(); },

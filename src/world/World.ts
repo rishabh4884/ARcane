@@ -9,7 +9,7 @@ import { ParticleSystem } from './particles.ts';
 import { PostFX } from './PostFX.ts';
 import { Foreground } from './Foreground.ts';
 import { makeLabelTexture } from './textures.ts';
-import { AUTHORED_WORLD, ForestEnvironment } from './ForestEnvironment.ts';
+import { AUTHORED_WORLD, ForestEnvironment, PAINTED_WORLD } from './ForestEnvironment.ts';
 import { DRAWN_LOOK } from './authored.ts';
 import { WOODLAND_MODELS } from './Woodland.ts';
 import { INK } from './render/InkPaint.ts';
@@ -221,7 +221,8 @@ export class World {
     this.camera.add(this.foreground.group);
 
     const params = new URLSearchParams(window.location.search);
-    this.post = new PostFX(this.renderer, this.scene, this.camera, params.get('post') !== '0', AUTHORED_WORLD, DRAWN_LOOK);
+    this.post = new PostFX(this.renderer, this.scene, this.camera, params.get('post') !== '0', AUTHORED_WORLD || PAINTED_WORLD, DRAWN_LOOK);
+    INK.uPaintedAir.value = PAINTED_WORLD ? 1 : 0;
 
     this.wisps = {
       left: this.makeWisp('left'),
@@ -799,9 +800,11 @@ export class World {
   private driftCamera(dt: number): void {
     this.ambientTime += dt;
     const t = this.ambientTime;
-    this.camera.position.set(Math.sin(t * 0.05) * 3.5, 0, 17 + Math.sin(t * 0.031) * 2);
-    this.camera.position.y = terrainHeight(this.camera.position.x, this.camera.position.z) + 1.85 + Math.sin(t * 0.07) * 0.25;
-    this.camera.lookAt(Math.sin(t * 0.04 + 1) * 8, 2.2 + Math.sin(t * 0.05) * 0.6, -12);
+    // A painted set holds true near the spot it was painted from: there the look drifts less.
+    const roam = PAINTED_WORLD ? 0.3 : 1;
+    this.camera.position.set(Math.sin(t * 0.05) * 3.5 * roam, 0, 17 + Math.sin(t * 0.031) * 2 * roam);
+    this.camera.position.y = terrainHeight(this.camera.position.x, this.camera.position.z) + 1.85 + Math.sin(t * 0.07) * 0.25 * roam;
+    this.camera.lookAt(Math.sin(t * 0.04 + 1) * 8 * roam, (PAINTED_WORLD ? 1.4 : 2.2) + Math.sin(t * 0.05) * 0.6 * roam, -12);
     this.camera.updateMatrixWorld(true);
   }
 

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { AUTHORED_WORLD } from './authored.ts';
+import { AUTHORED_WORLD, PAINTED_WORLD } from './authored.ts';
 import { LANTERN_GLSL, SPELL_LIGHTS, type LanternUniform } from './LanternLighting.ts';
 import { SPAWN, seededRandom, terrainHeight } from './spatial.ts';
 
@@ -189,7 +189,7 @@ export class MoonShafts {
     });
     const random = seededRandom(0x700d);
     // In the authored world light comes down only where the canopy opens over the clearing.
-    const sites = AUTHORED_WORLD ? [[2.5, -11], [-4, -19]] : [[-7, -6], [2.5, -10], [9, -17], [-3, -20], [-12, -25]];
+    const sites = AUTHORED_WORLD || PAINTED_WORLD ? [[2.5, -11], [-4, -19]] : [[-7, -6], [2.5, -10], [9, -17], [-3, -20], [-12, -25]];
     for (const [x, z] of sites) {
       const material = this.material.clone();
       material.uniforms.uTime = time;

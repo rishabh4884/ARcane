@@ -33,6 +33,8 @@ export const INK = {
   uResolution: { value: new THREE.Vector2(1280, 720) },
   /** Line weight in pixels at 1080 lines of resolution. */
   uLineWeight: { value: 2.4 },
+  /** 1 in a painted set: figures take the painting's own aerial haze, so they sit in its air. */
+  uPaintedAir: { value: 0 },
 };
 
 const COMMON = /* glsl */`
@@ -94,7 +96,7 @@ export function inkPaintMaterial(maps: InkMaps | null, u: FigureUniforms): THREE
     fragmentShader: /* glsl */`
       uniform sampler2D map; uniform sampler2D ormMap; uniform sampler2D emitMap; uniform sampler2D fxMap;
       uniform vec3 uFillDir; uniform vec3 uMoonDir; uniform vec3 uLitColor; uniform vec3 uMidColor; uniform vec3 uShadeColor; uniform vec3 uRimColor; uniform vec3 uInk;
-      uniform float uDrawing; uniform vec3 uAir;
+      uniform float uDrawing; uniform vec3 uAir; uniform float uPaintedAir;
       uniform float uTime; uniform float uDissolve; uniform vec3 uEdge; uniform float uFlash; uniform vec3 uFlashColor;
       uniform float uFrost; uniform float uGroundY; uniform float uMist; uniform float uHeight; uniform vec3 uEyeColor; uniform float uEyes;
       uniform float uOpacity; uniform float uExposure;
@@ -150,9 +152,9 @@ export function inkPaintMaterial(maps: InkMaps | null, u: FigureUniforms): THREE
         col += uFlashColor * uFlash * 0.5;
         // Into the air: distance and ground mist soften the drawing like the painted set behind it.
         float dist = length(vWorld - cameraPosition);
-        float air = 1.0 - exp(-dist * 0.018);
+        float air = mix((1.0 - exp(-dist * 0.018)) * 0.4, (1.0 - exp(-max(dist - 8.0, 0.0) / 62.0)) * 0.92, uPaintedAir);
         float low = 1.0 - smoothstep(uGroundY - 0.05, uGroundY + uMist, vWorld.y);
-        col = mix(col, uAir, clamp(air * 0.4 + low * 0.45, 0.0, 0.85) * (1.0 - min(1.0, length(glow))));
+        col = mix(col, uAir, clamp(air + low * 0.45, 0.0, 0.88) * (1.0 - min(1.0, length(glow))));
         col *= uExposure;
         if (uDissolve > 0.0) {
           float hh = clamp((vWorld.y - uGroundY) / max(uHeight, 0.1), 0.0, 1.0);
@@ -208,7 +210,7 @@ export function inkLineMaterial(u: FigureUniforms): THREE.ShaderMaterial {
         vWorld = (modelMatrix * vec4(transformed, 1.0)).xyz;
       }`,
     fragmentShader: /* glsl */`
-      uniform vec3 uInk; uniform vec3 uAir; uniform float uDissolve; uniform float uGroundY; uniform float uHeight; uniform float uOpacity;
+      uniform vec3 uInk; uniform vec3 uAir; uniform float uPaintedAir; uniform float uDissolve; uniform float uGroundY; uniform float uHeight; uniform float uOpacity;
       varying vec3 vWorld;
       varying vec3 vRest;
       ${COMMON}
@@ -219,8 +221,8 @@ export function inkLineMaterial(u: FigureUniforms): THREE.ShaderMaterial {
           if (front < uDissolve * 1.08 - 0.02) discard;
         }
         float dist = length(vWorld - cameraPosition);
-        float air = 1.0 - exp(-dist * 0.022);
-        gl_FragColor = vec4(mix(uInk, uAir, clamp(air * 0.75, 0.0, 0.9)), uOpacity);
+        float air = mix((1.0 - exp(-dist * 0.022)) * 0.75, (1.0 - exp(-max(dist - 6.0, 0.0) / 55.0)) * 0.95, uPaintedAir);
+        gl_FragColor = vec4(mix(uInk, uAir, clamp(air, 0.0, 0.92)), uOpacity);
         #include <colorspace_fragment>
       }`,
   });

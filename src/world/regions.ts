@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { PAINTED_WORLD } from './authored.ts';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { butterflies, flowerField, hangingLantern, lanternFlower, rootThrone } from '../cutscene/cast.ts';
 import type { LevelDef, Mood } from '../game/campaign.ts';
@@ -141,6 +142,8 @@ export class Regions {
     const darken = 1 - spec.depth * 0.18;
     this.env.setTint(new THREE.Color(...look.trees).multiplyScalar(darken), new THREE.Color(look.distant).multiplyScalar(darken), new THREE.Color(look.ground).multiplyScalar(darken), new THREE.Color(...look.grass).multiplyScalar(darken), look.grassHeight);
     for (const [k, c] of Object.entries(look.light)) (FIGURE_LIGHT as Record<string, { value: THREE.Color }>)[k].value.set(c);
+    // In the painted Edge, figures sink into the painting's own air.
+    if (PAINTED_WORLD && spec.key === 'edge') FIGURE_LIGHT.uAir.value.set('#3e5a56');
     const rng = mulberry(spec.seed);
     const build = { edge: this.edge, fen: this.fen, deeps: this.deeps, throne: this.throne, dawn: this.dawn }[spec.key];
     build.call(this, rng, spec.depth);
@@ -249,10 +252,13 @@ export class Regions {
   /* ── chapters ── */
 
   private edge(rng: () => number, depth: number): void {
-    this.ferns(rng, Math.round(70 + depth * 70), '#2f4a2c');
-    this.boulders(rng, Math.round(10 + depth * 8), '#5a5f58', '#45602f');
-    this.mushrooms(rng, Math.round(20 + depth * 30), '#b8452e', 0.12);
-    this.logs(rng, 3 + Math.round(depth * 3));
+    // The painted Edge has its ferns, stones, toadstools and fallen logs in the painting.
+    if (!PAINTED_WORLD) {
+      this.ferns(rng, Math.round(70 + depth * 70), '#2f4a2c');
+      this.boulders(rng, Math.round(10 + depth * 8), '#5a5f58', '#45602f');
+      this.mushrooms(rng, Math.round(20 + depth * 30), '#b8452e', 0.12);
+      this.logs(rng, 3 + Math.round(depth * 3));
+    }
     // Fireflies drift low over the grass.
     this.emitter(6, (r) => {
       const p = ringPoint(r, 2, 26, false);
