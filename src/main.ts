@@ -188,6 +188,7 @@ void game.boot(async (step) => {
 
 // Development-only console hooks for checking levels, scenes and spells without a camera.
 if (import.meta.env.DEV) {
+  void import('./dev/inspect.ts').then(({ inspector }) => Object.assign((window as unknown as { arcane: object }).arcane, { inspect: inspector(world) }));
   Object.assign(window, {
     arcane: {
       cast: (spellId: string, side: HandSide = 'right') => cast(spellId, side, spellId === 'spell-1' ? '90% draw' : 'left'),

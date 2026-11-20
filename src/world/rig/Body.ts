@@ -20,6 +20,48 @@ export const SURFACES: Record<Surface, number> = {
 export type V3 = readonly [number, number, number];
 const vec = (p: V3) => new THREE.Vector3(p[0], p[1], p[2]);
 
+/**
+ * Mesh density multiplier. Every builder samples its surface this many times more finely, so
+ * silhouettes stay round up close and the sculpted relief below has vertices to move.
+ */
+export const DETAIL = 2;
+
+/* ───────────────────────────── a little 3D noise for sculpting ───────────────────────────── */
+
+function hash3(x: number, y: number, z: number): number {
+  let h = Math.imul(x | 0, 0x27d4eb2d) ^ Math.imul(y | 0, 0x165667b1) ^ Math.imul(z | 0, 0x9e3779b1);
+  h = Math.imul(h ^ (h >>> 15), 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 13), 0xc2b2ae35);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+function noise3(x: number, y: number, z: number): number {
+  const xi = Math.floor(x), yi = Math.floor(y), zi = Math.floor(z);
+  const xf = x - xi, yf = y - yi, zf = z - zi;
+  const u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf), w = zf * zf * (3 - 2 * zf);
+  const l = (a: number, b: number, t: number) => a + (b - a) * t;
+  return l(
+    l(l(hash3(xi, yi, zi), hash3(xi + 1, yi, zi), u), l(hash3(xi, yi + 1, zi), hash3(xi + 1, yi + 1, zi), u), v),
+    l(l(hash3(xi, yi, zi + 1), hash3(xi + 1, yi, zi + 1), u), l(hash3(xi, yi + 1, zi + 1), hash3(xi + 1, yi + 1, zi + 1), u), v), w);
+}
+export function fbm3(x: number, y: number, z: number, octaves = 4): number {
+  let a = 0.5, s = 0, f = 1;
+  for (let i = 0; i < octaves; i++) { s += a * noise3(x * f, y * f, z * f); f *= 2.03; a *= 0.5; }
+  return s;
+}
+
+/** Macro relief carved into each surface: knots in bark, lumps in moss, the grain of fur. */
+const RELIEF: Partial<Record<Surface, { amp: number; freq: number; stretch: number }>> = {
+  bark: { amp: 0.022, freq: 7, stretch: 0.28 },
+  stone: { amp: 0.02, freq: 5, stretch: 1 },
+  moss: { amp: 0.024, freq: 12, stretch: 1 },
+  fur: { amp: 0.008, freq: 22, stretch: 0.35 },
+  hair: { amp: 0.006, freq: 26, stretch: 0.3 },
+  skin: { amp: 0.0035, freq: 16, stretch: 1 },
+  chitin: { amp: 0.004, freq: 9, stretch: 1 },
+  bone: { amp: 0.004, freq: 11, stretch: 1 },
+  cloth: { amp: 0.006, freq: 5, stretch: 0.25 },
+};
+
 /* ───────────────────────────── geometry builders ───────────────────────────── */
 
 interface Ring { c: THREE.Vector3; n: THREE.Vector3; b: THREE.Vector3; r: number; u: number }
@@ -87,9 +129,9 @@ export interface TubeOptions {
  * twists or pinches along a bend.
  */
 export function tube(points: readonly V3[], radii: readonly number[] | ((u: number) => number), o: TubeOptions = {}): THREE.BufferGeometry {
-  const radial = o.radial ?? 10;
+  const radial = Math.round((o.radial ?? 10) * DETAIL);
   const curve = new THREE.CatmullRomCurve3(points.map(vec), false, 'centripetal');
-  const segments = o.segments ?? Math.max(6, points.length * 5);
+  const segments = Math.round((o.segments ?? Math.max(6, points.length * 5)) * DETAIL);
   const radiusAt = typeof radii === 'function' ? radii : radii.length === 1 ? () => radii[0] : (u: number) => {
     const f = u * (radii.length - 1), i = Math.min(radii.length - 2, Math.floor(f)), t = f - i;
     const s = t * t * (3 - 2 * t);
@@ -141,7 +183,7 @@ export interface EllipsoidOptions {
 
 /** A sculpted ellipsoid: heads, bellies, noses, eyes, shoulder moss. */
 export function ellipsoid(center: V3, radii: V3, o: EllipsoidOptions = {}): THREE.BufferGeometry {
-  const sphere = new THREE.SphereGeometry(1, o.widthSegments ?? 22, o.heightSegments ?? 16);
+  const sphere = new THREE.SphereGeometry(1, Math.round((o.widthSegments ?? 22) * DETAIL), Math.round((o.heightSegments ?? 16) * DETAIL));
   sphere.deleteAttribute('uv');
   sphere.deleteAttribute('normal');
   const g = mergeVertices(sphere, 1e-5);
@@ -173,8 +215,15 @@ export interface LatheOptions {
 }
 
 /** A surface of revolution from a [radius, height] profile listed top to bottom: robes, caps, lanterns. */
-export function lathe(profile: ReadonlyArray<readonly [number, number]>, o: LatheOptions = {}): THREE.BufferGeometry {
+export function lathe(input: ReadonlyArray<readonly [number, number]>, o: LatheOptions = {}): THREE.BufferGeometry {
   const cx = o.center?.[0] ?? 0, cz = o.center?.[2] ?? 0, cy = o.center?.[1] ?? 0;
+  // The profile is a smooth curve through its points, sampled finely: robes and caps get soft
+  // swells instead of hard rings.
+  let profile = input;
+  if (input.length >= 3) {
+    const curve = new THREE.CatmullRomCurve3(input.map(([r, y]) => new THREE.Vector3(r, y, 0)), false, 'centripetal');
+    profile = curve.getPoints((input.length - 1) * 3 * DETAIL).map((p) => [Math.max(1e-4, p.x), p.y] as const);
+  }
   const rings: Ring[] = profile.map(([r, y], i) => ({
     c: new THREE.Vector3(cx, y + cy, cz),
     n: new THREE.Vector3(o.scaleX ?? 1, 0, 0),
@@ -182,7 +231,7 @@ export function lathe(profile: ReadonlyArray<readonly [number, number]>, o: Lath
     r: Math.max(1e-4, r),
     u: i / Math.max(1, profile.length - 1),
   }));
-  return ringSurface(rings, o.segments ?? 20, {
+  return ringSurface(rings, Math.round((o.segments ?? 20) * DETAIL), {
     startPole: o.closeTop ? new THREE.Vector3(cx, profile[0][1] + cy, cz) : undefined,
     endPole: o.closeBottom ? new THREE.Vector3(cx, profile[profile.length - 1][1] + cy, cz) : undefined,
     shape: o.deform ? (offset, a, ring) => o.deform!(offset, a, ring.u, ring.c.y) : undefined,
@@ -215,6 +264,8 @@ export interface PartOptions {
   rigid?: boolean;
   /** How sharply weights fall off with distance (higher = crisper joints). */
   falloff?: number;
+  /** Scale of the carved relief (0 = smooth, 1 = the surface's default). */
+  relief?: number;
 }
 
 interface PartRecord { geometry: THREE.BufferGeometry; o: PartOptions }
@@ -264,16 +315,35 @@ export class Body {
   boneNames(): string[] { return [...this.bones.keys()]; }
 
   part(geometry: THREE.BufferGeometry, o: PartOptions): this {
-    this.parts.push({ geometry: this.scaled(geometry), o });
+    this.parts.push({ geometry: this.sculpt(this.scaled(geometry), o), o });
     return this;
   }
 
   /** A left part and its mirror bound to the matching right bones. */
   pair(geometry: THREE.BufferGeometry, o: PartOptions): this {
-    const g = this.scaled(geometry);
+    const g = this.sculpt(this.scaled(geometry), o);
     this.parts.push({ geometry: g, o });
     this.parts.push({ geometry: mirrorX(g), o: { ...o, bones: o.bones.map(sideSwap) } });
     return this;
+  }
+
+  /** Carve the surface's relief into it, along its normals, then re-smooth the normals. */
+  private sculpt(geometry: THREE.BufferGeometry, o: PartOptions): THREE.BufferGeometry {
+    const relief = RELIEF[o.surface ?? 'skin'];
+    if (!relief || o.relief === 0) return geometry;
+    const amp = relief.amp * (o.relief ?? 1) * this.scale;
+    const f = relief.freq / this.scale;
+    const pos = geometry.attributes.position as THREE.BufferAttribute;
+    const nor = geometry.attributes.normal as THREE.BufferAttribute;
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+      // Two scales of relief: broad swells and finer knots, stretched along the grain.
+      const h = (fbm3(x * f, y * f * relief.stretch, z * f, 3) - 0.5) * 2;
+      const d = amp * h;
+      pos.setXYZ(i, x + nor.getX(i) * d, y + nor.getY(i) * d, z + nor.getZ(i) * d);
+    }
+    geometry.computeVertexNormals();
+    return geometry;
   }
 
   private scaled(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
@@ -282,6 +352,12 @@ export class Body {
   }
 
   build(material: THREE.Material): { mesh: THREE.SkinnedMesh; bones: Record<string, THREE.Bone> } {
+    const { geometry, root, names } = this.bake();
+    return instantiate(geometry, root, names, material, false);
+  }
+
+  /** Merge, skin and shade every part once; the result can be instanced many times. */
+  bake(): { geometry: THREE.BufferGeometry; root: THREE.Bone; names: string[] } {
     const names = [...this.bones.keys()];
     const boneIndex = new Map(names.map((n, i) => [n, i]));
     // Influence segments: head → tail (explicit, else the average of its children, else a stub).
@@ -311,12 +387,14 @@ export class Body {
     const surf = new Float32Array(vertexCount * 2);
     const skinIndex = new Uint16Array(vertexCount * 4);
     const skinWeight = new Float32Array(vertexCount * 4);
+    const partOf = new Uint16Array(vertexCount);
     const index = new Uint32Array(indexCount);
     const p = new THREE.Vector3(), closest = new THREE.Vector3(), line = new THREE.Line3();
     const c0 = new THREE.Color(), c1 = new THREE.Color(), mixed = new THREE.Color();
-    let vo = 0, io = 0;
+    let vo = 0, io = 0, partIndex = 0;
     const candidates: Array<{ i: number; w: number }> = [];
     for (const { geometry, o } of this.parts) {
+      partIndex++;
       const pos = geometry.attributes.position as THREE.BufferAttribute;
       const nor = geometry.attributes.normal as THREE.BufferAttribute;
       const grad = geometry.attributes.grad as THREE.BufferAttribute | undefined;
@@ -327,6 +405,7 @@ export class Body {
       for (let i = 0; i < pos.count; i++) {
         p.fromBufferAttribute(pos, i);
         const k = vo + i;
+        partOf[k] = partIndex;
         position.set([p.x, p.y, p.z], k * 3);
         normal.set([nor.getX(i), nor.getY(i), nor.getZ(i)], k * 3);
         mixed.copy(c0).lerp(c1, grad ? grad.getX(i) : 0);
@@ -359,6 +438,7 @@ export class Body {
       geometry.dispose();
     }
     const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('aAO', new THREE.BufferAttribute(contactOcclusion(position, normal, partOf, color, surf), 1));
     geometry.setAttribute('position', new THREE.BufferAttribute(position, 3));
     geometry.setAttribute('normal', new THREE.BufferAttribute(normal, 3));
     geometry.setAttribute('color', new THREE.BufferAttribute(color, 3));
@@ -367,17 +447,69 @@ export class Body {
     geometry.setAttribute('skinWeight', new THREE.BufferAttribute(skinWeight, 4));
     geometry.setIndex(new THREE.BufferAttribute(index, 1));
     geometry.computeBoundingSphere();
-    const mesh = new THREE.SkinnedMesh(geometry, material);
-    mesh.add(this.root);
-    mesh.updateMatrixWorld(true);
-    const skeleton = new THREE.Skeleton(names.map((n) => this.bones.get(n)!));
-    mesh.bind(skeleton);
-    // Skinned bounds follow the pose, not the bind; a figure is never large enough to matter.
-    mesh.frustumCulled = false;
-    const bones: Record<string, THREE.Bone> = {};
-    for (const [n, b] of this.bones) bones[n] = b;
-    return { mesh, bones };
+    return { geometry, root: this.root, names };
   }
+}
+
+/** A skinned figure from a baked body: shares the geometry, owns a fresh skeleton. */
+export function instantiate(geometry: THREE.BufferGeometry, template: THREE.Bone, names: readonly string[], material: THREE.Material, clone = true): { mesh: THREE.SkinnedMesh; bones: Record<string, THREE.Bone> } {
+  const root = clone ? (template.clone(true) as THREE.Bone) : template;
+  const bones: Record<string, THREE.Bone> = {};
+  root.traverse((o) => { if (o instanceof THREE.Bone) bones[o.name] = o; });
+  const mesh = new THREE.SkinnedMesh(geometry, material);
+  mesh.add(root);
+  mesh.updateMatrixWorld(true);
+  mesh.bind(new THREE.Skeleton(names.map((n) => bones[n])));
+  // Skinned bounds follow the pose, not the bind; a figure is never large enough to matter.
+  mesh.frustumCulled = false;
+  return { mesh, bones };
+}
+
+/**
+ * Contact occlusion baked per vertex: where one part presses into or tucks under another (a head
+ * on its neck, an arm at the shoulder, a beard on a chest, fingers against a palm) light is
+ * blocked, so the join darkens the way a real body's creases do. Nearby surfaces of other parts
+ * that sit in front of a vertex's normal occlude it, weighted by how close and how directly.
+ */
+function contactOcclusion(position: Float32Array, normal: Float32Array, part: Uint16Array, _color: Float32Array, surf: Float32Array): Float32Array {
+  const count = part.length;
+  const ao = new Float32Array(count).fill(1);
+  if (!count) return ao;
+  let minY = Infinity, maxY = -Infinity;
+  for (let i = 0; i < count; i++) { const y = position[i * 3 + 1]; if (y < minY) minY = y; if (y > maxY) maxY = y; }
+  const R = Math.max(0.03, (maxY - minY) * 0.035);
+  const cell = R;
+  const grid = new Map<string, number[]>();
+  const key = (x: number, y: number, z: number) => `${Math.floor(x / cell)},${Math.floor(y / cell)},${Math.floor(z / cell)}`;
+  // A thinned set of occluders keeps the bake fast on dense meshes.
+  for (let i = 0; i < count; i += 2) {
+    const k = key(position[i * 3], position[i * 3 + 1], position[i * 3 + 2]);
+    let list = grid.get(k);
+    if (!list) grid.set(k, (list = []));
+    list.push(i);
+  }
+  for (let i = 0; i < count; i++) {
+    if (surf[i * 2] === SURFACES.glow) continue;
+    const px = position[i * 3], py = position[i * 3 + 1], pz = position[i * 3 + 2];
+    const nx = normal[i * 3], ny = normal[i * 3 + 1], nz = normal[i * 3 + 2];
+    const cx = Math.floor(px / cell), cy = Math.floor(py / cell), cz = Math.floor(pz / cell);
+    let occ = 0;
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (let c = -1; c <= 1; c++) {
+      const list = grid.get(`${cx + a},${cy + b},${cz + c}`);
+      if (!list) continue;
+      for (const j of list) {
+        if (part[j] === part[i] || surf[j * 2] === SURFACES.glow) continue;
+        const dx = position[j * 3] - px, dy = position[j * 3 + 1] - py, dz = position[j * 3 + 2] - pz;
+        const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        if (d >= R || d < 1e-6) continue;
+        const facing = (dx * nx + dy * ny + dz * nz) / d;
+        if (facing > 0.05) occ += (1 - d / R) * facing;
+      }
+    }
+    ao[i] = 1 - Math.min(0.72, occ * 0.09);
+  }
+  // Smooth once over neighbours so the shading has no speckle.
+  return ao;
 }
 
 export function mulberry(seed: number): () => number {

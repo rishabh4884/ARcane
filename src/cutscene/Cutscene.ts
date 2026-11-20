@@ -144,6 +144,8 @@ export class Shot {
     for (const a of this.actors.values()) a.figure.dispose();
     for (const t of this.trails) t.dispose();
     this.root.traverse((o) => {
+      // Figures share their baked bodies with the rest of the game; only props are freed here.
+      if (o instanceof THREE.SkinnedMesh) return;
       if (o instanceof THREE.Mesh || o instanceof THREE.Sprite) {
         if (!(o instanceof THREE.Sprite)) o.geometry?.dispose();
         const m = o.material as THREE.Material | THREE.Material[];

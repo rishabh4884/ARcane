@@ -68,6 +68,11 @@ export const BRAMBLE_GOBLIN: Design = {
         p.x *= 1 - 0.1 * Math.exp(-((d.y - 0.35) ** 2) / 0.04) * Math.max(0, d.z);
       },
     }), { color: GOBLIN_SKIN, shade: GOBLIN_SHADE, surface: 'skin', bones: ['head'] });
+    // The neck joins head to body: a thick sinewy column bent forward under the skull.
+    b.part(tube([[0, 1.22, 0.06], [0, 1.34, 0.16], [0, 1.44, 0.26], [0, 1.5, 0.3]], [0.11, 0.085, 0.078, 0.08], { radial: 12 }),
+      { color: GOBLIN_SKIN, shade: GOBLIN_SKIN, surface: 'skin', bones: ['chest', 'neck', 'head'] });
+    for (const sx of [1, -1]) b.part(tube([[0.06 * sx, 1.27, 0.1], [0.05 * sx, 1.38, 0.2], [0.07 * sx, 1.46, 0.28]], [0.022, 0.02, 0.014], { radial: 6 }),
+      { color: GOBLIN_SKIN, surface: 'skin', bones: ['chest', 'neck', 'head'] });
     b.part(tube([[-0.12, 1.575, 0.43], [0, 1.56, 0.475], [0.12, 1.575, 0.43]], [0.032, 0.042, 0.032], { radial: 8 }),
       { color: '#59634a', surface: 'skin', bones: ['head'] });
     b.part(tube([[0, 1.53, 0.47], [0, 1.5, 0.56], [0.012, 1.44, 0.625]], [0.046, 0.034, 0.016], { radial: 9, wobble: 0.08 }),
@@ -76,6 +81,10 @@ export const BRAMBLE_GOBLIN: Design = {
       b.part(ellipsoid([0.07 * s, 1.525, 0.44], [0.052, 0.036, 0.03]), { color: '#100d0a', surface: 'dark', bones: ['head'] });
       b.part(ellipsoid([0.07 * s, 1.525, 0.462], [0.032, 0.024, 0.016]), { color: '#ffffff', surface: 'glow', glow: 1, bones: ['eyes'] });
       b.part(ellipsoid([0.07 * s, 1.525, 0.477], [0.007, 0.019, 0.005]), { color: '#0a0805', surface: 'dark', bones: ['eyes'] });
+      // Heavy upper lids half over the eyes: the goblin always looks like it is sizing you up.
+      b.part(ellipsoid([0.07 * s, 1.543, 0.458], [0.044, 0.018, 0.03], { deform: (d, p) => { p.y -= Math.max(0, d.x * s) * 0.006; } }),
+        { color: '#5d6649', surface: 'skin', bones: ['head'], relief: 0.5 });
+      b.part(ellipsoid([0.014 * s, 1.445, 0.62], [0.008, 0.006, 0.006]), { color: '#120d0a', surface: 'dark', bones: ['head'] });
     }
     // Jaw, the dark slash of a mouth and two pale tusks.
     b.part(ellipsoid([0, 1.4, 0.38], [0.13, 0.055, 0.12]), { color: GOBLIN_SKIN, shade: GOBLIN_SHADE, surface: 'skin', bones: ['jaw'] });
@@ -87,8 +96,10 @@ export const BRAMBLE_GOBLIN: Design = {
       radial: 12, segments: 22, flatten: { axis: [0.1, 0.4, 1], amount: 0.8 },
     }), { color: GOBLIN_SKIN, shade: '#8f6c5c', surface: 'skin', bones: ['earL', 'ear2L', 'head'] });
     // Arms with a bramble wound about the forearm.
-    b.pair(tube([[0.23, 1.29, 0.1], [0.36, 1.02, 0.14], [0.42, 0.76, 0.22]], [0.078, 0.056, 0.044], { radial: 11 }),
+    b.pair(tube([[0.2, 1.3, 0.09], [0.29, 1.16, 0.12], [0.36, 1.02, 0.14], [0.39, 0.9, 0.18], [0.42, 0.77, 0.22]], [0.085, 0.074, 0.05, 0.058, 0.04], { radial: 12, segments: 30 }),
       { color: GOBLIN_SKIN, shade: GOBLIN_SHADE, surface: 'skin', bones: ['shoulderL', 'elbowL', 'wristL', 'chest'] });
+    // Knobbled elbows and knuckles.
+    b.pair(ellipsoid([0.355, 1.02, 0.12], [0.04, 0.038, 0.035]), { color: GOBLIN_SKIN, surface: 'skin', bones: ['elbowL'] });
     const vine: V3[] = [];
     for (let i = 0; i <= 10; i++) {
       const u = i / 10, a = u * TAU * 1.3;
@@ -101,7 +112,7 @@ export const BRAMBLE_GOBLIN: Design = {
         { color: GOBLIN_SKIN, shade: '#ddd0b2', surface: 'skin', bones: ['handL'] });
     }
     // Bent, digitigrade legs and long feet.
-    b.pair(tube([[0.13, 0.84, 0], [0.15, 0.46, 0.1], [0.15, 0.12, -0.04]], [0.088, 0.062, 0.046], { radial: 11 }),
+    b.pair(tube([[0.13, 0.84, 0], [0.14, 0.65, 0.06], [0.15, 0.46, 0.1], [0.15, 0.3, 0.035], [0.15, 0.12, -0.04]], [0.095, 0.088, 0.058, 0.062, 0.042], { radial: 12, segments: 30 }),
       { color: GOBLIN_SKIN, shade: GOBLIN_SHADE, surface: 'skin', bones: ['thighL', 'kneeL', 'ankleL', 'hips'] });
     b.pair(tube([[0.15, 0.11, -0.07], [0.15, 0.05, 0.08], [0.15, 0.035, 0.2]], [0.052, 0.045, 0.016], { radial: 9 }),
       { color: GOBLIN_SKIN, shade: '#c9bb99', surface: 'skin', bones: ['ankleL', 'toeL'] });

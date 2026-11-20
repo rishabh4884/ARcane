@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { Body } from './Body.ts';
+import { Body, instantiate } from './Body.ts';
 import { figureMaterial, type FigureUniforms } from './figureMaterial.ts';
 import { clamp, Rig, smooth, Spring, type Anim, type CreaturePose } from './Rig.ts';
 
@@ -51,6 +51,13 @@ export interface CharacterInput {
 }
 
 const LOOK = new THREE.Vector3();
+/** Each design is modelled, sculpted and baked once; every creature of that kind shares it. */
+const BAKED = new WeakMap<Design, { geometry: THREE.BufferGeometry; root: THREE.Bone; names: string[] }>();
+function baked(design: Design) {
+  let b = BAKED.get(design);
+  if (!b) { const body = new Body(); design.build(body); b = body.bake(); BAKED.set(design, b); }
+  return b;
+}
 const TMP = new THREE.Vector3();
 
 export class Character {
@@ -88,13 +95,12 @@ export class Character {
 
   constructor(readonly design: Design, seed = Math.random()) {
     this.seed = seed;
-    const body = new Body();
-    design.build(body);
     const { material, u } = figureMaterial(new THREE.Color(design.edge));
     this.u = u;
     u.uHeight.value = design.height;
     u.uMist.value = design.mist ?? 0.5;
-    const built = body.build(material);
+    const b = baked(design);
+    const built = instantiate(b.geometry, b.root, b.names, material);
     this.mesh = built.mesh;
     this.bones = built.bones;
     this.mesh.name = design.name;
@@ -248,7 +254,7 @@ export class Character {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
-    this.mesh.geometry.dispose();
+    // The baked geometry is shared by every creature of this kind and kept for the next.
     (this.mesh.material as THREE.Material).dispose();
     this.mesh.skeleton.dispose();
     this.group.removeFromParent();

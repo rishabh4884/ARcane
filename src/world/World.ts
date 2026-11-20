@@ -346,6 +346,9 @@ export class World {
     this.moodSeconds = Math.max(0.01, seconds);
   }
 
+  /** The stage without taking the camera (development inspection). */
+  stage(): { scene: THREE.Scene; camera: THREE.PerspectiveCamera } { return { scene: this.scene, camera: this.camera }; }
+
   /** Hand the camera and the stage to a cutscene. */
   beginCinematic(): Stage {
     this.encounter.group.visible = false;

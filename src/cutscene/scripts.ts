@@ -558,8 +558,8 @@ const KINDLER: Script = {
     s.act('hands', t < 19 ? 'idle' : 'strike', smooth(20, 27, t));
     if (t >= 19) s.act('hands', t < 22 ? 'windup' : 'strike', t < 22 ? smooth(19, 22, t) : smooth(22, 27, t));
     const h = s.get('hands');
-    h.u.uExposure.value = 1 + smooth(19, 24, t) * 0.6;
-    h.overrides.flash = 0.4 * bump(19, 30, t);
+    h.u.uExposure.value = 1 + smooth(19, 24, t) * 0.25;
+    h.overrides.flash = 0.14 * bump(19, 30, t);
     h.u.uFlashColor.value.set('#ffd9a0');
   },
 };
@@ -617,7 +617,7 @@ const ENDING: Script = {
     { t: 38, p: G(0, 6.5, 14), l: G(0, 2, -14), fov: 58 },
     { t: 48, p: G(0, 7.5, 18), l: G(0, 3, -16), fov: 60 },
   ],
-  title: { at: 42, until: 48, name: 'The Hushwood Is Free', subtitle: 'ARcane' },
+  title: { at: 42, until: 48, name: 'The Hushwood Is Free', subtitle: 'Arcane' },
   lines: [
     { at: 3, until: 7, speaker: 'The Unlit King', text: '…so warm.' },
     { at: 8.5, until: 11.2, text: 'Every light, let go.', kind: 'caption' },

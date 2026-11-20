@@ -382,6 +382,8 @@ export const MOTH_MATRON: Design = {
     // A slender furred body and a moth's head under a long veil.
     b.part(ellipsoid([0, 3.3, 0.05], [0.3, 0.42, 0.26]), { color: '#b8ad9a', shade: '#5c5446', surface: 'fur', bones: ['chest', 'spine'] });
     b.part(ellipsoid([0, 4.1, 0.2], [0.2, 0.22, 0.2]), { color: '#a59a87', shade: '#544b3e', surface: 'fur', bones: ['head'] });
+    // A long furred neck carries the head up out of the shoulders.
+    b.part(tube([[0, 3.55, 0.04], [0, 3.8, 0.1], [0, 4.0, 0.16]], [0.17, 0.11, 0.1], { radial: 12 }), { color: '#b0a590', shade: '#6a604f', surface: 'fur', bones: ['chest', 'neck', 'head'] });
     for (const s of [1, -1]) {
       b.part(ellipsoid([0.11 * s, 4.12, 0.33], [0.1, 0.12, 0.09]), { color: '#ffffff', surface: 'glow', glow: 1, bones: ['eyes'] });
       b.part(tube([[0.06 * s, 4.28, 0.28], [0.3 * s, 4.62, 0.42], [0.55 * s, 4.95, 0.52], [0.8 * s, 5.2, 0.55]], [0.012, 0.01, 0.008, 0.003], { radial: 4 }), { color: '#3a332b', surface: 'fur', bones: [s > 0 ? 'antL' : 'antR', s > 0 ? 'ant2L' : 'ant2R'] });

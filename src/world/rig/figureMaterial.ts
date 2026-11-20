@@ -4,14 +4,18 @@ import { SPELL_LIGHT_GLSL, SPELL_LIGHTS } from '../LanternLighting.ts';
 /**
  * THE FIGURE SHADER
  * ─────────────────
- * One painterly material for every creature, gnome and boss. Light comes from three places, the way
- * an illustrator would light a night scene: the moon behind the wood (a cold rim that wraps the
- * silhouette), the caster's own glow in front (a soft fill that reads the face and form), and the
- * bounce off the dark ground. Shading falls into two broad bands whose edges are broken by a brush
- * noise, so forms read as painted volumes rather than plastic. Surface character (bark grooves,
- * cloth folds, bone cracks, fur strands, moss clumps, wing veins) is computed in the rest pose, so it
- * sticks to the body as it moves and stays crisp at any distance. Feet sink into the ground mist,
- * spells light the figure, frost glazes it, a hit flashes it, and death burns it away from the top.
+ * One material for every creature, gnome, boss and hand. It lights a sculpted body the way a night
+ * scene is lit on film: the moon behind the wood (a cold rim wrapping the silhouette), the caster's
+ * glow in front (a soft key that reads the form), sky and dark ground for ambient, and contact
+ * occlusion baked where parts meet so joins crease instead of floating.
+ *
+ * Surfaces are textured procedurally in the rest pose, so detail sticks to the body as it moves and
+ * stays sharp at any distance: each surface has its own albedo pattern and its own micro-relief,
+ * applied as a bump map from screen-space derivatives (skin pores and wrinkles, bark furrows, cloth
+ * weave and folds, bone cracks, fur and hair strands, moss clumps, chitin plates, wing veins). Skin,
+ * ears, leaves and membranes let light through at the terminator and from behind; cloth and fur
+ * carry a soft sheen; chitin, bone, eyes and metal take a sharp highlight. Feet sink into the ground
+ * mist, spells light the figure, frost glazes it, hits flash it, and death burns it away from the top.
  */
 export interface FigureUniforms {
   uTime: { value: number };
@@ -33,7 +37,17 @@ export interface FigureUniforms {
 }
 
 const MOON = new THREE.Vector3(-0.34, 0.45, -0.82).normalize();
-const FILL = new THREE.Vector3(0.35, 0.55, 0.76).normalize();
+const FILL = new THREE.Vector3(0.42, 0.62, 0.66).normalize();
+
+/** Region lighting shared by every figure (set when the wood changes around the caster). */
+export const FIGURE_LIGHT = {
+  uMoonColor: { value: new THREE.Color('#a9cadc') },
+  uFillColor: { value: new THREE.Color('#dcc6a2') },
+  uSky: { value: new THREE.Color('#30444a') },
+  uGround: { value: new THREE.Color('#151c18') },
+  uRim: { value: new THREE.Color('#a6d6d6') },
+  uAir: { value: new THREE.Color('#26302f') },
+};
 
 export function figureMaterial(edge = new THREE.Color('#ffb066')): { material: THREE.ShaderMaterial; u: FigureUniforms } {
   const u: FigureUniforms = {
@@ -53,15 +67,7 @@ export function figureMaterial(edge = new THREE.Color('#ffb066')): { material: T
     uExposure: { value: 1 },
   };
   const material = new THREE.ShaderMaterial({
-    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, {
-      uMoon: { value: MOON }, uFill: { value: FILL },
-      uMoonColor: { value: new THREE.Color('#9fc2d4') },
-      uFillColor: { value: new THREE.Color('#b9a98f') },
-      uSky: { value: new THREE.Color('#41575a') },
-      uGround: { value: new THREE.Color('#1b241f') },
-      uRim: { value: new THREE.Color('#a6d6d6') },
-      uAir: { value: new THREE.Color('#26302f') },
-    }]),
+    uniforms: THREE.UniformsUtils.merge([THREE.UniformsLib.fog, { uMoon: { value: MOON }, uFill: { value: FILL } }]),
     vertexColors: true,
     fog: true,
     side: THREE.DoubleSide,
@@ -71,6 +77,7 @@ export function figureMaterial(edge = new THREE.Color('#ffb066')): { material: T
       #include <skinning_pars_vertex>
       #include <fog_pars_vertex>
       attribute vec2 aSurf;
+      attribute float aAO;
       uniform float uTime;
       uniform vec4 uCloth;
       varying vec3 vColor;
@@ -78,16 +85,18 @@ export function figureMaterial(edge = new THREE.Color('#ffb066')): { material: T
       varying vec3 vNormalW;
       varying vec3 vRest;
       varying vec2 vSurf;
+      varying float vAO;
       void main() {
         vColor = color;
         vSurf = aSurf;
         vRest = position;
+        vAO = aAO;
         #include <skinbase_vertex>
         #include <beginnormal_vertex>
         #include <skinnormal_vertex>
         #include <defaultnormal_vertex>
         #include <begin_vertex>
-        // Cloth, hair and wings hang: slow overlapping waves that grow toward the free edge.
+        // Cloth and hair hang: slow overlapping waves that grow toward the free edge.
         if ((aSurf.x > 1.5 && aSurf.x < 2.5) || (aSurf.x > 10.5 && aSurf.x < 11.5)) {
           float hang = clamp((uCloth.y - position.y) / max(uCloth.y - uCloth.z, 0.001), 0.0, 1.0);
           float w = hang * hang * uCloth.x;
@@ -111,7 +120,7 @@ export function figureMaterial(edge = new THREE.Color('#ffb066')): { material: T
       uniform float uTime; uniform float uDissolve; uniform vec3 uEdge; uniform float uFlash; uniform vec3 uFlashColor;
       uniform float uFrost; uniform float uGroundY; uniform float uMist; uniform float uHeight;
       uniform vec3 uEyeColor; uniform float uEyes; uniform float uOpacity; uniform float uExposure;
-      varying vec3 vColor; varying vec3 vWorld; varying vec3 vNormalW; varying vec3 vRest; varying vec2 vSurf;
+      varying vec3 vColor; varying vec3 vWorld; varying vec3 vNormalW; varying vec3 vRest; varying vec2 vSurf; varying float vAO;
       ${SPELL_LIGHT_GLSL}
       float h31(vec3 p) { p = fract(p * 0.3183099 + vec3(0.71, 0.113, 0.419)); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
       float vnoise(vec3 x) {
@@ -120,105 +129,175 @@ export function figureMaterial(edge = new THREE.Color('#ffb066')): { material: T
                    mix(mix(h31(i + vec3(0,0,1)), h31(i + vec3(1,0,1)), f.x), mix(h31(i + vec3(0,1,1)), h31(i + vec3(1,1,1)), f.x), f.y), f.z);
       }
       float fbm(vec3 p) { float a = 0.5, s = 0.0; for (int i = 0; i < 4; i++) { s += a * vnoise(p); p = p * 2.03 + vec3(1.7, 9.2, 3.1); a *= 0.5; } return s; }
+      // Cellular noise for scales, plates and pores.
+      float cells(vec3 p) {
+        vec3 i = floor(p), f = fract(p); float d = 1.0;
+        for (int x = -1; x <= 1; x++) for (int y = -1; y <= 1; y++) for (int z = -1; z <= 1; z++) {
+          vec3 o = vec3(float(x), float(y), float(z));
+          vec3 r = o + vec3(h31(i + o), h31(i + o + 17.0), h31(i + o + 31.0)) - f;
+          d = min(d, dot(r, r));
+        }
+        return sqrt(d);
+      }
+      // Bump mapping from screen-space derivatives: tilts the normal by the slope of a height field.
+      vec3 bump(vec3 n, vec3 pos, float h) {
+        vec3 dpdx = dFdx(pos), dpdy = dFdy(pos);
+        float dhdx = dFdx(h), dhdy = dFdy(h);
+        vec3 r1 = cross(dpdy, n), r2 = cross(n, dpdx);
+        float det = dot(dpdx, r1);
+        vec3 grad = sign(det) * (dhdx * r1 + dhdy * r2);
+        return normalize(abs(det) * n - grad);
+      }
       void main() {
         float sid = floor(vSurf.x + 0.5);
         float glow = vSurf.y;
         vec3 V = normalize(cameraPosition - vWorld);
         vec3 n = normalize(vNormalW);
         if (!gl_FrontFacing) n = -n;
+        float dist = length(vWorld - cameraPosition);
+        // Fine relief fades with distance so it never shimmers.
+        float near = 1.0 - smoothstep(6.0, 30.0, dist);
         vec3 p = vRest;
         vec3 base = vColor;
-        float spec = 0.0, trans = 0.0, cavity = 1.0;
-        if (sid < 0.5) {                       // skin
-          base *= 0.84 + 0.3 * fbm(p * 13.0);
-          base = mix(base, base * vec3(1.12, 0.9, 0.86), smoothstep(0.55, 0.8, fbm(p * 3.3)) * 0.6);
-          spec = 0.12;
-        } else if (sid < 1.5) {                // bark: long grooves that run with the grain
+        float h = 0.0, spec = 0.0, rough = 0.6, sss = 0.0, sheen = 0.0, trans = 0.0, cavity = 1.0;
+        vec3 sssColor = vec3(0.9, 0.35, 0.25);
+        if (sid < 0.5) {                       // skin: mottled, pored, creased
+          float mott = fbm(p * 13.0);
+          base *= 0.84 + 0.3 * mott;
+          base = mix(base, base * vec3(1.14, 0.88, 0.84), smoothstep(0.55, 0.8, fbm(p * 3.3)) * 0.55);
+          float pores = cells(p * 140.0);
+          float creases = 1.0 - abs(fbm(p * vec3(9.0, 26.0, 9.0)) * 2.0 - 1.0);
+          h = (pores * 0.0006 - pow(creases, 6.0) * 0.0018 + mott * 0.0012) * near;
+          cavity = 0.92 + 0.08 * pores;
+          spec = 0.22; rough = 0.45; sss = 0.55;
+        } else if (sid < 1.5) {                // bark: deep furrows along the grain, plates between
           float g = fbm(vec3(p.x * 11.0, p.y * 1.7, p.z * 11.0));
-          float groove = smoothstep(0.38, 0.62, g);
-          cavity = mix(0.45, 1.12, groove);
-          base *= cavity * (0.88 + 0.22 * fbm(p * 24.0));
-        } else if (sid < 2.5) {                // cloth: hanging folds and a coarse weave
-          float fold = sin(atan(p.x, p.z) * 9.0 + fbm(p * 2.6) * 7.0) * 0.5 + 0.5;
-          cavity = 0.7 + 0.36 * fold;
-          base *= cavity * (0.92 + 0.1 * vnoise(p * 140.0));
-        } else if (sid < 3.5) {                // bone: pale, cracked, stained
+          float furrow = smoothstep(0.32, 0.6, g);
+          float plates = cells(vec3(p.x * 9.0, p.y * 3.0, p.z * 9.0));
+          cavity = mix(0.38, 1.1, furrow) * (0.85 + 0.2 * plates);
+          base *= cavity * (0.86 + 0.24 * fbm(p * 26.0));
+          base = mix(base, base * vec3(0.8, 1.0, 0.72), smoothstep(0.62, 0.85, fbm(p * 5.0 + 9.0)) * 0.5);
+          h = (furrow * 0.008 + plates * 0.003 + fbm(p * 60.0) * 0.0015) * (0.4 + 0.6 * near);
+          rough = 0.9;
+        } else if (sid < 2.5) {                // cloth: folds that fall with the fabric, weave, wear
+          // Folds wander and fade in and out: fabric, not stripes.
+          float fold = (sin(atan(p.x, p.z) * 7.0 + fbm(p * 2.2) * 9.0 + p.y * 3.0) * 0.5 + 0.5) * smoothstep(0.25, 0.75, fbm(p * 1.6 + 4.0));
+          float weave = sin(p.x * 900.0) * sin(p.y * 900.0) * 0.5 + 0.5;
+          cavity = 0.8 + 0.25 * fold;
+          base *= cavity * (0.9 + 0.12 * vnoise(p * 140.0));
+          base *= 1.0 - smoothstep(0.65, 0.95, fbm(p * 7.0)) * 0.25;
+          h = (fold * 0.007 + weave * 0.0002 * near + fbm(p * 30.0) * 0.001) * (0.5 + 0.5 * near);
+          sheen = 0.45; rough = 0.85;
+        } else if (sid < 3.5) {                // bone: polished ridges, cracks, old stains
           float crack = 1.0 - smoothstep(0.0, 0.035, abs(fbm(p * 7.0) - 0.5));
-          base *= (0.9 + 0.14 * fbm(p * 16.0)) * (1.0 - crack * 0.5);
-          base = mix(base, base * vec3(0.72, 0.62, 0.5), smoothstep(0.5, 0.75, fbm(p * 4.0 + 3.0)) * 0.5);
-          spec = 0.3;
-        } else if (sid < 4.5) {                // metal
-          spec = 1.0;
+          base *= (0.9 + 0.14 * fbm(p * 16.0)) * (1.0 - crack * 0.55);
+          base = mix(base, base * vec3(0.7, 0.6, 0.48), smoothstep(0.5, 0.75, fbm(p * 4.0 + 3.0)) * 0.55);
+          h = (-crack * 0.0025 + fbm(p * 22.0) * 0.0012) * near;
+          spec = 0.45; rough = 0.35; sss = 0.15; sssColor = vec3(0.8, 0.6, 0.4);
+        } else if (sid < 4.5) {                // metal: hammered, scratched, tarnished
           base *= 0.75 + 0.35 * fbm(p * 34.0);
-        } else if (sid < 5.5) {                // fur
-          float s = vnoise(vec3(p.x * 70.0, p.y * 9.0, p.z * 70.0));
-          base *= 0.68 + 0.5 * s;
+          h = (cells(p * 40.0) * 0.0008 + vnoise(vec3(p.x * 400.0, p.y * 6.0, p.z * 400.0)) * 0.0002) * near;
+          spec = 1.0; rough = 0.25;
+        } else if (sid < 5.5) {                // fur: clumped strands
+          float s = vnoise(vec3(p.x * 80.0, p.y * 10.0, p.z * 80.0));
+          float clump = fbm(p * 18.0);
+          base *= 0.62 + 0.55 * s * (0.7 + 0.5 * clump);
+          h = (s * 0.003 + clump * 0.004) * near;
+          sheen = 0.6; rough = 0.9;
         } else if (sid < 6.5) {                // moss: soft clumps, lighter at their tips
           float c = fbm(p * 18.0);
-          base *= 0.62 + 0.7 * c;
-          base = mix(base, base * vec3(0.9, 1.2, 0.72), c * 0.6);
+          float tufts = 1.0 - cells(p * 55.0);
+          base *= 0.58 + 0.75 * c;
+          base = mix(base, base * vec3(0.9, 1.25, 0.7), c * 0.6 + tufts * 0.2);
+          h = (c * 0.008 + tufts * 0.002) * near;
+          sheen = 0.3; sss = 0.25; sssColor = vec3(0.5, 0.8, 0.3);
         } else if (sid < 7.5) {
-        } else if (sid < 8.5) {                // leaf: veins
+        } else if (sid < 8.5) {                // leaf: veins and translucency
           float vein = 1.0 - smoothstep(0.0, 0.05, abs(fract(p.y * 18.0 + abs(p.x) * 12.0) - 0.5));
-          base *= 0.85 + 0.25 * vein; trans = 0.5;
-        } else if (sid < 9.5) {                // stone: facets and speckle
-          base *= 0.78 + 0.3 * fbm(p * 9.0) + 0.12 * step(0.93, h31(floor(p * 60.0)));
-        } else if (sid < 10.5) {               // wing membrane: veined and backlit
+          base *= 0.85 + 0.25 * vein;
+          h = -vein * 0.0008 * near;
+          trans = 0.55; sss = 0.4; sssColor = vec3(0.6, 0.9, 0.3);
+        } else if (sid < 9.5) {                // stone: facets, speckle, lichen
+          float f = cells(p * 6.0);
+          base *= 0.74 + 0.3 * fbm(p * 9.0) + 0.12 * step(0.93, h31(floor(p * 60.0)));
+          base = mix(base, vec3(0.42, 0.5, 0.3), smoothstep(0.6, 0.8, fbm(p * 4.0 + 5.0)) * 0.4);
+          h = (f * 0.012 + fbm(p * 40.0) * 0.002) * (0.5 + 0.5 * near);
+          rough = 0.95;
+        } else if (sid < 10.5) {               // membrane: veined, dusty, glowing when backlit
           float vein = 1.0 - smoothstep(0.0, 0.06, abs(sin(atan(p.y - 1.0, p.x) * 14.0 + fbm(p * 3.0) * 2.0)));
-          base *= 1.0 - vein * 0.45; trans = 0.9;
-        } else if (sid < 11.5) {               // hair and beards: long strands
-          float s = vnoise(vec3(p.x * 90.0, p.y * 5.0, p.z * 90.0));
-          base *= 0.72 + 0.42 * s; spec = 0.18;
+          base *= (1.0 - vein * 0.45) * (0.85 + 0.25 * fbm(p * 30.0));
+          h = vein * 0.0012 * near;
+          trans = 0.9; sss = 0.3; sssColor = vec3(0.8, 0.6, 0.5); sheen = 0.25;
+        } else if (sid < 11.5) {               // hair and beards: long strands with a sheen
+          float s = vnoise(vec3(p.x * 110.0, p.y * 5.0, p.z * 110.0));
+          base *= 0.7 + 0.45 * s;
+          h = s * 0.0025 * near;
+          spec = 0.3; rough = 0.4; sheen = 0.5;
         } else if (sid < 12.5) {               // hollows: mouths, sockets
-          base *= 0.6;
-        } else {                               // chitin: glossy plates
-          spec = 0.7;
-          base *= 0.85 + 0.25 * fbm(p * 20.0);
+          base *= 0.55;
+        } else {                               // chitin: overlapping glossy plates
+          float plate = cells(p * 12.0);
+          base *= 0.82 + 0.28 * fbm(p * 20.0);
+          h = (smoothstep(0.2, 0.6, plate) * 0.003) * near;
+          spec = 0.75; rough = 0.3;
         }
+        n = bump(n, vWorld, h);
+        float ao = mix(1.0, vAO, 0.9) * cavity;
 
-        // Painted light: two broad bands with brush-broken edges.
-        float brush = (fbm(p * 6.0 + 7.0) - 0.5) * 0.3;
+        // Light: a soft key from the caster's side, the moon behind, sky and ground between.
+        float brush = (fbm(p * 6.0 + 7.0) - 0.5) * 0.22;
         float fillN = dot(n, uFill);
-        float fillLit = smoothstep(-0.25 + brush, 0.35 + brush, fillN) * 0.65 + smoothstep(0.45 + brush, 0.85 + brush, fillN) * 0.35;
+        float key = smoothstep(-0.2 + brush, 0.5 + brush, fillN) * 0.7 + smoothstep(0.45 + brush, 0.9 + brush, fillN) * 0.3;
         float moonN = dot(n, uMoon);
-        float moonLit = smoothstep(0.0 + brush, 0.45 + brush, moonN);
+        float moon = smoothstep(-0.05 + brush, 0.5 + brush, moonN);
         float hemi = n.y * 0.5 + 0.5;
-        vec3 ambient = mix(uGround, uSky, hemi) * cavity;
-        vec3 lightC = ambient + uFillColor * fillLit * 0.85 + uMoonColor * moonLit * 0.7;
+        vec3 ambient = mix(uGround, uSky, hemi) * ao;
+        vec3 lightC = ambient + (uFillColor * key * 1.15 + uMoonColor * moon * 0.7) * mix(0.5, 1.0, ao);
         vec3 col = base * lightC;
-        // Thin membranes and leaves glow when the moon is behind them.
-        col += base * uMoonColor * trans * pow(max(0.0, dot(-V, uMoon)), 2.0) * 1.2;
-        vec3 H = normalize(uFill + V);
-        col += uFillColor * spec * pow(max(dot(n, H), 0.0), 36.0) * 0.55;
-        // The moon wraps the silhouette from behind; the rim is what lifts a figure off the dark wood.
+        // Light under the skin: the terminator warms and softens where light wraps round the form.
+        float wrapKey = smoothstep(-0.55, 0.3, fillN) - smoothstep(-0.2, 0.5, fillN);
+        col += base * sssColor * sss * max(wrapKey, 0.0) * uFillColor * 0.55;
+        // Thin parts glow when the moon is behind them.
+        col += base * uMoonColor * trans * pow(max(0.0, dot(-V, uMoon)), 2.0) * 1.3;
+        // Highlights: a tight lobe for wet and polished surfaces, broader for rough ones.
+        float shininess = mix(140.0, 12.0, rough);
+        vec3 Hf = normalize(uFill + V), Hm = normalize(uMoon + V);
+        float sf = pow(max(dot(n, Hf), 0.0), shininess), sm = pow(max(dot(n, Hm), 0.0), shininess);
+        col += (uFillColor * sf * 0.8 + uMoonColor * sm * 0.6) * spec * ao;
         float facing = clamp(dot(n, V), 0.0, 1.0);
-        float rim = pow(1.0 - facing, 2.6);
+        // Velvet sheen on cloth, fur and moss.
+        col += base * sheen * pow(1.0 - facing, 3.0) * (uFillColor * 0.4 + uMoonColor * 0.3);
+        // The moon wraps the silhouette from behind; the rim is what lifts a figure off the dark wood.
+        float rim = pow(1.0 - facing, 2.8);
         float backlit = clamp(dot(-V, uMoon) * 0.5 + 0.7, 0.0, 1.0);
-        col += uRim * rim * (0.35 + 0.65 * smoothstep(-0.3, 0.5, n.y + moonN)) * backlit * 0.9;
+        col += uRim * rim * (0.35 + 0.65 * smoothstep(-0.3, 0.5, n.y + moonN)) * backlit * 1.0 * mix(0.6, 1.0, ao);
         col += base * spellIllumination(vWorld) * 1.5;
         col *= uExposure;
         bool emissive = sid > 6.5 && sid < 7.5;
         if (emissive) {
-          if (glow > 0.98) col = uEyeColor * uEyes * (1.6 + 0.8 * rim);
-          else col = mix(col, vColor * (1.0 + glow * 2.4), clamp(glow * 1.6, 0.0, 1.0));
+          if (glow > 0.98) {
+            col = uEyeColor * uEyes * (1.6 + 0.8 * rim);
+            // A wet glint in each eye.
+            col += vec3(1.0) * pow(max(dot(n, Hf), 0.0), 220.0) * 1.5;
+          } else col = mix(col, vColor * (1.0 + glow * 2.4), clamp(glow * 1.6, 0.0, 1.0));
         }
         // Frost glazes the figure: pale, glassy, with a crystalline sparkle.
         if (uFrost > 0.0) {
           vec3 ice = vec3(0.62, 0.82, 1.0) * (0.55 + 0.7 * rim) + vec3(0.25, 0.4, 0.55) * fbm(p * 26.0);
           ice += step(0.985, h31(floor(p * 90.0 + floor(uTime * 3.0)))) * 1.2;
+          ice += vec3(0.9, 0.97, 1.0) * pow(max(dot(n, Hf), 0.0), 60.0) * 0.8;
           col = mix(col, ice, uFrost * 0.72);
         }
         col += uFlashColor * uFlash * (0.35 + rim * 1.2);
         // Air and ground mist: distance softens the figure; mist swallows the feet.
-        float dist = length(vWorld - cameraPosition);
-        float air = 1.0 - exp(-dist * 0.018);
+        float air = 1.0 - exp(-dist * 0.016);
         float low = 1.0 - smoothstep(uGroundY - 0.05, uGroundY + uMist, vWorld.y);
-        if (!emissive) col = mix(col, uAir, clamp(air * 0.35 + low * 0.55, 0.0, 0.8));
+        if (!emissive) col = mix(col, uAir, clamp(air * 0.32 + low * 0.55, 0.0, 0.8));
         float alpha = uOpacity;
         if (uDissolve > 0.0) {
           // Burn away from the top down, broken by noise, with a glowing edge.
-          float h = clamp((vWorld.y - uGroundY) / max(uHeight, 0.1), 0.0, 1.0);
-          float front = (1.0 - h) * 0.55 + fbm(p * 8.0) * 0.45;
+          float hh = clamp((vWorld.y - uGroundY) / max(uHeight, 0.1), 0.0, 1.0);
+          float front = (1.0 - hh) * 0.55 + fbm(p * 8.0) * 0.45;
           float cut = uDissolve * 1.08 - 0.04;
           if (front < cut) discard;
           col = mix(col, uEdge * 2.2, 1.0 - smoothstep(0.0, 0.07, front - cut));
@@ -229,7 +308,7 @@ export function figureMaterial(edge = new THREE.Color('#ffb066')): { material: T
         #include <fog_fragment>
       }`,
   });
-  Object.assign(material.uniforms, u);
+  Object.assign(material.uniforms, u, FIGURE_LIGHT);
   material.uniforms.uSpellLights = SPELL_LIGHTS.uSpellLights;
   material.uniforms.uSpellColors = SPELL_LIGHTS.uSpellColors;
   return { material, u };
