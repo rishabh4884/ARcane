@@ -4,6 +4,7 @@ import { HOLLOW_STAG } from './characters/bosses.ts';
 import { animate, facingPlane, type SpellAnimation, type SpellContext } from './effects.ts';
 import { Character } from './rig/Character.ts';
 import { terrainHeight } from './spatial.ts';
+import { emberLash as stagedEmberLash } from './fx/emberLash.ts';
 import { Trail, WHITE, clamp01, easeOutBack, easeOutCubic, flareTexture, glowSprite, ringTexture } from './vfx.ts';
 
 /**
@@ -30,46 +31,7 @@ function impactBurst(ctx: SpellContext, at: THREE.Vector3, color: THREE.Color, f
   ctx.light?.(at, color, 7 * force, 0.4, 8);
 }
 
-/* ─────────────────────────────── EMBER LASH ─────────────────────────────── */
-
-function emberLash(origin: THREE.Vector3, target: THREE.Vector3, color: THREE.Color, ctx: SpellContext): SpellAnimation {
-  const group = new THREE.Group();
-  const side = ctx.hand === 'left' ? -1 : 1;
-  const start = ctx.cameraPosition ? below(ctx, 1.1, side) : origin.clone();
-  // The whip curls out to the side and cracks down onto the target.
-  const curl = new THREE.Vector3(side * 2.2, 1.6, 0).applyQuaternion(ctx.cameraQuaternion);
-  const mid = start.clone().lerp(target, 0.45).add(curl);
-  const curve = new THREE.QuadraticBezierCurve3(start, mid, target);
-  const flight = THREE.MathUtils.clamp(start.distanceTo(target) / 38, 0.18, 0.5);
-  const outer = new Trail(color, 0.32, 0.32, 40, 1.2);
-  const inner = new Trail(new THREE.Color('#ffe2a8'), 0.12, 0.26, 40, 1);
-  const head = glowSprite('#ffd08a', 0.55, undefined, 1);
-  group.add(outer.mesh, inner.mesh, head);
-  const flare = facingPlane(flareTexture(), '#ffb066', 2.2, ctx.cameraQuaternion);
-  flare.position.copy(target);
-  group.add(flare);
-  const p = new THREE.Vector3();
-  return animate(group, flight + 1.1, (_t, age, dt) => {
-    const u = clamp01(age / flight);
-    curve.getPoint(easeOutCubic(u), p);
-    head.position.copy(p);
-    head.visible = age < flight + 0.05;
-    if (age < flight) {
-      outer.push(p); inner.push(p);
-      ctx.particles?.emit({ x: p.x, y: p.y, z: p.z, vx: (Math.random() - 0.5), vy: 0.8 + Math.random(), vz: (Math.random() - 0.5), color: Math.random() < 0.5 ? color : new THREE.Color('#ffd08a'), size: 0.12, sizeEnd: 0.01, ttl: 0.5, drag: 1.5, gravity: -1.5, style: 'glow' });
-    }
-    const fade = clamp01(1 - Math.max(0, age - flight) / 0.5);
-    outer.opacity = inner.opacity = fade;
-    outer.update(dt, ctx.cameraPosition); inner.update(dt, ctx.cameraPosition);
-    const k = (age - flight) / 0.5;
-    flare.visible = k >= 0;
-    if (k >= 0) { flare.scale.setScalar(0.4 + easeOutCubic(k * 2) * 1.2); flare.material.opacity = clamp01(1 - k); }
-  }, flight, () => {
-    impactBurst(ctx, target, color, 1.2);
-    ctx.particles?.burst(target, 24, { speed: 1.2, direction: UP, spread: 0.8, color: new THREE.Color('#ff8a3d'), size: 0.16, sizeEnd: 0.01, ttl: 1.1, drag: 1, gravity: -2, style: 'glow' });
-    ctx.screen?.shake(0.12);
-  }, () => { outer.dispose(); inner.dispose(); });
-}
+/* Ember Lash lives in fx/emberLash.ts, staged in five beats. */
 
 /* ─────────────────────────────── THORNSNARE ─────────────────────────────── */
 
@@ -531,7 +493,7 @@ function stillness(color: THREE.Color, ctx: SpellContext): SpellAnimation {
 /** Route a newer spell to its animation. */
 export function createSpellAnimation2(kind: SpellEffect, origin: THREE.Vector3, target: THREE.Vector3, color: THREE.Color, ctx: SpellContext): SpellAnimation | null {
   switch (kind) {
-    case 'fire': return emberLash(origin, target, color, ctx);
+    case 'fire': return stagedEmberLash(origin, target, color, ctx);
     case 'roots': return thornsnare(target, color, ctx);
     case 'blade': return moonblade(target, color, ctx);
     case 'wisps': return wispSwarm(origin, target, color, ctx);

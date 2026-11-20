@@ -9,11 +9,8 @@ import { ArtResources } from './storybook.ts';
 import { forestLayout, intersectObstacle, intersectTerrain, pathX, seededRandom, terrainHeight, type Obstacle } from './spatial.ts';
 import { Woodland } from './Woodland.ts';
 
-/**
- * The authored 3D world (art pipeline assets) in place of the painted cut-outs. Opt-in with
- * `?world=authored` while its assets are being built; it becomes the default once the Edge is finished.
- */
-export const AUTHORED_WORLD = typeof location !== 'undefined' && new URLSearchParams(location.search).get('world') === 'authored';
+import { AUTHORED_WORLD } from './authored.ts';
+export { AUTHORED_WORLD };
 
 interface Cutout { mesh: THREE.InstancedMesh; sites: Array<{x:number; y:number; z:number; width:number; height:number}>; sorted: number[] }
 

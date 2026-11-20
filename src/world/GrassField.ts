@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { makeGrassTile, grassLod, GRASS_TILE, type GrassLod, type GrassSite } from './grass-layout.ts';
+import { AUTHORED_WORLD } from './authored.ts';
+import { makeGrassTile, grassPatches, grassLod, GRASS_TILE, type GrassLod, type GrassSite } from './grass-layout.ts';
 import { seededRandom, terrainHeight, type Obstacle } from './spatial.ts';
 import { createLanternUniform, LANTERN_GLSL, SPELL_LIGHTS, type LanternUniform } from './LanternLighting.ts';
 
@@ -100,7 +101,7 @@ export class GrassField {
       const x=(tx+0.5)*GRASS_TILE,z=(tz+0.5)*GRASS_TILE;
       if(Math.hypot(x,z)>88+GRASS_TILE)continue;
       const nearObstacles=obstacles.filter(o=>Math.abs(o.x-x)<GRASS_TILE+o.radius&&Math.abs(o.z-z)<GRASS_TILE+o.radius);
-      const layout=makeGrassTile(tx,tz,nearObstacles);if(!layout.sites.length)continue;
+      const layout=makeGrassTile(tx,tz,nearObstacles,10.0,AUTHORED_WORLD?grassPatches:undefined);if(!layout.sites.length)continue;
       const geometry=this.makeInstances(layout.sites,x,z);
       const mesh=new THREE.Mesh(geometry,this.material);mesh.position.set(x,0,z);mesh.frustumCulled=false;mesh.visible=false;this.group.add(mesh);
       this.tiles.push({mesh,lod:'hidden',center:new THREE.Vector3(x,terrainHeight(x,z)+0.4,z),sites:layout.sites.length});

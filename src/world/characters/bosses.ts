@@ -27,6 +27,7 @@ export const GORRIK: Design = {
   eye: '#ffd27a', eyeAngry: '#ff3b1f', edge: '#ffb066', mist: 0.5,
   stiffness: { ...BRAMBLE_GOBLIN.stiffness, handR: 12, hips: 14 },
   castBone: 'handL', coreBone: 'chest',
+  model: 'gorrik',
   build(b: Body) {
     b.scale = 1.72;
     BRAMBLE_GOBLIN.build(b);

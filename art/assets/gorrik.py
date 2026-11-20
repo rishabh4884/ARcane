@@ -68,7 +68,9 @@ def spec() -> AssetSpec:
     body.ellipsoid((0, 2.05, -0.08), (0.42, 0.26, 0.24), A('back', 'skin', SKIN, 'chest'), k=0.1, relief=sr)
     for x in (1, -1):
         body.ellipsoid((x * 0.17, 2.02, 0.33), (0.17, 0.11, 0.08), A('chest', 'skin', SKIN, 'chest'), k=0.06, rot=rotation(0.25, 0, 0))
-        body.limb([(x * 0.06, 2.3, 0.12), (x * 0.5, 2.18, 0.06)], radii=[(0, 0.14, 0.1), (1, 0.09, 0.08)], attr=A('back', 'skin', SKIN, 'chest', 'neck'), k=0.08)
+        # Trapezius heaped up to the ears: the head sits low between the shoulders.
+        body.limb([(x * 0.05, 2.4, 0.08), (x * 0.26, 2.33, 0.04), (x * 0.5, 2.2, 0.03)], radii=[(0, 0.17, 0.13), (0.5, 0.16, 0.13), (1, 0.11, 0.1)],
+                  attr=A('back', 'skin', SKIN, 'chest', 'neck'), k=0.1, relief=sr)
     body.crease([(0.25, 1.78, 0.42), (0, 1.75, 0.5), (-0.25, 1.78, 0.42)], 0.03, 0.008)
     body.sub(Ellipsoid((0, 1.5, 0.5), (0.012, 0.018, 0.02)), k=0.01)
     # A bull neck, short, the head sunk low on it.
@@ -78,32 +80,45 @@ def spec() -> AssetSpec:
     H = A('head', 'skin', SKIN, 'head')
     J = A('jaw', 'skin', SKIN, 'jaw')
     fr = Relief(0.002, 45.0, 1.0, 'fbm', 7)
-    body.ellipsoid((0, 2.44, 0.44), (0.15, 0.14, 0.16), H, k=0.06, relief=fr)
-    body.limb([(0.16, 2.5, 0.52), (0.07, 2.515, 0.6), (0, 2.51, 0.615), (-0.07, 2.52, 0.6), (-0.16, 2.505, 0.52)],
-              radii=[(0, 0.026, 0.03), (0.5, 0.03, 0.04), (1, 0.026, 0.03)], square=[(0, 2.6), (1, 2.6)], attr=H, k=0.03)
+    body.ellipsoid((0, 2.43, 0.46), (0.15, 0.135, 0.16), H, k=0.06, relief=fr)
+    # A brow like a shelf of rock, frowning hard over the nose.
+    body.box((0, 2.505, 0.6), (0.165, 0.032, 0.055), H, k=0.035, round_=0.024, rot=rotation(-0.25, 0, 0))
     for x in (1, -1):
-        body.ellipsoid((x * 0.1, 2.33, 0.53), (0.08, 0.08, 0.08), H, k=0.05)
-        body.limb([(x * 0.06, 2.4, 0.6), (x * 0.15, 2.41, 0.5)], radii=[(0, 0.022, 0.026), (1, 0.016, 0.02)], attr=H, k=0.03)
-        body.sub(Ellipsoid((x * 0.07, 2.462, 0.618), (0.034, 0.024, 0.03)), k=0.012)
+        body.box((x * 0.105, 2.5, 0.59), (0.07, 0.03, 0.05), H, k=0.03, round_=0.02, rot=rotation(-0.2, x * 0.35, x * -0.18))
+    body.crease([(0, 2.53, 0.66), (0, 2.49, 0.665)], 0.012, 0.006)
+    body.crease([(0.03, 2.535, 0.655), (0.012, 2.5, 0.664)], 0.008, 0.004)
+    body.crease([(-0.03, 2.535, 0.655), (-0.012, 2.5, 0.664)], 0.008, 0.004)
+    for x in (1, -1):
+        body.ellipsoid((x * 0.115, 2.34, 0.54), (0.085, 0.085, 0.085), H, k=0.05)
+        body.limb([(x * 0.06, 2.41, 0.61), (x * 0.16, 2.42, 0.5)], radii=[(0, 0.024, 0.028), (1, 0.018, 0.022)], square=[(0, 2.6), (1, 2.6)], attr=H, k=0.03)
+        body.sub(Ellipsoid((x * 0.07, 2.462, 0.62), (0.034, 0.022, 0.03)), k=0.012)
         e = 'eyeL' if x > 0 else 'eyeR'
-        body.ellipsoid((x * 0.07, 2.46, 0.618), (0.022, 0.017, 0.015), A(e, 'eye', hexcol('#cdbf94'), 'eyes', 'head'), k=0.002)
-        body.limb([(x * 0.07 - 0.026, 2.464, 0.618), (x * 0.07, 2.478, 0.632), (x * 0.07 + 0.026, 2.465, 0.616)],
-                  radii=[(0, 0.007, 0.008), (0.5, 0.0085, 0.009), (1, 0.007, 0.008)], attr=A('lid', 'skin', SKIN, 'head'), k=0.004)
-    body.ellipsoid((0, 2.37, 0.62), (0.11, 0.07, 0.09), H, k=0.05)
+        body.ellipsoid((x * 0.07, 2.46, 0.618), (0.021, 0.016, 0.014), A(e, 'eye', hexcol('#cdbf94'), 'eyes', 'head'), k=0.002)
+        body.limb([(x * 0.07 - 0.026, 2.465, 0.618), (x * 0.07, 2.479, 0.632), (x * 0.07 + 0.026, 2.466, 0.616)],
+                  radii=[(0, 0.008, 0.009), (0.5, 0.0095, 0.01), (1, 0.008, 0.009)], attr=A('lid', 'skin', SKIN, 'head'), k=0.004)
+    body.ellipsoid((0, 2.37, 0.62), (0.115, 0.07, 0.09), H, k=0.05)
+    # A broad, flattened nose, broken once and set crooked.
     nose = A('nose', 'skin', SKIN, 'head')
-    body.limb([(0, 2.49, 0.635), (0.012, 2.44, 0.7), (0.024, 2.4, 0.74)], radii=[(0, 0.026, 0.03), (0.6, 0.036, 0.034), (1, 0.03, 0.028)],
-              square=[(0, 2.8), (1, 2.2)], attr=nose, k=0.03)
+    body.limb([(0, 2.485, 0.64), (0.012, 2.44, 0.7), (0.022, 2.405, 0.733)], radii=[(0, 0.03, 0.028), (0.6, 0.05, 0.034), (1, 0.046, 0.03)],
+              square=[(0, 2.8), (1, 2.4)], attr=nose, k=0.03)
     for x in (1, -1):
-        body.ellipsoid((x * 0.03 + 0.02, 2.39, 0.72), (0.026, 0.02, 0.024), nose, k=0.015)
-        body.sub(Ellipsoid((x * 0.018 + 0.022, 2.378, 0.737), (0.009, 0.006, 0.012)), k=0.005)
+        body.ellipsoid((x * 0.04 + 0.02, 2.392, 0.716), (0.03, 0.022, 0.026), nose, k=0.015)
+        body.sub(Ellipsoid((x * 0.024 + 0.021, 2.38, 0.735), (0.011, 0.007, 0.013)), k=0.005)
     # The scar: a ridge of healed skin from brow to cheek through the blind right eye.
     body.crease([(-0.03, 2.56, 0.6), (-0.075, 2.47, 0.635), (-0.12, 2.38, 0.6)], 0.01, -0.004)
-    body.limb([(0.12, 2.34, 0.44), (0.105, 2.28, 0.58), (0, 2.235, 0.675), (-0.105, 2.28, 0.58), (-0.12, 2.34, 0.44)],
-              radii=[(0, 0.05, 0.055), (0.5, 0.052, 0.06), (1, 0.05, 0.055)], attr=J, k=0.05)
-    body.ellipsoid((0, 2.235, 0.675), (0.06, 0.04, 0.045), J, k=0.03)
-    body.limb([(0.1, 2.3, 0.62), (0, 2.296, 0.69), (-0.1, 2.3, 0.62)], radii=[(0, 0.014, 0.015), (1, 0.014, 0.015)], attr=A('lip', 'skin', SKIN, 'jaw'), k=0.015)
-    body.limb([(0.09, 2.322, 0.62), (0, 2.326, 0.672), (-0.09, 2.322, 0.62)], radii=[(0, 0.013, 0.014), (1, 0.013, 0.014)], attr=A('lip', 'skin', SKIN, 'head'), k=0.015)
-    body.sub(Limb([(0.1, 2.311, 0.62), (0, 2.311, 0.685), (-0.1, 2.311, 0.62)], radii=[(0, 0.007, 0.008), (1, 0.007, 0.008)]), k=0.007)
+    # An underbite: the lower jaw thrust past the upper lip, a wide mouth turned down.
+    body.limb([(0.13, 2.34, 0.44), (0.12, 2.27, 0.6), (0, 2.225, 0.71), (-0.12, 2.27, 0.6), (-0.13, 2.34, 0.44)],
+              radii=[(0, 0.052, 0.058), (0.5, 0.058, 0.064), (1, 0.052, 0.058)], attr=J, k=0.05)
+    body.ellipsoid((0, 2.225, 0.705), (0.07, 0.045, 0.05), J, k=0.03)
+    body.limb([(0.125, 2.296, 0.62), (0, 2.292, 0.728), (-0.125, 2.296, 0.62)], radii=[(0, 0.016, 0.018), (1, 0.016, 0.018)], attr=A('lip', 'skin', SKIN, 'jaw'), k=0.016)
+    body.limb([(0.115, 2.325, 0.615), (0, 2.33, 0.68), (-0.115, 2.325, 0.615)], radii=[(0, 0.013, 0.014), (1, 0.013, 0.014)], attr=A('lip', 'skin', SKIN, 'head'), k=0.015)
+    body.sub(Limb([(0.125, 2.305, 0.62), (0.06, 2.312, 0.68), (0, 2.313, 0.695), (-0.06, 2.312, 0.68), (-0.125, 2.305, 0.62)],
+                  radii=[(0, 0.007, 0.008), (0.5, 0.009, 0.01), (1, 0.007, 0.008)]), k=0.007)
+    for x in (1, -1):
+        tusk = claw((x * 0.075, 2.27, 0.69), (x * 0.1, 2.46, 0.715), 0.03, curl=(x * 0.012, 0, 0.01), sides=5)
+        for h in tusk:
+            gear.hull(h, A('tooth', 'tooth', hexcol('#e0d5b5'), 'jaw'), k=0.002)
+    gear.carve_plane((0.09, 2.39, 0.71), (0.2, 1.0, 0.15), Ellipsoid((0.09, 2.4, 0.71), (0.05, 0.05, 0.05)), k=0.002)
     # Ears: shorter than his kin's, chewed ragged; the left lost its tip.
     for x in (1, -1):
         s = 'L' if x > 0 else 'R'
@@ -112,7 +127,7 @@ def spec() -> AssetSpec:
                   radii=[(0, 0.07, 0.014), (0.4, 0.085, 0.011), (1, 0.02, 0.008)], up=(x * 0.1, 0.4, 1.0),
                   attr=A('ear', 'skin', SKIN, f'ear{s}', f'ear2{s}', 'head'), k=0.03)
         for k in range(3):
-            body.sub(Ellipsoid((x * (0.27 + k * 0.08), 2.55 + k * 0.01, 0.3 - k * 0.03), (0.022, 0.03, 0.03)), k=0.004)
+            body.sub(Ellipsoid((x * (0.26 + k * 0.085), 2.6 + k * 0.012, 0.31 - k * 0.04), (0.024, 0.03, 0.03)), k=0.004)
 
     # ── Arms like trunks: huge shoulders, a log of a forearm, hands that could crush a stag's skull. ──
     for x in (1, -1):
@@ -175,7 +190,7 @@ def spec() -> AssetSpec:
 
     # ── The bramble hump: thorned vines grown through the hide over his back, knotted into a mantle. ──
     bram = A('bramble', 'bark', BARK, 'chest', 'spine')
-    body.ellipsoid((0, 2.17, -0.24), (0.36, 0.24, 0.2), bram, k=0.06, relief=Relief(0.03, 6.0, 1.0, 'cracks', 5))
+    body.ellipsoid((0, 2.24, -0.3), (0.44, 0.3, 0.26), bram, k=0.08, relief=Relief(0.035, 5.0, 1.0, 'cracks', 5))
     rng = np.random.default_rng(3)
     vines = []
     for i in range(9):
@@ -183,15 +198,15 @@ def spec() -> AssetSpec:
         pts = []
         for t in np.linspace(0, 1, 6):
             ang = a0 + t * 2.4
-            pts.append(V(np.cos(ang) * (0.42 - 0.12 * t), 2.05 + np.sin(ang) * 0.25 + t * 0.12, -0.22 - np.sin(t * np.pi) * 0.18 + rng.random() * 0.04))
-        body.limb(pts, radii=[(0, 0.035, 0.035), (0.5, 0.045, 0.04), (1, 0.02, 0.02)], attr=bram, k=0.03, samples=6)
+            pts.append(V(np.cos(ang) * (0.5 - 0.14 * t), 2.1 + np.sin(ang) * 0.3 + t * 0.14, -0.3 - np.sin(t * np.pi) * 0.22 + rng.random() * 0.05))
+        body.limb(pts, radii=[(0, 0.045, 0.045), (0.5, 0.06, 0.05), (1, 0.025, 0.025)], attr=bram, k=0.035, samples=6)
         vines.append(pts)
     for pts in vines:
         for j in (1, 3, 4):
             p = pts[j]
             out = p - V(0, 2.1, -0.05)
             out /= np.linalg.norm(out)
-            for h in claw(p - out * 0.01, p + out * (0.14 + rng.random() * 0.1) + V(0, 0.05, 0), 0.026, curl=(0, 0.02, 0)):
+            for h in claw(p - out * 0.01, p + out * (0.2 + rng.random() * 0.14) + V(0, 0.07, 0), 0.034, curl=(0, 0.03, 0)):
                 gear.hull(h, A('thorn', 'bark', BARK, 'chest'), k=0.002)
 
     # ── What he wears: a ragged hide over the loins, a hide mantle, bark pauldrons, a belt of skulls. ──
@@ -288,10 +303,20 @@ def paint(m: Surface) -> Painted:
     scars = cell_spots(P, 9.0, 0.83, 41) * z('chest', 'arm', 'back', 'belly')
     s = mix(s, srgb_to_linear(np.array([0.55, 0.42, 0.36])), scars * 0.55)
     # War paint: three ochre stripes across the face under the eyes, two down the chest.
-    face_stripe = z('head', 'jaw', 'nose') & (np.abs(np.sin((P[:, 1] - 2.38) * 95)) > 0.6) & (P[:, 1] > 2.36) & (P[:, 1] < 2.45) & (np.abs(P[:, 0]) > 0.05)
-    chest_stripe = z('chest', 'belly') & (np.abs(np.abs(P[:, 0]) - 0.14) < 0.03) & (P[:, 2] > 0.25)
-    paint_mask = (face_stripe | chest_stripe) * (0.6 + 0.4 * noise(P, 30, 2, 9))
-    s = mix(s, srgb_to_linear(OCHRE) * 0.85, np.clip(paint_mask, 0, 0.85))
+    # War paint, smeared on by hand: two strokes down each cheek from under the eye, three claw marks
+    # raked across the chest; broken where the paint ran thin.
+    ax = np.abs(P[:, 0])
+    cheek = np.zeros(len(P))
+    for off in (0.0, 0.035):
+        d = np.abs((P[:, 1] - 2.43) + (ax - 0.08 - off) * 1.2)
+        cheek = np.maximum(cheek, (d < 0.011) & (P[:, 1] < 2.45) & (P[:, 1] > 2.31) & (ax > 0.06) & (P[:, 2] > 0.5))
+    rake = np.zeros(len(P))
+    for off in (-0.08, 0.0, 0.08):
+        d = np.abs((P[:, 1] - 1.95) - (P[:, 0] - off) * 0.9)
+        rake = np.maximum(rake, (d < 0.022) & (P[:, 2] > 0.25) & (P[:, 1] > 1.75) & (P[:, 1] < 2.12))
+    wear = smoothstep(0.3, 0.6, noise(P, 26, 3, 9))
+    paint_mask = (cheek * z('head', 'jaw', 'nose') + rake * z('chest', 'belly')) * wear
+    s = mix(s, srgb_to_linear(np.array([0.48, 0.24, 0.12])), np.clip(paint_mask, 0, 0.8))
     grime = (1 - smoothstep(0.1, 0.6, P[:, 1])) * 0.7 + z('hand', 'finger') * 0.3
     s = mix(s, srgb_to_linear(np.array([0.18, 0.14, 0.09])), np.clip(grime * 0.8, 0, 0.75))
     col = np.where(skin[:, None], s, col)

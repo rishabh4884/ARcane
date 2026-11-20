@@ -34,7 +34,20 @@ export function groundSlope(x: number, z: number): { x: number; z: number } {
     z: (terrainHeight(x, z + step) - terrainHeight(x, z - step)) / (2 * step) };
 }
 
-export function makeGrassTile(tx: number, tz: number, obstacles: readonly Obstacle[], density = 10.0): GrassTile {
+/**
+ * Grass where grass would grow: drifts in the open and a fringe round the clearing, none on the worn
+ * path or the trampled middle where the spirits fight (0 = none, 1 = full).
+ */
+export function grassPatches(x: number, z: number): number {
+  const drift = 0.5 + 0.5 * Math.sin(x * 0.17 + Math.sin(z * 0.13) * 2.1) * Math.cos(z * 0.15 + Math.sin(x * 0.11) * 1.4);
+  const clearing = Math.hypot(x, z + 12);
+  const fringe = Math.exp(-((clearing - 15) ** 2) / 30);
+  const trampled = 1 - Math.max(0, 1 - clearing / 10);
+  const path = Math.min(1, Math.max(0, (Math.abs(x - pathX(z)) - 1.4) / 1.4));
+  return Math.min(1, Math.max(0, (drift - 0.45) * 2.4 + fringe * 0.8)) * trampled * path;
+}
+
+export function makeGrassTile(tx: number, tz: number, obstacles: readonly Obstacle[], density = 10.0, mask?: (x: number, z: number) => number): GrassTile {
   const random = seededRandom((Math.imul(tx + 97, 73856093) ^ Math.imul(tz + 127, 19349663)) >>> 0);
   const sites: GrassSite[] = [];
   const side = Math.ceil(GRASS_TILE * Math.sqrt(density));
@@ -43,7 +56,7 @@ export function makeGrassTile(tx: number, tz: number, obstacles: readonly Obstac
   for (let zIndex = 0; zIndex < side; zIndex++) for (let xIndex = 0; xIndex < side; xIndex++) {
     const x = x0 + (xIndex + 0.12 + random() * 0.76) * spacing;
     const z = z0 + (zIndex + 0.12 + random() * 0.76) * spacing;
-    const habitat = grassHabitat(x, z, obstacles);
+    const habitat = grassHabitat(x, z, obstacles) * (mask ? mask(x, z) : 1);
     if (habitat <= 0 || random() > 0.6 + habitat * 0.4) continue;
     const patch = 0.5 + Math.sin(x * 0.21 + Math.sin(z * 0.16) * 1.8) * Math.cos(z * 0.18) * 0.5;
     const slope = groundSlope(x, z);
