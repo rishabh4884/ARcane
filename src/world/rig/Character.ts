@@ -54,6 +54,9 @@ const LOOK = new THREE.Vector3();
 const BLOB_GEOMETRY = new THREE.PlaneGeometry(1, 1);
 /** Each design is modelled, sculpted and baked once; every creature of that kind shares it. */
 const BAKED = new WeakMap<Design, { geometry: THREE.BufferGeometry; root: THREE.Bone; names: string[] }>();
+/** Hand over a body baked elsewhere (a worker, the cache). */
+export function seedBaked(design: Design, b: { geometry: THREE.BufferGeometry; root: THREE.Bone; names: string[] }): void { if (!BAKED.has(design)) BAKED.set(design, b); }
+export function isBaked(design: Design): boolean { return BAKED.has(design); }
 function baked(design: Design) {
   let b = BAKED.get(design);
   if (!b) { const body = new Body(); design.build(body); b = body.bake(); BAKED.set(design, b); }

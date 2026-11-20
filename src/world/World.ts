@@ -21,6 +21,7 @@ import { lerpMood, MOODS, moodState, type MoodState } from './moods.ts';
 import { namedRegion, regionFor, Regions } from './regions.ts';
 import type { ParticleSystem as Particles } from './particles.ts';
 import { DESIGNS } from './characters/index.ts';
+import { prepareBodies } from './rig/bakery.ts';
 import { Character } from './rig/Character.ts';
 
 /**
@@ -346,14 +347,17 @@ export class World {
    * first wave does not hitch while the GPU learns them.
    */
   async warmup(step: (fraction: number, label: string) => void): Promise<void> {
-    const frame = () => new Promise<void>((r) => requestAnimationFrame(() => r()));
+    // A frame, or a moment if the tab is in the background (where frames stop): loading must not stall.
+    const frame = () => new Promise<void>((r) => { let done = false; const go = () => { if (!done) { done = true; r(); } }; requestAnimationFrame(go); window.setTimeout(go, 60); });
     step(0.08, 'Painting the wood…');
     await frame();
     this.renderer.compile(this.scene, this.camera);
+    // Sculpt, drape and bake every body in worker threads (or load them from the last visit).
+    await prepareBodies((f, label) => step(0.1 + f * 0.5, label));
     const kinds = Object.keys(DESIGNS) as Array<keyof typeof DESIGNS>;
     const figures: Character[] = [];
     for (let i = 0; i < kinds.length; i++) {
-      step(0.12 + (i / kinds.length) * 0.5, `Waking ${DESIGNS[kinds[i]].name}…`);
+      step(0.6 + (i / kinds.length) * 0.1, `Waking ${DESIGNS[kinds[i]].name}…`);
       const c = new Character(DESIGNS[kinds[i]]);
       c.group.position.set(0, -50, -20);
       this.scene.add(c.group);

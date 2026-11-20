@@ -7,7 +7,7 @@ import type { Character } from '../world/rig/Character.ts';
 import { bump, smooth, TAU, type Anim } from '../world/rig/Rig.ts';
 import { terrainHeight } from '../world/spatial.ts';
 import { glowSprite } from '../world/vfx.ts';
-import { bloomkin, butterflies, flowerField, hangingLantern, KINDLER_HANDS, lanternFlower, rootThrone, WARDEN } from './cast.ts';
+import { bloomkin, BLOOMKIN_COATS, butterflies, flowerField, hangingLantern, KINDLER_HANDS, lanternFlower, rootThrone, WARDEN } from './cast.ts';
 import type { CameraKey, Script, Shot, V3 } from './Cutscene.ts';
 
 /**
@@ -649,8 +649,7 @@ const ENDING: Script = {
     }
     const gnomes = [GNOME_DESIGNS.moss, GNOME_DESIGNS.ember, GNOME_DESIGNS.moss, GNOME_DESIGNS.ember];
     gnomes.forEach((d, i) => { const g = s.actor(`g${i}`, d, Math.cos(i * 1.57) * 1.6, -7.5 + Math.sin(i * 1.57) * 1.6, 0, 0, i * 0.23); g.overrides.dissolve = 1; });
-    const furs = ['#f3e9da', '#e8d6c0', '#fff6ea', '#e2cdb6', '#f7efe2'], caps = ['#e05a4a', '#f0a640', '#c86ad8', '#5ab0e0', '#e05a4a'];
-    for (let i = 0; i < 5; i++) { const b = s.actor(`b${i}`, bloomkin(furs[i], caps[i]), -5 + i * 2.5, -4 + Math.sin(i * 2) * 2, 0.4, 0, i * 0.31); b.overrides.dissolve = 1; }
+    for (let i = 0; i < 5; i++) { const b = s.actor(`b${i}`, bloomkin(...BLOOMKIN_COATS[i]), -5 + i * 2.5, -4 + Math.sin(i * 2) * 2, 0.4, 0, i * 0.31); b.overrides.dissolve = 1; }
     (s as Shot & { en?: unknown }).en = { lights, field, flies, blooms };
   },
   tick(s, t) {

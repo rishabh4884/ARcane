@@ -133,7 +133,17 @@ export const WARDEN: Design = {
 /* ═════════════════════════════════ BLOOMKIN ═════════════════════════════════ */
 
 /** Round, soft and shy: what the wood's little creatures look like when the light comes home. */
+/** The Bloomkin who come back in the ending, by fur and cap. */
+export const BLOOMKIN_COATS: ReadonlyArray<readonly [string, string]> = [['#f3e9da', '#e05a4a'], ['#e8d6c0', '#f0a640'], ['#fff6ea', '#c86ad8'], ['#e2cdb6', '#5ab0e0'], ['#f7efe2', '#e05a4a']];
+const BLOOMKIN = new Map<string, Design>();
+/** One design per coat, made once, so each is baked once. */
 export function bloomkin(fur: string, cap: string): Design {
+  const key = `${fur}${cap}`;
+  let d = BLOOMKIN.get(key);
+  if (!d) BLOOMKIN.set(key, (d = makeBloomkin(fur, cap)));
+  return d;
+}
+function makeBloomkin(fur: string, cap: string): Design {
   return {
     kind: 'bloomkin', name: 'Bloomkin', height: 0.6, radius: 0.25, turnRate: 9, stride: 0.6, pace: 1.6,
     eye: '#2a1a14', eyeAngry: '#2a1a14', edge: '#ffe7a3', mist: 0.05,
