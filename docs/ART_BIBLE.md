@@ -5,7 +5,11 @@ visual brief (an illustrated, atmospheric dark-fantasy woodland with the environ
 richly art-directed 3D world and the silhouette discipline of LIMBO, no anime) into concrete rules.
 When a decision is not covered here, choose what serves the **north star** and the **light economy**.
 
-The technical plan that delivers this is in [VISUAL_REWRITE.md](VISUAL_REWRITE.md).
+**Medium:** a drawn, 2D animated series — drawn characters, painted sets, frame-by-frame animation
+(see [2D_PRODUCTION.md](2D_PRODUCTION.md)). Everything here about story, light, emotion, composition,
+colour, shape language, the cast, effects and animation applies as the brief for that drawing. Where a
+section speaks of meshes, maps or 3D shading (the material table, the acceptance list's turntables), read
+it as guidance for how the drawn and painted art should respond to light and hold up in close-up.
 
 ---
 

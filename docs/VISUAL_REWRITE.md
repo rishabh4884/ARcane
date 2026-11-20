@@ -1,4 +1,8 @@
-# Arcane — Visual Rewrite Plan
+# Arcane — Visual Rewrite Plan (3D, superseded)
+
+> **Superseded.** The direction is now a drawn, 2D animated series: see
+> [2D_PRODUCTION.md](2D_PRODUCTION.md). This 3D plan and its Blender pipeline are paused; the pipeline
+> remains useful as layout and turnaround reference for 2D artists.
 
 How the look described in [ART_BIBLE.md](ART_BIBLE.md) gets built. Gameplay, gesture tracking,
 combat, progression, story flow and UI are preserved; the visual system underneath them is
