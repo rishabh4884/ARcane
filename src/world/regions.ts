@@ -287,8 +287,8 @@ export class Regions {
           col += vec3(0.75, 0.9, 1.0) * pow(max(dot(R, uMoon), 0.0), 180.0) * 1.6;
           col += vec3(0.6, 0.85, 0.7) * pow(max(dot(R, uMoon), 0.0), 18.0) * 0.08;
           // Patchy: open water, then reedy mud, then dry tussocks where the grass takes over.
-          float patch = smoothstep(0.22, 0.48, n(q * 0.12) * 0.7 + n(q * 0.5) * 0.3);
-          float alpha = (0.55 + 0.4 * fres) * patch;
+          float marsh = smoothstep(0.22, 0.48, n(q * 0.12) * 0.7 + n(q * 0.5) * 0.3);
+          float alpha = (0.55 + 0.4 * fres) * marsh;
           gl_FragColor = vec4(col, alpha);
           #include <fog_fragment>
         }`,
