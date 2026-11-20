@@ -9,7 +9,9 @@ import { ParticleSystem } from './particles.ts';
 import { PostFX } from './PostFX.ts';
 import { Foreground } from './Foreground.ts';
 import { makeLabelTexture } from './textures.ts';
-import { ForestEnvironment } from './ForestEnvironment.ts';
+import { AUTHORED_WORLD, ForestEnvironment } from './ForestEnvironment.ts';
+import { WOODLAND_MODELS } from './Woodland.ts';
+import { preloadModels } from './render/models.ts';
 import { FrameBudget } from './FrameBudget.ts';
 import { CasterView, worldInputBlocked } from './CasterView.ts';
 import { SPELL_RANGE, chooseRayTarget, screenPointAtDepth, terrainHeight } from './spatial.ts';
@@ -32,7 +34,9 @@ import { Character } from './rig/Character.ts';
 function createMoonShadows(): THREE.Object3D[] {
   const target = new THREE.Object3D();
   target.position.set(0, 0, -10);
-  const moon = new THREE.DirectionalLight('#ffffff', 0);
+  // In the authored world the moon is the real key light behind the treeline; the painted world kept
+  // it as a shadow-only light over a catcher.
+  const moon = new THREE.DirectionalLight('#b9cfe0', AUTHORED_WORLD ? 1.6 : 0);
   moon.position.copy(target.position).addScaledVector(new THREE.Vector3(-0.34, 0.5, -0.8).normalize(), 60);
   moon.target = target;
   moon.castShadow = true;
@@ -51,7 +55,7 @@ function createMoonShadows(): THREE.Object3D[] {
   catcher.receiveShadow = true;
   catcher.renderOrder = 1;
   catcher.name = 'Moon shadow catcher';
-  return [target, moon, catcher];
+  return AUTHORED_WORLD ? [target, moon] : [target, moon, catcher];
 }
 
 /** What a cutscene may use while it holds the camera. */
@@ -354,6 +358,10 @@ export class World {
     this.renderer.compile(this.scene, this.camera);
     // Sculpt, drape and bake every body in worker threads (or load them from the last visit).
     await prepareBodies((f, label) => step(0.1 + f * 0.5, label));
+    if (AUTHORED_WORLD) {
+      await preloadModels(WOODLAND_MODELS, (f) => step(0.6 + f * 0.05, 'Growing the wood…'));
+      this.environment.populate();
+    }
     const kinds = Object.keys(DESIGNS) as Array<keyof typeof DESIGNS>;
     const figures: Character[] = [];
     for (let i = 0; i < kinds.length; i++) {

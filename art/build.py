@@ -13,12 +13,13 @@ import traceback
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
 
-from arcane_art.pipeline import build  # noqa: E402
+from arcane_art.pipeline import build, preview  # noqa: E402
 
 
 def main() -> None:
     argv = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
     review = '--no-review' not in argv
+    fast = '--preview' in argv
     names = [a for a in argv if not a.startswith('--')]
     if names == ['all']:
         names = sorted(f[:-3] for f in os.listdir(os.path.join(HERE, 'assets')) if f.endswith('.py') and not f.startswith('_'))
@@ -26,7 +27,10 @@ def main() -> None:
     for name in names:
         try:
             mod = importlib.import_module(f'assets.{name}')
-            build(mod.spec(), review=review)
+            if fast:
+                preview(mod.spec())
+            else:
+                build(mod.spec(), review=review)
         except Exception:  # noqa: BLE001
             traceback.print_exc()
             failed.append(name)

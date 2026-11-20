@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { Body, instantiate } from './Body.ts';
 import { figureMaterial, type FigureUniforms } from './figureMaterial.ts';
+import { canUseModel, modelBody } from '../render/modelRig.ts';
+import { figureUniforms, mapsFrom, stylizedMaterial } from '../render/StylizedMaterial.ts';
 import { clamp, Rig, smooth, Spring, type Anim, type CreaturePose } from './Rig.ts';
 
 /** A character, described as data plus two functions: how it is built and how it moves. */
@@ -30,6 +32,11 @@ export interface Design {
   /** Where ranged attacks leave from, and where arrows stick. */
   castBone?: string;
   coreBone?: string;
+  /**
+   * An authored model from the art pipeline (public/art/<model>.glb). When it is loaded the figure
+   * uses it; `build` remains the procedural body used before then and wherever models cannot load.
+   */
+  model?: string;
   build(body: Body): void;
   animate(a: Anim): void;
 }
@@ -100,11 +107,20 @@ export class Character {
 
   constructor(readonly design: Design, seed = Math.random()) {
     this.seed = seed;
-    const { material, u } = figureMaterial(new THREE.Color(design.edge));
+    let material: THREE.Material, u: FigureUniforms, b: { geometry: THREE.BufferGeometry; root: THREE.Bone; names: string[] };
+    if (canUseModel(design.model)) {
+      // An authored model: its baked maps under the shared stylised lighting.
+      const m = modelBody(design.model);
+      u = figureUniforms(new THREE.Color(design.edge));
+      material = stylizedMaterial(mapsFrom(m.material, m.fx), u);
+      b = m;
+    } else {
+      ({ material, u } = figureMaterial(new THREE.Color(design.edge)));
+      b = baked(design);
+    }
     this.u = u;
     u.uHeight.value = design.height;
     u.uMist.value = design.mist ?? 0.5;
-    const b = baked(design);
     const built = instantiate(b.geometry, b.root, b.names, material);
     this.mesh = built.mesh;
     this.bones = built.bones;

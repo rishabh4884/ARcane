@@ -420,7 +420,7 @@ class Limb(Form):
     """
     def __init__(self, points: Sequence[Vec], radii, square=((0, 2.0), (1, 2.0)), offset=((0, 0, 0), (1, 0, 0)),
                  twist=((0, 0.0), (1, 0.0)), up: Vec = (0, 0, 1), cap: float = 0.3, relief: Relief | None = None,
-                 samples: int = 10):
+                 samples: int = 10, around: tuple | None = None):
         S = catmull_rom(points, samples)
         self.S = S
         seg = S[1:] - S[:-1]
@@ -434,12 +434,20 @@ class Limb(Form):
         T = np.vstack([seg / self.len[:, None], (seg[-1] / self.len[-1])[None]])
         T = (T + np.vstack([T[:1], T[:-1]])) / 2
         T /= np.linalg.norm(T, axis=1, keepdims=True)
-        u0 = np.asarray(up, float)
-        N = [u0 - T[0] * (u0 @ T[0])]
-        N[0] /= np.linalg.norm(N[0])
-        for i in range(1, len(T)):
-            n = N[-1] - T[i] * (N[-1] @ T[i])
-            N.append(n / np.linalg.norm(n))
+        if around is not None:
+            # Frames that face away from an axis: a strap or bandage lying flat on a limb.
+            A0 = np.asarray(around[0], float); ax = np.asarray(around[1], float); ax = ax / np.linalg.norm(ax)
+            rel = S - A0
+            Nr = rel - np.outer(rel @ ax, ax)
+            Nr = Nr - T * np.sum(Nr * T, axis=1, keepdims=True)
+            N = Nr / np.maximum(np.linalg.norm(Nr, axis=1, keepdims=True), 1e-9)
+        else:
+            u0 = np.asarray(up, float)
+            N = [u0 - T[0] * (u0 @ T[0])]
+            N[0] /= np.linalg.norm(N[0])
+            for i in range(1, len(T)):
+                n = N[-1] - T[i] * (N[-1] @ T[i])
+                N.append(n / np.linalg.norm(n))
         self.T, self.N = T, np.asarray(N)
         self.B = np.cross(self.T, self.N)  # local x (side); N is local y (front)
         rmax = np.max(np.asarray(radii, float)[:, 1:]) + np.max(np.abs(np.asarray(offset, float)[:, 1:])) + (relief.amp if relief else 0)
@@ -467,8 +475,11 @@ class Limb(Form):
         N = N - T * np.sum(N * T, axis=1, keepdims=True)
         N /= np.linalg.norm(N, axis=1, keepdims=True)
         B = np.cross(T, N)
-        # Distance past either end, along the spine.
-        axial = np.where((s == 0) & (traw < 0), -traw * self.len[0], 0.0)
+        # Signed distance along the spine to the nearer end: negative inside the length, positive past
+        # either end (where the flat, softened cap takes over).
+        pos = self.cum[s] + t * self.len[s]
+        axial = -np.minimum(pos, self.total - pos)
+        axial = np.where((s == 0) & (traw < 0), -traw * self.len[0], axial)
         last = len(self.len) - 1
         axial = np.where((s == last) & (traw > 1), (traw - 1) * self.len[last], axial)
         return u, C, T, N, B, axial
@@ -505,6 +516,106 @@ class Limb(Form):
     def grain(self, P):
         _, _, T, _, _, _ = self._frames(P)
         return T
+
+
+class Torus(Form):
+    """A ring: earrings, buckle loops, bangles, chain links. `axis` is the ring's normal."""
+    def __init__(self, c: Vec, axis: Vec, R: float, r: float, relief: Relief | None = None):
+        self.c = np.asarray(c, float)
+        a = np.asarray(axis, float); a = a / np.linalg.norm(a)
+        ref = np.array([1.0, 0, 0]) if abs(a[0]) < 0.9 else np.array([0, 0, 1.0])
+        x = np.cross(ref, a); x /= np.linalg.norm(x); z = np.cross(x, a)
+        self.R3 = np.stack([x, a, z], axis=1)
+        self.Rm, self.r = R, r
+        self.relief = relief
+        m = R + r + 0.002
+        self.lo, self.hi = self.c - m, self.c + m
+
+    def dist(self, P):
+        L = (P - self.c) @ self.R3
+        q = np.sqrt(L[:, 0] ** 2 + L[:, 2] ** 2) - self.Rm
+        return np.sqrt(q * q + L[:, 1] ** 2) - self.r
+
+
+class Drape(Form):
+    """
+    Sculpted drapery hanging about a vertical axis: gathered at `top`, flaring toward the hem, falling in
+    pipe folds that deepen as they descend, with a hem that can be torn and a front that can be open.
+    A shell of real thickness, so hems and openings show their edge.
+
+      top_r / bottom_r   (rx, rz) ellipse radii at the top and the hem
+      folds, depth       how many folds around, and how deep (fraction of the radius) at the hem
+      sharp              <1 pinches the valleys and rounds the ridges (heavy cloth); >1 the reverse
+      hem, tatter        how ragged the hem is (m) and how fine its tears
+      opening            angle (radians) left open at the front, centred on +z
+      lean               (x, z) the hem's offset from under the top (a belly pushes it forward)
+    """
+    def __init__(self, top: Vec, length: float, top_r: Vec, bottom_r: Vec, folds: int = 8, depth: float = 0.1,
+                 sharp: float = 0.7, thickness: float = 0.006, hem: float = 0.0, tatter: float = 9.0, seed: int = 0,
+                 opening: float = 0.0, lean: Vec = (0.0, 0.0), flare: float = 1.0, belly: float = 0.0,
+                 relief: Relief | None = None):
+        self.top = np.asarray(top, float); self.L = length
+        self.tr = np.asarray(top_r, float); self.br = np.asarray(bottom_r, float)
+        self.folds, self.depth, self.sharp, self.th = folds, depth, sharp, thickness
+        self.hem, self.tatter, self.seed, self.opening = hem, tatter, seed, opening
+        self.lean = np.asarray(lean, float); self.flare, self.belly = flare, belly
+        self.relief = relief
+        rmax = max(self.tr.max(), self.br.max()) * (1 + depth) + abs(self.lean).max() + thickness + hem
+        self.lo = self.top - np.array([rmax, length + hem + 0.02, rmax])
+        self.hi = self.top + np.array([rmax, 0.02, rmax])
+
+    def dist(self, P):
+        q = P - self.top
+        yd = -q[:, 1]
+        t = np.clip(yd / self.L, 0, 1)
+        x = q[:, 0] - self.lean[0] * t * t
+        z = q[:, 2] - self.lean[1] * t * t
+        th = np.arctan2(x, z)
+        tf = t ** self.flare
+        rx = self.tr[0] + (self.br[0] - self.tr[0]) * tf + self.belly * np.sin(np.pi * t)
+        rz = self.tr[1] + (self.br[1] - self.tr[1]) * tf + self.belly * np.sin(np.pi * t)
+        re = 1.0 / np.sqrt((np.sin(th) / rx) ** 2 + (np.cos(th) / rz) ** 2)
+        rng = np.random.default_rng(self.seed)
+        ph = rng.random(3) * 6.28
+        u = self.folds * (th + 0.35 * np.sin(2 * th + ph[0]) + 0.18 * np.sin(3 * th + ph[1])) / (2 * np.pi) + 0.15 * t + ph[2]
+        frac = u - np.floor(u)
+        g = np.sin(np.pi * frac) ** self.sharp
+        amp = t ** 0.75
+        # Small gathers just under the top, where the cloth is bunched.
+        gather = 0.25 * np.exp(-t * 9) * (np.sin(th * self.folds * 2.6 + ph[0]) * 0.5 + 0.5)
+        R = re * (1 + self.depth * ((g - 0.55) * 2 * amp + gather))
+        r = np.sqrt(x * x + z * z)
+        d = (r - R) * 0.82
+        d = np.abs(d) - self.th / 2
+        d = np.maximum(d, -yd)
+        hemline = self.L
+        if self.hem:
+            ang = np.stack([np.cos(th) * self.tatter, np.sin(th) * self.tatter, np.full_like(th, self.seed * 0.37)], axis=1)
+            torn = fbm(ang, 3, self.seed) - 0.5
+            teeth = np.abs(np.sin(th * self.tatter * 1.7 + ph[1])) ** 3
+            hemline = self.L + self.hem * (torn * 2.0 - teeth * 0.6)
+        d = np.maximum(d, yd - hemline)
+        if self.opening > 0:
+            d = np.maximum(d, (self.opening / 2 - np.abs(th)) * np.maximum(r, 0.02))
+        return d
+
+
+def wrap_path(a: Vec, b: Vec, ra: float, rb: float, turns: float, lift: float = 0.004, per_turn: int = 14,
+              wobble: float = 0.0, seed: int = 0) -> tuple[list, tuple]:
+    """Points of a bandage wound round a tapered limb from a to b, and the axis to lay it flat against."""
+    A = np.asarray(a, float); B = np.asarray(b, float); ax = B - A
+    L = np.linalg.norm(ax); ax /= L
+    ref = np.array([0, 1.0, 0]) if abs(ax[1]) < 0.9 else np.array([1.0, 0, 0])
+    e1 = np.cross(ax, ref); e1 /= np.linalg.norm(e1); e2 = np.cross(ax, e1)
+    rng = np.random.default_rng(seed)
+    n = max(4, int(turns * per_turn))
+    pts = []
+    for i in range(n + 1):
+        t = i / n
+        ang = t * turns * 2 * np.pi
+        r = ra + (rb - ra) * t + lift + wobble * (rng.random() - 0.5)
+        pts.append(A + ax * t * L + (e1 * np.cos(ang) + e2 * np.sin(ang)) * r)
+    return pts, (A, ax)
 
 
 class Shell(Form):
@@ -636,6 +747,26 @@ class Sculpt:
                     fall = fall * np.clip(np.sin(np.pi * u) * 1.6, 0, 1)
                 d = d + fall * c['d']
         return d
+
+    def cast(self, origin: Vec, direction: Vec, max_dist: float = 1.0, step: float = 0.003):
+        """Where a ray first meets the sculpted surface, and the outward normal there (or None)."""
+        o = np.asarray(origin, float); d = np.asarray(direction, float); d = d / np.linalg.norm(d)
+        ts = np.arange(0, max_dist, step)
+        f = self.field(o + ts[:, None] * d)
+        hit = np.nonzero((f[:-1] > 0) & (f[1:] <= 0))[0]
+        if not len(hit):
+            return None
+        a, b = ts[hit[0]], ts[hit[0] + 1]
+        for _ in range(24):
+            m = (a + b) / 2
+            if self.field((o + m * d)[None])[0] > 0:
+                a = m
+            else:
+                b = m
+        p = o + b * d
+        e = 0.0008
+        g = np.array([self.field((p + dd)[None])[0] - self.field((p - dd)[None])[0] for dd in np.eye(3) * e])
+        return p, g / max(np.linalg.norm(g), 1e-9)
 
     def attributes(self, V: np.ndarray, chunk: int = 12000) -> dict:
         """Blend the additive forms' attributes onto mesh vertices V (n, 3), a chunk at a time."""

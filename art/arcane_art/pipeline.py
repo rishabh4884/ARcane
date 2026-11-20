@@ -16,7 +16,7 @@ from typing import Callable
 import bpy
 import numpy as np
 
-from . import bl
+from . import bl, rig as rigging
 from .mesh import mesh_sculpt
 from .paint import response
 from .sdf import Sculpt
@@ -55,7 +55,9 @@ class Part:
     sculpt: Sculpt
     cell: float
     faces: int
-    voxel: float | None = None   # remesh voxel before Quadriflow (defaults to 2.5 × cell)
+    voxel: float | None = None   # remesh voxel before Quadriflow (defaults to 1.5 × cell)
+    topology: str = 'quad'       # 'quad' (Quadriflow: props, scenery) or 'tri' (decimation: keeps thin ears, fingers, straps)
+    detail_zones: tuple = ()     # zones that keep more triangles when decimating (faces, hands)
 
 
 @dataclass
@@ -67,10 +69,11 @@ class AssetSpec:
     bake_size: int = 2048
     height: float = 1.0            # for review framing
     centre: float = 0.5
-    rig: Callable | None = None    # (low objects) -> armature, after which meshes are skinned
+    skeleton: list | None = None   # rig spec (see rig.py); the low mesh is skinned to it
     review_shots: list = field(default_factory=lambda: [('front', 0, 1.0), ('three-quarter', 35, 1.0), ('side', 90, 1.0), ('back', 180, 1.0)])
-    closeups: list = field(default_factory=list)  # (name, yaw, look_y, dist, lens)
+    closeups: list = field(default_factory=list)  # (name, yaw, look_y, dist, lens[, look_x, look_z]) in game coords
     extrusion: float = 0.007
+    lods: tuple = ()               # extra lower-detail meshes (triangle counts), exported alongside as <name>-lod<i>
 
 
 def log(*a):
@@ -102,13 +105,14 @@ def build_high(part: Part) -> tuple[bpy.types.Object, dict]:
     Vg = bl.verts_game(high)
     t = time.time()
     attrs = part.sculpt.attributes(Vg)
+    attrs['V'] = Vg
     log(f'attributes for {len(Vg)} verts in {time.time() - t:.1f}s')
     return high, attrs
 
 
-def paint_high(high: bpy.types.Object, attrs: dict, recipe: Callable[[Surface], Painted]) -> None:
+def paint_high(high: bpy.types.Object, attrs: dict, recipe: Callable[[Surface], Painted], fast: bool = False) -> None:
     t = time.time()
-    ao = ao_vertex_colors(high)
+    ao = np.ones(len(high.data.vertices)) if fast else ao_vertex_colors(high)
     curv = bl.curvature(high)
     s = Surface(V=bl.verts_game(high), N=bl.normals_game(high), color=attrs['color'], mat=attrs['mat'],
                 zone=attrs['zone'], bones=attrs['bones'], curv=curv, ao=ao)
@@ -163,11 +167,22 @@ def finish_maps(spec: AssetSpec, maps: dict) -> dict:
 def build(spec: AssetSpec, review: bool = True) -> str:
     t0 = time.time()
     bl.reset()
-    lows, highs = [], []
+    lows, highs, hint_V, hint_bones = [], [], [], []
     for i, part in enumerate(spec.parts):
         high, attrs = build_high(part)
         paint_high(high, attrs, spec.paint)
-        low = bl.retopo(high, f'{spec.name}-{part.sculpt.name}', part.faces, part.voxel or part.cell * 2.5)
+        hint_V.append(attrs['V']); hint_bones.extend(attrs['bones'])
+        if part.topology == 'tri':
+            low = bl.duplicate(high, f'{spec.name}-{part.sculpt.name}')
+            low.data.materials.clear()
+            weights = None
+            if part.detail_zones:
+                weights = np.isin(attrs['zone'], part.detail_zones).astype(float)
+            bl.decimate(low, part.faces, weights)
+            bl.clean(low, merge=1e-6)
+            bl.shade_smooth(low)
+        else:
+            low = bl.retopo(high, f'{spec.name}-{part.sculpt.name}', part.faces, part.voxel or part.cell * 1.5)
         log(f'low {low.name}: {len(low.data.polygons)} faces')
         lows.append(low); highs.append(high)
     # Join the parts into one low mesh for one texture set; keep highs together for baking.
@@ -184,10 +199,18 @@ def build(spec: AssetSpec, review: bool = True) -> str:
     mat = bl.pbr_material(f'{spec.name}-material', maps['albedo'], maps['normal'], maps['orm'], maps['emit'])
     low.data.materials.clear(); low.data.materials.append(mat)
     objects = [low]
+    for i, tris in enumerate(spec.lods):
+        lod = bl.duplicate(low, f'{spec.name}-lod{i + 1}')
+        bl.decimate(lod, tris)
+        bl.shade_smooth(lod)
+        objects.append(lod)
+        log(f'lod{i + 1}: {len(lod.data.polygons)} faces')
     armature = None
-    if spec.rig is not None:
-        armature = spec.rig(low)
-        objects = [armature, low]
+    if spec.skeleton is not None:
+        sk = rigging.tails(spec.skeleton)
+        armature = rigging.build_armature(sk, f'{spec.name}-rig')
+        rigging.skin(low, armature, sk, np.concatenate(hint_V), hint_bones)
+        objects = [armature, *objects]
     high.hide_render = True
     glb = os.path.join(MODELS, f'{spec.name}.glb')
     bl.export_glb(glb, objects, skins=armature is not None)
@@ -202,19 +225,53 @@ def build(spec: AssetSpec, review: bool = True) -> str:
     return glb
 
 
+def preview(spec: AssetSpec, scale: float = 2.0) -> None:
+    """Fast form check: mesh each part coarser, paint without the AO bake, render the sculpt itself."""
+    t0 = time.time()
+    bl.reset()
+    for part in spec.parts:
+        coarse = Part(part.sculpt, cell=part.cell * scale, faces=part.faces)
+        high, attrs = build_high(coarse)
+        paint_high(high, attrs, spec.paint, fast=True)
+        mat = bpy.data.materials.new('preview'); mat.use_nodes = True
+        nt = mat.node_tree
+        bsdf = nt.nodes['Principled BSDF']
+        ca = nt.nodes.new('ShaderNodeVertexColor'); ca.layer_name = 'albedo'
+        nt.links.new(ca.outputs['Color'], bsdf.inputs['Base Color'])
+        bsdf.inputs['Roughness'].default_value = 0.75
+        high.data.materials.clear(); high.data.materials.append(mat)
+    out = os.path.join(REVIEW, spec.name)
+    os.makedirs(out, exist_ok=True)
+    bl.review_scene(spec.height, spec.centre)
+    bpy.context.scene.cycles.samples = 16
+    h = spec.height
+    for name, yaw, sc in spec.review_shots:
+        bl.review_shot(os.path.join(out, f'preview-{name}.jpg'), yaw, h * 3.2 * sc, spec.centre, res=720)
+    for c in spec.closeups:
+        name, yaw, look_y, dist, lens = c[:5]
+        bl.review_shot(os.path.join(out, f'preview-{name}.jpg'), yaw, dist, look_y, lens, res=720,
+                       look_x=c[5] if len(c) > 5 else 0.0, look_z=c[6] if len(c) > 6 else 0.0)
+    log(f'preview of {spec.name} in {time.time() - t0:.0f}s')
+
+
 def render_review(spec: AssetSpec, glb: str) -> None:
     """Re-import the shipped GLB into an empty studio and render it: review what the game receives."""
     out = os.path.join(REVIEW, spec.name)
     os.makedirs(out, exist_ok=True)
     bl.reset()
     bpy.ops.import_scene.gltf(filepath=glb)
-    meshes = [o for o in bpy.context.scene.objects if o.type == 'MESH']
+    for o in bpy.context.scene.objects:
+        if o.type == 'MESH' and '-lod' in o.name:
+            o.hide_render = True
+    meshes = [o for o in bpy.context.scene.objects if o.type == 'MESH' and '-lod' not in o.name]
     bl.review_scene(spec.height, spec.centre)
     h = spec.height
     for name, yaw, scale in spec.review_shots:
         bl.review_shot(os.path.join(out, f'{name}.jpg'), yaw, h * 3.2 * scale, spec.centre)
-    for name, yaw, look_y, dist, lens in spec.closeups:
-        bl.review_shot(os.path.join(out, f'{name}.jpg'), yaw, dist, look_y, lens)
+    for c in spec.closeups:
+        name, yaw, look_y, dist, lens = c[:5]
+        bl.review_shot(os.path.join(out, f'{name}.jpg'), yaw, dist, look_y, lens, look_x=c[5] if len(c) > 5 else 0.0,
+                       look_z=c[6] if len(c) > 6 else 0.0)
     # Silhouette: the figure in flat black on white.
     sil = bpy.data.materials.new('silhouette'); sil.use_nodes = True
     nt = sil.node_tree

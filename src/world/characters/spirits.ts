@@ -26,6 +26,7 @@ export const BRAMBLE_GOBLIN: Design = {
   eye: '#d8f27a', eyeAngry: '#ff6a3a', edge: '#ffb066', mist: 0.4,
   stiffness: { earL: 8, earR: 8, ear2L: 5, ear2R: 5, jaw: 20, hips: 22, handL: 14, handR: 14 },
   castBone: 'handR', coreBone: 'chest',
+  model: 'goblin',
   build(b: Body) {
     b.bone('hips', 'root', [0, 0.82, 0])
       .bone('spine', 'hips', [0, 0.98, 0.02])

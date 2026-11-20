@@ -133,12 +133,25 @@ def quadriflow(ob: bpy.types.Object, faces: int, seed: int = 0) -> bool:
         return False
 
 
-def decimate(ob: bpy.types.Object, faces: int) -> None:
-    ratio = min(1.0, faces / max(1, len(ob.data.polygons)))
+def decimate(ob: bpy.types.Object, faces: int, detail: np.ndarray | None = None) -> None:
+    """Quadric decimation to about `faces` triangles; vertices weighted in `detail` (0..1) are spared."""
+    tris = sum(len(p.vertices) - 2 for p in ob.data.polygons)
+    ratio = min(1.0, faces / max(1, tris))
     m = ob.modifiers.new('decimate', 'DECIMATE')
     m.ratio = ratio
     m.use_collapse_triangulate = True
+    if detail is not None and len(detail) == len(ob.data.vertices):
+        # The group marks where decimation may act; inverted, the detail zones are decimated a quarter
+        # as hard as the rest, so faces and hands keep their triangles.
+        g = ob.vertex_groups.new(name='detail')
+        for i in np.nonzero(detail > 0.5)[0]:
+            g.add([int(i)], 0.75, 'REPLACE')
+        m.vertex_group = 'detail'
+        m.invert_vertex_group = True
+        m.vertex_group_factor = 1.0
     apply_modifiers(ob)
+    if 'detail' in ob.vertex_groups:
+        ob.vertex_groups.remove(ob.vertex_groups['detail'])
 
 
 def shrinkwrap(ob: bpy.types.Object, target: bpy.types.Object, offset: float = 0.0) -> None:
@@ -158,18 +171,24 @@ def smooth(ob: bpy.types.Object, factor: float = 0.5, repeat: int = 2) -> None:
     apply_modifiers(ob)
 
 
-def retopo(high: bpy.types.Object, name: str, faces: int, voxel: float) -> bpy.types.Object:
-    """A clean low mesh from the high sculpt: voxel remesh → Quadriflow → project back onto the high."""
+def retopo(high: bpy.types.Object, name: str, faces: int, voxel: float | None = None) -> bpy.types.Object:
+    """A clean low mesh from the high sculpt: Quadriflow (on the sculpt itself, so thin ears and
+    fingers survive; through a voxel remesh only if that fails), projected back onto the high."""
     low = duplicate(high, name)
-    voxel_remesh(low, voxel)
-    # Voxel remeshing leaves coincident vertices that Quadriflow rejects as non-manifold.
-    clean(low, merge=voxel * 0.05)
-    if not quadriflow(low, faces):
-        print('[topo] falling back to decimation')
+    for m in list(low.data.materials):
+        low.data.materials.clear()
+    ok = quadriflow(low, faces)
+    if not ok and voxel:
+        low.data = high.data.copy()
+        voxel_remesh(low, voxel)
+        clean(low, merge=voxel * 0.05)
+        ok = quadriflow(low, faces)
+    if not ok:
+        print('[topo] falling back to decimation', flush=True)
         low.data = high.data.copy()
         decimate(low, faces * 2)
     shrinkwrap(low, high)
-    clean(low)
+    clean(low, merge=1e-6)
     shade_smooth(low)
     return low
 
@@ -411,14 +430,17 @@ def review_scene(target_height: float, centre_y: float) -> None:
     co = bpy.data.objects.new('cam', cam); scn.collection.objects.link(co); scn.camera = co
 
 
-def review_shot(path: str, yaw_deg: float, dist: float, look_y: float, lens: float = 70, res: int = 900) -> None:
+def review_shot(path: str, yaw_deg: float, dist: float, look_y: float, lens: float = 70, res: int = 900, look_x: float = 0.0,
+                look_z: float = 0.0) -> None:
+    """Look at the game-space point (look_x, look_y, look_z) from `dist` at a yaw (0 = in front)."""
     scn = bpy.context.scene
     co = scn.camera
     co.data.lens = lens
     a = math.radians(yaw_deg)
-    # Yaw 0 looks at the figure's face (the figure faces Blender -Y).
-    co.location = (math.sin(a) * dist, -math.cos(a) * dist, look_y + dist * 0.06)
-    d = Vector((0, 0, look_y)) - co.location
+    # Game +Z (the figure's front) is Blender -Y.
+    tx, ty, tz = look_x, -look_z, look_y
+    co.location = (tx + math.sin(a) * dist, ty - math.cos(a) * dist, tz + dist * 0.06)
+    d = Vector((tx, ty, tz)) - co.location
     co.rotation_euler = d.to_track_quat('-Z', 'Y').to_euler()
     scn.render.resolution_x = res; scn.render.resolution_y = res
     scn.render.image_settings.file_format = 'JPEG'

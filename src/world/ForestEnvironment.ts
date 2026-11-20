@@ -7,6 +7,13 @@ import { illuminateIllustration } from './LanternLighting.ts';
 import { GrassField } from './GrassField.ts';
 import { ArtResources } from './storybook.ts';
 import { forestLayout, intersectObstacle, intersectTerrain, pathX, seededRandom, terrainHeight, type Obstacle } from './spatial.ts';
+import { Woodland } from './Woodland.ts';
+
+/**
+ * The authored 3D world (art pipeline assets) in place of the painted cut-outs. Opt-in with
+ * `?world=authored` while its assets are being built; it becomes the default once the Edge is finished.
+ */
+export const AUTHORED_WORLD = typeof location !== 'undefined' && new URLSearchParams(location.search).get('world') === 'authored';
 
 interface Cutout { mesh: THREE.InstancedMesh; sites: Array<{x:number; y:number; z:number; width:number; height:number}>; sorted: number[] }
 
@@ -34,6 +41,7 @@ export class ForestEnvironment {
   private readonly shafts:MoonShafts;
   private readonly watchers:Watchers;
   private disposed = false;
+  readonly woodland: Woodland | null = null;
 
   constructor(private readonly scene: THREE.Scene) {
     this.group.name = 'The Hushwood — an illustrated world';
@@ -45,7 +53,18 @@ export class ForestEnvironment {
     this.lantern=new LanternGrove();this.group.add(this.lantern.group);
     this.group.add(ambient,sun);
     this.sky = this.makeSky();
-    this.makeCarpet(); this.makeTrees(); this.makeRocks(); this.makeLandmarks(); this.makeAtmosphere();
+    if (AUTHORED_WORLD) {
+      (this as { woodland: Woodland | null }).woodland = new Woodland(this.obstacles);
+      this.group.add(this.woodland!.group);
+      // The caster's own glow: a soft warm fill from behind the eye that reveals faces the moon leaves dark.
+      const fill = new THREE.DirectionalLight('#e2c9a2', 0.55);
+      fill.position.set(3, 7, 32);
+      fill.target.position.set(0, 0.5, -10);
+      this.group.add(fill, fill.target);
+    } else {
+      this.makeCarpet(); this.makeTrees(); this.makeRocks();
+    }
+    this.makeLandmarks(); this.makeAtmosphere();
     this.fog=new VolumetricFog(this.lantern.lanterns);this.group.add(this.fog.group);
     this.grass=new GrassField(this.obstacles,this.lantern.lanterns);this.group.add(this.grass.group);
     this.mist=new GroundMist(this.lantern.lanterns,this.time,this.motion);this.group.add(this.mist.group);
@@ -184,8 +203,10 @@ export class ForestEnvironment {
       ctx.strokeStyle='#789477';ctx.lineWidth=5;ctx.beginPath();ctx.moveTo(266,982);ctx.lineTo(282,403);ctx.bezierCurveTo(290,137,751,148,756,407);ctx.stroke();
       ctx.fillStyle='#355d46';for(let i=0;i<60;i++){const a=this.random()*Math.PI,x=512+Math.cos(a)*300,y=390-Math.sin(a)*220;ctx.beginPath();ctx.ellipse(x,y,13+this.random()*20,5+this.random()*6,-a,0,Math.PI*2);ctx.fill();}
     });
-    this.cutout(gateMap,[{x:-25,y:terrainHeight(-25,-30)-0.1,z:-30,width:8,height:8}],'#ffffff',0);
-    this.obstacles.push({x:-28,z:-30,radius:0.8,height:5},{x:-22,z:-30,radius:0.8,height:5});
+    if (!AUTHORED_WORLD) {
+      this.cutout(gateMap,[{x:-25,y:terrainHeight(-25,-30)-0.1,z:-30,width:8,height:8}],'#ffffff',0);
+      this.obstacles.push({x:-28,z:-30,radius:0.8,height:5},{x:-22,z:-30,radius:0.8,height:5});
+    }
     const waterY=terrainHeight(25,-15)+0.04;
     const geometry=this.art.geometry(new THREE.CircleGeometry(7.6,64));geometry.rotateX(-Math.PI/2);geometry.scale(1,1,0.6);
     const material=this.art.material(new THREE.ShaderMaterial({transparent:true,depthWrite:false,side:THREE.DoubleSide,uniforms:{time:this.time,motion:this.motion},
@@ -228,10 +249,13 @@ export class ForestEnvironment {
     this.grass.setTint(grass);
   }
 
+  /** Stand the authored assets once their models are loaded. */
+  populate(): void { this.woodland?.populate(); }
+
   intersect(ray:THREE.Ray,range:number):number|null {
     let nearest=intersectTerrain(ray,range);
     for(const obstacle of this.obstacles){const d=intersectObstacle(ray,obstacle,nearest??range);if(d!==null&&(nearest===null||d<nearest))nearest=d;}return nearest;
   }
   update(dt:number,camera:THREE.Camera,reducedMotion:boolean):void {this.motion.value=reducedMotion?0:1;if(!reducedMotion)this.time.value+=dt;this.sky.position.copy(camera.position);this.lantern.update(dt,reducedMotion);this.grass.update(dt,camera,reducedMotion);this.fog.update(dt,camera,reducedMotion);}
-  dispose():void {if(this.disposed)return;this.disposed=true;this.lantern.dispose();this.fog.dispose();this.grass.dispose();this.mist.dispose();this.wisps.dispose();this.shafts.dispose();this.watchers.dispose();this.scene.remove(this.group);this.art.dispose();this.illustration.dispose();}
+  dispose():void {if(this.disposed)return;this.disposed=true;this.woodland?.dispose();this.lantern.dispose();this.fog.dispose();this.grass.dispose();this.mist.dispose();this.wisps.dispose();this.shafts.dispose();this.watchers.dispose();this.scene.remove(this.group);this.art.dispose();this.illustration.dispose();}
 }

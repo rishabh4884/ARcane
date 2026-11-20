@@ -1,6 +1,9 @@
 import * as THREE from 'three';
+import { DESIGNS } from '../world/characters/index.ts';
 import { loadModel, primaryMesh } from '../world/render/models.ts';
 import { propMaterial } from '../world/render/StylizedMaterial.ts';
+import { Character } from '../world/rig/Character.ts';
+import type { CreaturePose } from '../world/rig/Rig.ts';
 
 /**
  * LOOKDEV
@@ -76,6 +79,13 @@ function place(): void {
   cam.updateProjectionMatrix();
 }
 
+let figure: Character | null = null;
+let pose: CreaturePose = 'idle';
+let attack = '';
+let poseClock = 0;
+let walk = 0;
+const LOOK = new THREE.Vector3(0, 1.6, 6);
+
 const VIEWS: Record<string, number> = { front: 0, 'three-quarter': 35, side: 90, back: 180, 'back-three-quarter': 145 };
 
 const api = {
@@ -95,6 +105,29 @@ const api = {
     api.view('three-quarter');
     info.textContent = `${name} — neutral studio, no post`;
   },
+  /** A character from the game's designs, standing in its idle (its authored model when it has one). */
+  async character(kind: string) {
+    const design = (DESIGNS as Record<string, (typeof DESIGNS)[keyof typeof DESIGNS]>)[kind];
+    if (!design) throw new Error(`no design ${kind}`);
+    if (design.model) await loadModel(design.model).catch(() => null);
+    if (subject) holder.remove(subject);
+    figure?.dispose();
+    figure = new Character(design, 0.37);
+    figure.setYaw(0);
+    subject = figure.group;
+    holder.add(figure.group);
+    figure.update(0.016, { pose: 'idle', progress: 0, velocity: new THREE.Vector3(), faceYaw: 0, look: LOOK, groundY: 0 });
+    frame();
+    api.view('three-quarter');
+    info.textContent = `${design.name}${design.model ? ' (authored model)' : ' (procedural)'} — neutral studio, no post`;
+  },
+  /** Play a pose on the staged character: idle, walk, windup, strike, recover, stagger. */
+  pose(p: CreaturePose | 'walk', attackName = '') {
+    walk = p === 'walk' ? 1.2 : 0;
+    pose = p === 'walk' ? 'idle' : p;
+    attack = attackName;
+    poseClock = 0;
+  },
   /** A named view framing the whole subject. */
   view(name: string, scale = 1) {
     frame();
@@ -111,6 +144,15 @@ const api = {
     camLookY = bounds.min.y + size.y * heightFraction;
     camDist = span / (2 * Math.tan(THREE.MathUtils.degToRad(fov / 2)));
     place();
+  },
+  /** Frame a point (subject space) filling `span` metres, from a yaw. */
+  at(x: number, y: number, z: number, span: number, yawDeg = 0, fov = 24) {
+    const a = THREE.MathUtils.degToRad(yawDeg);
+    const dist = span / (2 * Math.tan(THREE.MathUtils.degToRad(fov / 2)));
+    camera.fov = fov;
+    camera.position.set(x + Math.sin(a) * dist, y + dist * 0.05, z + Math.cos(a) * dist);
+    camera.lookAt(x, y, z);
+    camera.updateProjectionMatrix();
   },
   turn(deg: number) { yaw = THREE.MathUtils.degToRad(deg); },
   spin(on = true) { spin = on; },
@@ -162,10 +204,25 @@ renderer.setAnimationLoop(() => {
   const dt = clock.getDelta();
   if (spin) yaw += dt * 0.6;
   holder.rotation.y = yaw;
+  if (figure) {
+    poseClock += dt;
+    const cycle = pose === 'windup' || pose === 'strike' ? 1.4 : 3;
+    figure.update(dt, {
+      pose: walk ? 'walk' as CreaturePose : pose, progress: (poseClock % cycle) / cycle, attack,
+      velocity: new THREE.Vector3(0, 0, walk), faceYaw: 0, look: LOOK, groundY: 0,
+    });
+    figure.group.position.set(0, 0, 0);
+  }
   renderer.render(scene, camera);
 });
 
 const params = new URLSearchParams(location.search);
+const c = params.get('c');
+if (c) void api.character(c).then(() => {
+  const v = params.get('view');
+  if (v) api.view(v);
+  if (params.get('light') === 'night') api.lighting('night');
+});
 const m = params.get('m');
 if (m) void api.model(m).then(() => {
   const v = params.get('view');

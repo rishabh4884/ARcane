@@ -2,6 +2,7 @@ import workerUrl from './bake.worker.ts?worker&url';
 import { DESIGN_REGISTRY } from '../characters/registry.ts';
 import { deserializeBaked, type BakedData } from './bakeData.ts';
 import { isBaked, seedBaked } from './Character.ts';
+import { hasModel, preloadModels } from '../render/models.ts';
 
 /**
  * THE BAKERY
@@ -54,7 +55,11 @@ function dbPrune(db: IDBDatabase): void {
  * Falls back to baking on this thread (lazily, on first use) where workers are unavailable.
  */
 export async function prepareBodies(onProgress: (fraction: number, label: string) => void): Promise<void> {
-  const keys = Object.keys(DESIGN_REGISTRY).filter((k) => !isBaked(DESIGN_REGISTRY[k]));
+  // Authored models first: a design with a loaded model never needs its procedural body.
+  const models = [...new Set(Object.values(DESIGN_REGISTRY).map((d) => d.model).filter((m): m is string => !!m))];
+  if (models.length) await preloadModels(models, (f, n) => onProgress(f * 0.3, `Waking ${n}…`));
+  const loaded = new Set(models.filter(hasModel));
+  const keys = Object.keys(DESIGN_REGISTRY).filter((k) => !isBaked(DESIGN_REGISTRY[k]) && !(DESIGN_REGISTRY[k].model && loaded.has(DESIGN_REGISTRY[k].model!)));
   if (!keys.length) return;
   let done = 0;
   const finished = (key: string) => { done++; onProgress(done / keys.length, `Waking ${DESIGN_REGISTRY[key].name}…`); };

@@ -60,6 +60,38 @@ export function mapsFrom(source: THREE.Material, fx: THREE.Texture | null): Styl
   return { map: m.map, normalMap: m.normalMap, normalScale: m.normalScale?.clone(), orm: m.roughnessMap ?? m.aoMap, emissiveMap: m.emissiveMap, fx };
 }
 
+/**
+ * three.js's physical lighting chunk with the stylised direct diffuse (wrap, terminator warmth,
+ * translucency, sheen). Needs a global `vec3 stylFx` (sheen, translucency, subsurface) declared
+ * before it and set before the lights run.
+ */
+export function stylizedLights(): string {
+  return THREE.ShaderChunk.lights_physical_pars_fragment
+      .replace(
+        /float dotNL = saturate\( dot\( geometryNormal, directLight\.direction \) \);\s*vec3 irradiance = dotNL \* directLight\.color;/,
+        `float NoL = dot( geometryNormal, directLight.direction );
+	float dotNL = saturate( NoL );
+	vec3 irradiance = dotNL * directLight.color;
+	// Stylised diffuse: a gentle wrap past the terminator, wider with subsurface, softly shaped.
+	float wrapK = 0.12 + stylFx.b * 0.38;
+	float wrapped = saturate( ( NoL + wrapK ) / ( 1.0 + wrapK ) );
+	wrapped = wrapped * wrapped * ( 3.0 - 2.0 * wrapped ) * 0.65 + wrapped * 0.35;
+	vec3 styleDiffuse = wrapped * directLight.color;
+	// Light under the skin warms the shadow edge.
+	float term = saturate( 1.0 - abs( NoL + 0.08 ) * 2.6 ) * stylFx.b;
+	styleDiffuse += directLight.color * term * vec3( 0.95, 0.42, 0.28 ) * 0.42;
+	// Thin parts (ears, leaves, membranes, cloth edges) glow when the light is behind them.
+	float behind = saturate( dot( -geometryNormal, directLight.direction ) );
+	float viewThrough = saturate( dot( -geometryViewDir, directLight.direction ) );
+	styleDiffuse += directLight.color * stylFx.g * ( behind * 0.45 + pow( viewThrough, 3.0 ) * 0.7 );
+	// Velvet sheen at grazing angles on cloth, fur and moss.
+	float facing = saturate( dot( geometryNormal, geometryViewDir ) );
+	styleDiffuse += directLight.color * stylFx.r * pow( 1.0 - facing, 3.0 ) * saturate( NoL + 0.35 ) * 0.9;`)
+      .replace(
+        /reflectedLight\.directDiffuse \+= irradiance \* BRDF_Lambert\( material\.diffuseColor \);\s*\}/,
+        'reflectedLight.directDiffuse += styleDiffuse * BRDF_Lambert( material.diffuseColor );\n}');
+}
+
 export function stylizedMaterial(maps: StylizedMaps, u: FigureUniforms, opts: { figure?: boolean } = {}): THREE.MeshStandardMaterial {
   const material = new THREE.MeshStandardMaterial({
     map: maps.map,
@@ -88,30 +120,7 @@ export function stylizedMaterial(maps: StylizedMaps, u: FigureUniforms, opts: { 
         #ifdef USE_INSTANCING
           vStylWorld = (modelMatrix * instanceMatrix * vec4(transformed, 1.0)).xyz;
         #endif`);
-    const lights = THREE.ShaderChunk.lights_physical_pars_fragment
-      .replace(
-        /float dotNL = saturate\( dot\( geometryNormal, directLight\.direction \) \);\s*vec3 irradiance = dotNL \* directLight\.color;/,
-        `float NoL = dot( geometryNormal, directLight.direction );
-	float dotNL = saturate( NoL );
-	vec3 irradiance = dotNL * directLight.color;
-	// Stylised diffuse: a gentle wrap past the terminator, wider with subsurface, softly shaped.
-	float wrapK = 0.12 + stylFx.b * 0.38;
-	float wrapped = saturate( ( NoL + wrapK ) / ( 1.0 + wrapK ) );
-	wrapped = wrapped * wrapped * ( 3.0 - 2.0 * wrapped ) * 0.65 + wrapped * 0.35;
-	vec3 styleDiffuse = wrapped * directLight.color;
-	// Light under the skin warms the shadow edge.
-	float term = saturate( 1.0 - abs( NoL + 0.08 ) * 2.6 ) * stylFx.b;
-	styleDiffuse += directLight.color * term * vec3( 0.95, 0.42, 0.28 ) * 0.42;
-	// Thin parts (ears, leaves, membranes, cloth edges) glow when the light is behind them.
-	float behind = saturate( dot( -geometryNormal, directLight.direction ) );
-	float viewThrough = saturate( dot( -geometryViewDir, directLight.direction ) );
-	styleDiffuse += directLight.color * stylFx.g * ( behind * 0.45 + pow( viewThrough, 3.0 ) * 0.7 );
-	// Velvet sheen at grazing angles on cloth, fur and moss.
-	float facing = saturate( dot( geometryNormal, geometryViewDir ) );
-	styleDiffuse += directLight.color * stylFx.r * pow( 1.0 - facing, 3.0 ) * saturate( NoL + 0.35 ) * 0.9;`)
-      .replace(
-        /reflectedLight\.directDiffuse \+= irradiance \* BRDF_Lambert\( material\.diffuseColor \);\s*\}/,
-        'reflectedLight.directDiffuse += styleDiffuse * BRDF_Lambert( material.diffuseColor );\n}');
+    const lights = stylizedLights();
     if (!lights.includes('float wrapK') || !lights.includes('styleDiffuse * BRDF')) console.warn('[arcane] stylised lighting patch did not apply; three.js chunk changed');
     shader.fragmentShader = shader.fragmentShader
       .replace('#include <common>', `#include <common>
