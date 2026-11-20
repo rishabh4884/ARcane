@@ -68,11 +68,12 @@ const GradeShader = {
     uSat: { value: 1 },
     uExposure: { value: 1 },
     uDark: { value: 0 },
+    uTexel: { value: new THREE.Vector2(1 / 1280, 1 / 720) },
   },
   vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
   fragmentShader: `
     uniform sampler2D tDiffuse; uniform float uTime; uniform float uVignette; uniform float uGrain; uniform float uAspect; uniform float uHush;
-    uniform vec3 uTint; uniform vec3 uLift; uniform float uSat; uniform float uExposure; uniform float uDark;
+    uniform vec3 uTint; uniform vec3 uLift; uniform float uSat; uniform float uExposure; uniform float uDark; uniform vec2 uTexel;
     varying vec2 vUv;
     float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
     vec3 shoulder(vec3 c){
@@ -81,7 +82,15 @@ const GradeShader = {
       return min(c, vec3(0.82)) + 0.18 * (1.0 - exp(-over / 0.18));
     }
     void main(){
-      vec3 c = texture2D(tDiffuse, vUv).rgb;
+      // A lens's faint colour fringe toward the edges of the frame.
+      vec2 fromCentre = vUv - 0.5;
+      float edge2 = dot(fromCentre, fromCentre);
+      vec2 ca = fromCentre * edge2 * 0.012;
+      vec3 c = vec3(texture2D(tDiffuse, vUv + ca).r, texture2D(tDiffuse, vUv).g, texture2D(tDiffuse, vUv - ca).b);
+      // A light unsharp mask: fine detail in skin, bark and grass reads crisply.
+      vec3 blur = (texture2D(tDiffuse, vUv + vec2(uTexel.x, 0.0)).rgb + texture2D(tDiffuse, vUv - vec2(uTexel.x, 0.0)).rgb
+                 + texture2D(tDiffuse, vUv + vec2(0.0, uTexel.y)).rgb + texture2D(tDiffuse, vUv - vec2(0.0, uTexel.y)).rgb) * 0.25;
+      c = max(c + (c - blur) * 0.35, 0.0);
       // Chapter mood: a tint and lift over the painted world, its saturation, and the King's darkness.
       c = c * uTint * uExposure + uLift;
       float l0 = dot(c, vec3(0.2126, 0.7152, 0.0722));
@@ -161,6 +170,7 @@ export class PostFX {
     // Bloom is a blur: half resolution is indistinguishable and a quarter of the cost.
     this.bloom.setSize(Math.max(1, Math.round(width * pixelRatio * 0.5)), Math.max(1, Math.round(height * pixelRatio * 0.5)));
     this.grade.uniforms.uAspect.value = width / Math.max(1, height);
+    this.grade.uniforms.uTexel.value.set(1 / Math.max(1, width * pixelRatio), 1 / Math.max(1, height * pixelRatio));
     this.depthOfField.uniforms.uResolution.value.set(width * pixelRatio, height * pixelRatio);
     // Blur radius in pixels follows the frame size, so the softness looks the same at any resolution.
     this.depthOfField.uniforms.uMaxRadius.value = Math.max(3, height * pixelRatio / 150);

@@ -22,6 +22,36 @@ import type { ParticleSystem as Particles } from './particles.ts';
 import { DESIGNS } from './characters/index.ts';
 import { Character } from './rig/Character.ts';
 
+/**
+ * The moon behind the wood casts every creature's shadow long across the ground toward the caster.
+ * A shadow-only light (it adds no light of its own) renders a map of the figures, and a catcher
+ * following the terrain just above the soil shows the shadow and nothing else.
+ */
+function createMoonShadows(): THREE.Object3D[] {
+  const target = new THREE.Object3D();
+  target.position.set(0, 0, -10);
+  const moon = new THREE.DirectionalLight('#ffffff', 0);
+  moon.position.copy(target.position).addScaledVector(new THREE.Vector3(-0.34, 0.5, -0.8).normalize(), 60);
+  moon.target = target;
+  moon.castShadow = true;
+  moon.shadow.mapSize.set(2048, 2048);
+  const cam = moon.shadow.camera as THREE.OrthographicCamera;
+  cam.left = -40; cam.right = 40; cam.top = 40; cam.bottom = -40; cam.near = 5; cam.far = 140;
+  moon.shadow.bias = -0.0006;
+  moon.shadow.normalBias = 0.03;
+  moon.shadow.radius = 4;
+  const cols = 74, rows = 80;
+  const geometry = new THREE.PlaneGeometry(74, 80, cols, rows).rotateX(-Math.PI / 2).translate(0, 0, -14);
+  const p = geometry.attributes.position as THREE.BufferAttribute;
+  for (let i = 0; i < p.count; i++) p.setY(i, terrainHeight(p.getX(i), p.getZ(i)) + 0.28);
+  geometry.computeVertexNormals();
+  const catcher = new THREE.Mesh(geometry, new THREE.ShadowMaterial({ color: "#040709", opacity: 0.6, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2 }));
+  catcher.receiveShadow = true;
+  catcher.renderOrder = 1;
+  catcher.name = 'Moon shadow catcher';
+  return [target, moon, catcher];
+}
+
 /** What a cutscene may use while it holds the camera. */
 export interface Stage {
   scene: THREE.Scene;
@@ -148,7 +178,9 @@ export class World {
     // The illustrated world is authored untonemapped; the post grade rolls off only the highlights.
     this.renderer.toneMapping = THREE.NoToneMapping;
     // Scene shadows are painted into the artwork; no mesh casts a real-time shadow.
-    this.renderer.shadowMap.enabled = false;
+    // Real-time shadows only for what moves: creatures cast onto a catcher laid over the ground.
+    this.renderer.shadowMap.enabled = true;
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     container.appendChild(this.renderer.domElement);
     this.screenFx = new ScreenFX(container);
     this.feedback = this.screenFx.feedback((amount) => this.shake(amount));
@@ -158,6 +190,7 @@ export class World {
     this.particles = new ParticleSystem(5000, pixelRatio);
     this.mist = new ParticleSystem(1500, pixelRatio, THREE.NormalBlending);
     this.scene.add(this.particles.points, this.mist.points);
+    this.scene.add(...createMoonShadows());
     // A fixed pool of spell lights: adding or removing lights would recompile every lit shader.
     for (let i = 0; i < LIGHT_POOL; i++) {
       const light = new THREE.PointLight('#ffffff', 0, 10, 2);

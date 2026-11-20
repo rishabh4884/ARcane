@@ -51,6 +51,7 @@ export interface CharacterInput {
 }
 
 const LOOK = new THREE.Vector3();
+const BLOB_GEOMETRY = new THREE.PlaneGeometry(1, 1);
 /** Each design is modelled, sculpted and baked once; every creature of that kind shares it. */
 const BAKED = new WeakMap<Design, { geometry: THREE.BufferGeometry; root: THREE.Bone; names: string[] }>();
 function baked(design: Design) {
@@ -91,6 +92,7 @@ export class Character {
   private readonly angryEye: THREE.Color;
   private first = true;
   private disposed = false;
+  private blob: THREE.Mesh<THREE.PlaneGeometry, THREE.ShaderMaterial> | null = null;
   readonly seed: number;
 
   constructor(readonly design: Design, seed = Math.random()) {
@@ -110,8 +112,23 @@ export class Character {
     u.uEyeColor.value.copy(this.calmEye);
     if (design.cloth) u.uCloth.value.set(design.cloth[0], design.cloth[1], design.cloth[2], 0);
     this.group.name = `${design.name} (figure)`;
+    this.mesh.castShadow = design.kind !== 'hands';
     this.lift.add(this.mesh);
     this.group.add(this.lift);
+    // A soft contact shadow pooled under the body: grounds it even where the moon's map does not reach.
+    if (design.kind !== 'hands') {
+      this.blob = new THREE.Mesh(BLOB_GEOMETRY, new THREE.ShaderMaterial({
+        transparent: true, depthWrite: false,
+        uniforms: { uOpacity: { value: 0.55 } },
+        vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
+        fragmentShader: 'uniform float uOpacity; varying vec2 vUv; void main(){ float d = length(vUv - 0.5) * 2.0; gl_FragColor = vec4(0.01, 0.015, 0.02, pow(max(0.0, 1.0 - d), 1.8) * uOpacity); }',
+      }));
+      this.blob.rotation.x = -Math.PI / 2;
+      this.blob.position.y = 0.24;
+      this.blob.scale.setScalar(design.radius * 3.2);
+      this.blob.renderOrder = 2;
+      this.group.add(this.blob);
+    }
   }
 
   get kind(): string { return this.design.kind; }
@@ -244,6 +261,13 @@ export class Character {
     if (this.overrides.eyes !== undefined) u.uEyes.value = this.overrides.eyes;
     if (d.cloth) u.uCloth.value.w = clamp(speed / d.pace) * (d.cloth[3] ?? 0.15) * Math.max(0, fwd);
     this.group.visible = !(dead && input.progress >= 1) && (this.overrides.dissolve ?? 0) < 0.999;
+    // Half-dissolved figures stop casting: a ghost should not leave a solid shadow.
+    this.mesh.castShadow = d.kind !== 'hands' && u.uDissolve.value < 0.5;
+    if (this.blob) {
+      const altitude = Math.max(0, this.lift.position.y);
+      this.blob.material.uniforms.uOpacity.value = 0.55 * (1 - u.uDissolve.value) / (1 + altitude * 0.8);
+      this.blob.scale.setScalar(d.radius * 3.2 * (1 + altitude * 0.15));
+    }
   }
 
   /** World position of the figure's head top, for health bars and labels. */
@@ -256,6 +280,7 @@ export class Character {
     this.disposed = true;
     // The baked geometry is shared by every creature of this kind and kept for the next.
     (this.mesh.material as THREE.Material).dispose();
+    this.blob?.material.dispose();
     this.mesh.skeleton.dispose();
     this.group.removeFromParent();
   }
