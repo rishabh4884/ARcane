@@ -34,8 +34,7 @@ const MOSS: Palette = { cap: '#4d7a3b', capShade: '#2b4a22', tunic: '#7a5634', t
 function gnomeDesign(c: Palette, kind: string): Design {
   return {
     kind, name: kind === 'gnome-ember' ? 'Ember gnome' : 'Moss gnome',
-    // The moss gnome is Tuck, the stump-keeper, authored by the art pipeline.
-    ...(kind === 'gnome-moss' ? { model: 'tuck' } : {}), height: 1.2, radius: 0.3, turnRate: 9, stride: 0.95, pace: 2.6,
+    height: 1.2, radius: 0.3, turnRate: 9, stride: 0.95, pace: 2.6,
     eye: '#1a1210', eyeAngry: '#1a1210', edge: '#ffd166', mist: 0.18,
     stiffness: { cap1: 10, cap2: 6, cap3: 4, beard: 10, beard2: 6, hips: 22, handL: 18, handR: 18 },
     castBone: 'handR', coreBone: 'chest',
