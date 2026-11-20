@@ -22,14 +22,14 @@ type Surface = 'ground' | 'tree' | 'rock' | 'sky';
 
 const BASE = `${import.meta.env.BASE_URL ?? '/'}art/sets/`;
 
-function projectedMaterial(paint: THREE.Texture, depth: THREE.Texture, paintVP: THREE.Matrix4, paintCam: THREE.Vector3, depthMax: number, surface: Surface, fallback: THREE.Color): THREE.ShaderMaterial {
+function projectedMaterial(paint: THREE.Texture, depth: THREE.Texture, paintVP: THREE.Matrix4, paintCam: THREE.Vector3, depthMax: number, surface: Surface, fallback: THREE.Color, tint: { value: THREE.Color }): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
     defines: { SKY: surface === 'sky' ? 1 : 0, SWAY: surface === 'tree' ? 1 : 0 },
     side: surface === 'sky' ? THREE.BackSide : THREE.FrontSide,
     depthWrite: surface !== 'sky',
     uniforms: {
       tPaint: { value: paint }, tDepth: { value: depth }, uPaintVP: { value: paintVP }, uPaintCam: { value: paintCam },
-      uDepthMax: { value: depthMax }, uFallback: { value: fallback }, uTime: { value: 0 }, ...SPELL_LIGHTS,
+      uDepthMax: { value: depthMax }, uFallback: { value: fallback }, uTint: tint, uTime: { value: 0 }, ...SPELL_LIGHTS,
     },
     vertexShader: /* glsl */`
       uniform float uTime;
@@ -53,7 +53,7 @@ function projectedMaterial(paint: THREE.Texture, depth: THREE.Texture, paintVP: 
         gl_Position = projectionMatrix * viewMatrix * world;
       }`,
     fragmentShader: /* glsl */`
-      uniform sampler2D tPaint; uniform sampler2D tDepth; uniform mat4 uPaintVP; uniform vec3 uPaintCam; uniform float uDepthMax; uniform vec3 uFallback;
+      uniform sampler2D tPaint; uniform sampler2D tDepth; uniform mat4 uPaintVP; uniform vec3 uPaintCam; uniform float uDepthMax; uniform vec3 uFallback; uniform vec3 uTint;
       varying vec3 vRestWorld;
       varying vec3 vNormalW;
       ${SPELL_LIGHT_GLSL}
@@ -64,7 +64,7 @@ function projectedMaterial(paint: THREE.Texture, depth: THREE.Texture, paintVP: 
         #if SKY
           // Beyond the painting's frame the live sky shows through.
           if (!inside) discard;
-          vec3 col = texture2D(tPaint, uv).rgb;
+          vec3 col = texture2D(tPaint, uv).rgb * uTint;
         #else
           float seen = 0.0;
           if (inside) {
@@ -74,7 +74,7 @@ function projectedMaterial(paint: THREE.Texture, depth: THREE.Texture, paintVP: 
           }
           // Unseen by the painting: a plain painted tone, lit from above.
           float shade = 0.6 + 0.4 * max(vNormalW.y, 0.0);
-          vec3 col = mix(uFallback * shade, texture2D(tPaint, uv).rgb, seen);
+          vec3 col = mix(uFallback * shade, texture2D(tPaint, uv).rgb, seen) * uTint;
           col += col * spellIllumination(vRestWorld) * 1.2;
         #endif
         gl_FragColor = vec4(col, 1.0);
@@ -88,6 +88,8 @@ export class PaintedSet {
   private readonly materials: THREE.ShaderMaterial[] = [];
   private readonly geometries: THREE.BufferGeometry[] = [];
   private readonly textures: THREE.Texture[] = [];
+  /** A region not yet painted borrows this painting, retinted. */
+  private readonly tint = { value: new THREE.Color(1, 1, 1) };
   private time = 0;
 
   private constructor() { this.group.name = 'Painted set'; }
@@ -123,7 +125,7 @@ export class PaintedSet {
     cam.updateMatrixWorld(true);
     const vp = new THREE.Matrix4().multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse);
     const make = (surface: Surface, fallback: string) => {
-      const m = projectedMaterial(paint, depth, vp, cam.position.clone(), meta.depthMax, surface, new THREE.Color(fallback));
+      const m = projectedMaterial(paint, depth, vp, cam.position.clone(), meta.depthMax, surface, new THREE.Color(fallback), this.tint);
       this.materials.push(m);
       return m;
     };
@@ -188,6 +190,8 @@ export class PaintedSet {
     sky.name = 'Painted sky';
     this.group.add(sky);
   }
+
+  setTint(color: THREE.Color): void { this.tint.value.copy(color); }
 
   update(dt: number): void {
     this.time += dt;

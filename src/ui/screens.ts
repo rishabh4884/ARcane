@@ -52,7 +52,8 @@ export class LoadingScreen {
     this.enter.hidden = true;
     this.root.append(
       this.motes,
-      el('div', { class: 'load-trees', 'aria-hidden': 'true' }, el('span'), el('span'), el('span')),
+      // The title card sits on the painted Edge, as a series opens on its first background.
+      el('div', { class: 'load-painting', 'aria-hidden': 'true', style: { backgroundImage: `url(${import.meta.env.BASE_URL}art/sets/edge/paint.webp)` } }),
       el('div', { class: 'load-center' },
         el('p', { class: 'load-eyebrow' }, 'A dark fairy-tale adventure'),
         title,

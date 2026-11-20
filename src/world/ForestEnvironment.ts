@@ -42,6 +42,7 @@ export class ForestEnvironment {
   private disposed = false;
   readonly woodland: Woodland | null = null;
   private painted: PaintedSet | null = null;
+  private readonly paintTint = new THREE.Color(1, 1, 1);
 
   constructor(private readonly scene: THREE.Scene) {
     this.group.name = 'The Hushwood — an illustrated world';
@@ -124,6 +125,7 @@ export class ForestEnvironment {
       if (this.disposed) { set?.dispose(); return; }
       if (!set) { this.obstacles.splice(start, added); this.makeCarpet(); this.makeTrees(); this.makeRocks(); return; }
       this.painted = set;
+      set.setTint(this.paintTint);
       this.group.add(set.group);
     });
   }
@@ -269,6 +271,8 @@ export class ForestEnvironment {
    */
   setTint(trees: THREE.Color, distant: THREE.Color, ground: THREE.Color, grass: THREE.Color, grassHeight = 1): void {
     this.grass?.setHeight(grassHeight);
+    this.paintTint.copy(trees);
+    this.painted?.setTint(trees);
     for (const m of this.treeMaterials) m.color.copy(trees);
     this.distantMaterial?.color.copy(distant);
     this.groundMaterial?.color.copy(ground);

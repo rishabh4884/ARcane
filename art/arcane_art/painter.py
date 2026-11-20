@@ -236,6 +236,7 @@ class Direction:
     air_reach: float = 62.0           # metres for the air to take most of the colour
     frame_dark: float = 0.5           # how dark the foreground frame goes
     focus: tuple = (0.5, 0.58)        # where the eye goes, in screen fractions (x, y)
+    corner_ferns: bool = False        # paint ferns into the bottom corners (for stills; the game has its own)
 
 
 def design(ps: Passes, d: Direction, log=print) -> tuple[np.ndarray, dict]:
@@ -817,9 +818,10 @@ def paint(ps: Passes, d: Direction, seed: int = 7, log=print, quick: bool = Fals
     litter(p)
     n = grass(p)
     W, H = p.W, p.H
-    fern(p, 0.01 * W, 1.0 * H, 0.36 * H, 0.55, 3)
-    fern(p, 0.995 * W, 1.0 * H, 0.3 * H, -0.6, 4)
-    log(f'[paint] {n} tufts and two ferns in {time.time() - t:.0f}s')
+    if d.corner_ferns:     # in the game the living foreground layer hangs its own fronds into the corners
+        fern(p, 0.01 * W, 1.0 * H, 0.36 * H, 0.55, 3)
+        fern(p, 0.995 * W, 1.0 * H, 0.3 * H, -0.6, 4)
+    log(f'[paint] {n} tufts in {time.time() - t:.0f}s')
     out = finish(p.canvas.array(), seed)
     log(f'[paint] painted in {time.time() - t0:.0f}s')
     return out, D

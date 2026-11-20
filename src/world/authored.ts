@@ -14,6 +14,6 @@ export const DRAWN_LOOK = params.get('look') !== '3d';
 
 /**
  * The wood is a painted set (see PaintedSet.ts): a background painting projected onto the ground,
- * trunks and stones it was painted from. `?world=painted` while it is being finished.
+ * trunks and stones it was painted from. `?world=cutout` restores the earlier illustrated cut-outs.
  */
-export const PAINTED_WORLD = params.get('world') === 'painted';
+export const PAINTED_WORLD = !AUTHORED_WORLD && params.get('world') !== 'cutout';
