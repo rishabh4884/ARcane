@@ -4,6 +4,7 @@ import type { Design } from '../rig/Character.ts';
 import { biped, blink, bump, idleLife, lookAt, smooth, TAU, type Anim } from '../rig/Rig.ts';
 import { flap, mothWing, pitchAbout, quadruped, serpent } from './creatures.ts';
 import { Sculpt } from '../rig/Sculpt.ts';
+import { BodyProxy, drape, RadialHull, union, vAtHeight } from '../rig/Cloth.ts';
 import { BRAMBLE_GOBLIN } from './spirits.ts';
 
 /**
@@ -754,7 +755,7 @@ export const LANTERN_WIDOW: Design = {
 
 /* ═════════════════════════════════ THE UNLIT KING ═════════════════════════════════ */
 
-const NIGHT = '#15131b', NIGHT_EDGE = '#2c2836', KING_BARK = '#2b2119';
+const NIGHT = '#15131b', NIGHT_EDGE = '#2c2836', KING_BARK = '#5b4c3f';
 
 export const UNLIT_KING: Design = {
   kind: 'king', name: 'The Unlit King', height: 9.2, radius: 2.3, turnRate: 0.8, stride: 4.4, pace: 0.5,
@@ -772,7 +773,8 @@ const KING_LOOK: RegalLook = { cloak: NIGHT, cloakDark: '#07060a', edge: NIGHT_E
 export const WARDEN_LOOK: RegalLook = { cloak: '#35523a', cloakDark: '#16241a', edge: '#5f7f52', mask: '#6b5038', crown: 'leaves', stars: false };
 
 export function buildRegal(b: Body, look: RegalLook): void {
-    const NIGHT = look.cloak, NIGHT_EDGE = look.edge, KING_BARK = look.mask;
+    const NIGHT = look.cloak, KING_BARK = look.mask, living = look.stars;
+    const GOLD = living ? '#b08a45' : '#c9a85a', GOLD_DARK = living ? '#5e4824' : '#6f5a2c';
     b.bone('hips', 'root', [0, 4.1, 0])
       .bone('spine', 'hips', [0, 5.4, 0])
       .bone('chest', 'spine', [0, 6.6, 0.1])
@@ -789,74 +791,211 @@ export function buildRegal(b: Body, look: RegalLook): void {
       .pairBone('thighL', 'hips', [0.5, 4.0, 0])
       .pairBone('kneeL', 'thighL', [0.58, 2.1, 0.2])
       .pairBone('ankleL', 'kneeL', [0.6, 0.25, 0], [0.6, 0.05, 0.6]);
-    // A cloak of night from the shoulders to the ground, flecked with the ghosts of stars.
-    b.part(lathe([[0.45, 7.5], [0.95, 7.2], [1.15, 6.6], [1.1, 5.8], [1.2, 4.6], [1.5, 3.2], [1.85, 1.8], [2.2, 0.5], [2.3, 0.05]], {
-      segments: 40, scaleZ: 0.78,
-      deform: (o, a, t) => {
-        o.multiplyScalar(1 + Math.sin(a * 8 + t * 4) * 0.05 * t);
-        // The front parts over the chest, opening onto the heart.
-        if (o.z > 0 && t < 0.5) o.x *= 1 + 0.25 * (1 - t * 2) * Math.sign(o.x) * 0.3;
-        if (t > 0.85) o.y -= Math.max(0, Math.sin(a * 6)) ** 2 * 0.3;
+
+    // ── The robes, cut and hung, not turned on a lathe. ──
+    // The body beneath them, rough masses for the cloth to fall over.
+    const torso = new BodyProxy()
+      .capsule([0, 7.15, 0.15], [0, 7.8, 0.3], 0.25)
+      .capsule([-1.0, 7.05, 0.02], [1.0, 7.05, 0.02], 0.3)
+      .ellipsoid([0, 6.35, 0.1], [0.95, 0.95, 0.62])
+      .ellipsoid([0, 6.3, 0.5], [0.62, 0.72, 0.5])
+      .ellipsoid([0, 4.7, 0.05], [0.88, 1.15, 0.66]);
+    for (const x of [1, -1]) torso.capsule([x * 0.48, 4.0, 0], [x * 0.58, 2.1, 0.2], 0.42, 0.36).capsule([x * 0.58, 2.1, 0.2], [x * 0.6, 0.2, 0.05], 0.34, 0.28);
+    const legBones = (y: number) => [y > 5.2 ? 'spine' : 'hips', 'thighL', 'thighR', 'kneeL', 'kneeR', 'cape1'];
+    // An under-skirt sewn at the waist, of a darker night, light drifting up through its weave.
+    const skirtProfile = [[1.0, 5.6], [1.12, 4.4], [1.45, 2.6], [1.85, 0.9], [2.0, 0.1]] as const;
+    const skirt = drape({
+      cols: 64, rows: 46, closed: true, profile: skirtProfile, extra: 0.3, depth: 0.78, center: [0, 0.05],
+      sew: (u, _v, p) => { const a = u * TAU; p.set(Math.sin(a) * 0.8, 5.55, 0.05 + Math.cos(a) * 0.6); },
+      collider: torso, thickness: 0.03, folds: 9, foldDepth: 0.06, seed: 3, stiffness: 0.3, steps: 100,
+      color: living ? '#1a1524' : '#2a3a24', shade: living ? '#0b0910' : '#121a10', surface: 'fabric', glow: living ? 0.9 : 0,
+      bones: legBones(5), bonesByHeight: [[3.2, ['hips', 'thighL', 'thighR', 'kneeL', 'kneeR']]],
+    });
+    b.draped(skirt);
+    // The over-robe: sewn at the collar, cinched at the waist so the bodice blouses over the belt,
+    // open in a V onto the caged heart and parting below; embroidered along every edge.
+    const robeProfile = [[0.55, 7.55], [1.4, 7.1], [1.45, 6.3], [1.3, 5.6], [1.35, 4.4], [1.7, 2.6], [2.15, 0.9], [2.35, 0.1]] as const;
+    const vWaist = vAtHeight(robeProfile, 0.45, 5.55);
+    const ROWS = 64, waistRow = Math.round(vWaist * (ROWS - 1)) / (ROWS - 1);
+    const robe = drape({
+      cols: 100, rows: ROWS, arc: [0.42, TAU - 0.42], profile: robeProfile, extra: 0.45, depth: 0.8, center: [0, 0.05],
+      pinned: (_u, v) => v === 0 || Math.abs(v - waistRow) < 1e-6,
+      sew: (u, v, p) => {
+        if (v === 0) { const a = 0.55 + (TAU - 1.1) * u; p.set(Math.sin(a) * 0.44, 7.38 + (1 - Math.cos(a)) * 0.05, 0.15 + Math.cos(a) * 0.38); }
+        else { const a = 0.5 + (TAU - 1.0) * u; p.set(Math.sin(a) * 0.98, 5.55, 0.05 + Math.cos(a) * 0.74); }
       },
-    }), { color: NIGHT, shade: look.cloakDark, surface: 'cloth', bones: ['chest', 'spine', 'hips', 'thighL', 'thighR', 'kneeL', 'kneeR', 'cape1'], falloff: 3 });
-    b.part(lathe([[0.4, 7.45], [1.0, 7.15], [1.45, 6.4], [1.6, 4.2], [1.9, 2.2], [2.1, 0.4]], {
-      segments: 32, scaleZ: 0.7, center: [0, 0, -0.35],
-      deform: (o, a, t) => { if (o.z > -0.1) o.multiplyScalar(0.55); if (t > 0.8) o.y -= Math.max(0, Math.sin(a * 5 + 1)) * 0.3; },
-    }), { color: '#1b1822', shade: '#08070b', surface: 'cloth', bones: ['chest', 'cape1', 'cape2'], falloff: 2.5 });
-    const random = (i: number) => Math.abs(Math.sin(i * 12.9898) * 43758.5453) % 1;
-    for (let i = 0; i < (look.stars ? 70 : 0); i++) {
-      const t = random(i), a = random(i + 100) * TAU, y = 7.2 - t * 6.8;
-      const r0 = (1.0 + t * 1.25) * 1.01;
-      b.part(ellipsoid([Math.cos(a) * r0, y, Math.sin(a) * r0 * 0.78], [0.025, 0.025, 0.025], { widthSegments: 6, heightSegments: 4 }),
-        { color: random(i + 7) > 0.5 ? '#bcd2ff' : '#ffe7c4', surface: 'glow', glow: 0.5 + random(i + 3) * 0.4, bones: [y > 5.5 ? 'chest' : y > 3.5 ? 'hips' : 'cape1'] });
-    }
-    // A mantle of dead feathers and antler-shards across the shoulders.
-    for (let i = 0; i < 14; i++) {
-      const a = (i / 13 - 0.5) * 2.6, x = Math.sin(a) * 1.05, z = Math.cos(a) * 0.55 - 0.35;
-      b.part(tube([[x * 0.9, 7.35, z * 0.9], [x * 1.25, 7.25, z * 1.2], [x * 1.45, 6.85, z * 1.3]], [0.09, 0.06, 0.005], { radial: 6, flatten: { axis: [0, 1, 0], amount: 0.5 } }),
-        { color: '#2d2834', shade: '#5a5068', surface: 'fur', bones: ['chest'] });
-    }
-    // The heart: a mass of every swallowed light, behind a cage of roots.
-    b.part(ellipsoid([0, 6.3, 0.72], [0.62, 0.7, 0.3]), { color: '#08060a', surface: 'dark', bones: ['chest'] });
-    b.part(ellipsoid([0, 6.3, 0.82], [0.42, 0.46, 0.3]), { color: '#ffffff', surface: 'glow', glow: 1, bones: ['eyes', 'chest'] });
-    for (let i = 0; i < 7; i++) {
-      const x = -0.54 + i * 0.18;
-      b.part(tube([[x, 7.0, 0.6], [x * 1.2, 6.5, 1.08], [x * 1.1, 6.0, 1.06], [x * 0.7, 5.55, 0.75]], [0.06, 0.07, 0.06, 0.04], { radial: 6, wobble: 0.3 }),
-        { color: KING_BARK, shade: '#4a3a2b', surface: 'bark', bones: ['chest'] });
-    }
-    // A long mask of bark, two hollows full of stolen light, a crack that leaks it.
-    b.part(ellipsoid([0, 7.95, 0.5], [0.42, 0.62, 0.42], { deform: (d, p) => { if (d.y < 0) { p.x *= 1 + d.y * 0.45; p.y *= 1.35; } if (d.z > 0.3 && d.y > -0.1 && d.y < 0.4) p.z -= 0.08; } }),
-      { color: KING_BARK, shade: '#120d09', surface: 'bark', bones: ['head'] });
-    for (const s of [1, -1]) {
-      b.part(ellipsoid([0.15 * s, 8.1, 0.84], [0.1, 0.075, 0.06]), { color: '#050406', surface: 'dark', bones: ['head'] });
-      b.part(ellipsoid([0.15 * s, 8.1, 0.87], [0.05, 0.04, 0.03]), { color: '#ffffff', surface: 'glow', glow: 1, bones: ['eyes'] });
-    }
-    b.part(tube([[0.02, 8.5, 0.86], [-0.05, 8.2, 0.9], [0.04, 7.9, 0.9], [-0.02, 7.55, 0.84]], [0.012, 0.016, 0.012, 0.004], { radial: 5 }), { color: '#ffe7a3', surface: 'glow', glow: 0.85, bones: ['head'] });
-    // Antlers wide as the trees, and a crown of lanterns gone dark.
-    const antler = (pts: V3[], radii: number[], bones: string[]) => b.pair(tube(pts, radii, { radial: 8, wobble: 0.18, seed: pts.length * 3 }), { color: '#211a14', shade: '#4d3e30', surface: 'bark', bones });
-    antler([[0.25, 8.45, 0.35], [0.8, 9.0, 0.2], [1.5, 9.4, 0.0], [2.3, 9.7, -0.2], [3.0, 9.8, -0.35]], [0.14, 0.11, 0.08, 0.05, 0.01], ['antlerL']);
-    antler([[0.65, 8.9, 0.22], [0.75, 9.5, 0.4], [0.8, 10.0, 0.5]], [0.07, 0.05, 0.008], ['antlerL']);
-    antler([[1.3, 9.3, 0.05], [1.4, 9.95, 0.15], [1.45, 10.4, 0.22]], [0.06, 0.04, 0.008], ['antlerL']);
-    antler([[2.0, 9.6, -0.12], [2.2, 10.1, 0.0], [2.3, 10.45, 0.05]], [0.05, 0.03, 0.006], ['antlerL']);
-    antler([[2.5, 9.72, -0.25], [2.9, 9.4, -0.1], [3.2, 9.3, 0.05]], [0.04, 0.025, 0.005], ['antlerL']);
-    for (let i = 0; i < 7; i++) {
-      const a = (i / 7) * TAU + 0.2, x = Math.cos(a) * 0.42, z = 0.42 + Math.sin(a) * 0.4, y = 8.62 + Math.sin(a * 2) * 0.05;
-      if (look.crown === 'leaves') {
-        b.part(ellipsoid([x, y + 0.08, z], [0.16, 0.05, 0.09], { deform: (_d, p) => p.applyAxisAngle(Y, -a) }), { color: '#7fae5a', shade: '#3f6a2e', surface: 'leaf', bones: ['head'] });
-        continue;
+      collider: union(torso, new RadialHull(skirt.geometry, 0, 0.05, 0.78, 0.035)), thickness: 0.06,
+      folds: 11, foldDepth: 0.07, seed: 11, stiffness: 0.35, steps: 110,
+      color: NIGHT, shade: look.cloakDark, surface: 'fabric', glow: living ? 0.3 : 0,
+      bands: [
+        { where: (_u, v) => v > 0.925, color: GOLD, shade: GOLD_DARK, surface: 'thread', glow: living ? 0.4 : 0.15 },
+        { where: (u, v) => (u < 0.022 || u > 0.978) && v > 0.02, color: GOLD, shade: GOLD_DARK, surface: 'thread', glow: living ? 0.4 : 0.15 },
+      ],
+      bones: ['neck', 'chest', 'shoulderL', 'shoulderR'], bonesByHeight: [[6.2, ['chest', 'spine']], [5.2, legBones(5)], [3.0, ['hips', 'thighL', 'thighR', 'kneeL', 'kneeR', 'cape1']]],
+    });
+    b.draped(robe);
+    // A rolled hem and edges give the cloth its thickness.
+    const roll = (pts: V3[], r: number, color: string, surface: 'fabric' | 'thread', bones: string[]) =>
+      b.part(tube(pts, pts.map(() => r), { radial: 6, segments: Math.max(8, pts.length * 2) }), { color, surface, glow: surface === 'thread' && living ? 0.35 : 0, bones });
+    roll(robe.hem, 0.035, GOLD, 'thread', ['hips', 'kneeL', 'kneeR', 'cape1']);
+    roll(robe.left.slice(1), 0.03, GOLD, 'thread', ['chest', 'spine', 'hips', 'kneeL']);
+    roll(robe.right.slice(1), 0.03, GOLD, 'thread', ['chest', 'spine', 'hips', 'kneeR']);
+    roll(skirt.hem, 0.025, living ? '#0b0910' : '#121a10', 'fabric', ['hips', 'kneeL', 'kneeR']);
+    // A sash cinches the waist, closed by a clasp of old gold.
+    b.part(lathe([[0.99, 5.69], [1.04, 5.63], [1.05, 5.55], [1.04, 5.47], [0.99, 5.41]], { center: [0, 0, 0.05], segments: 56, scaleZ: 0.755 }), { color: living ? '#2a1a1c' : '#4a3020', shade: '#120a0b', surface: 'fabric', bones: ['spine', 'hips'] });
+    // Bell sleeves, draped over the arms and the robe.
+    const robeHull = new RadialHull(robe.geometry, 0, 0.05, 0.8, 0.03);
+    for (const x of [1, -1]) {
+      const S = x > 0 ? 'L' : 'R';
+      const arm = new BodyProxy()
+        .ellipsoid([x * 1.0, 7.05, 0.02], [0.36, 0.32, 0.36])
+        .capsule([x * 1.0, 7.05, 0.05], [x * 1.5, 5.4, 0.4], 0.27, 0.25)
+        .capsule([x * 1.5, 5.4, 0.4], [x * 1.62, 3.85, 0.85], 0.25, 0.2);
+      const sleeve = drape({
+        cols: 40, rows: 36, closed: true, profile: [[0.55, 7.3], [0.66, 6.0], [0.76, 4.6], [0.88, 3.5]], center: [x * 1.42, 0.5],
+        sew: (u, _v, p) => { const a = u * TAU; p.set(x * 1.06 + Math.sin(a) * 0.36, 7.14 + Math.sin(a) * x * 0.06, 0.04 + Math.cos(a) * 0.36); },
+        collider: union(arm, robeHull), thickness: 0.035, folds: 5, foldDepth: 0.06, seed: x > 0 ? 5 : 6, stiffness: 0.35, steps: 90,
+        color: NIGHT, shade: look.cloakDark, surface: 'fabric', glow: living ? 0.3 : 0,
+        bands: [{ where: (_u, v) => v > 0.86, color: GOLD, shade: GOLD_DARK, surface: 'thread', glow: living ? 0.4 : 0.15 }],
+        bones: [`shoulder${S}`, 'chest'], bonesByHeight: [[6.1, [`shoulder${S}`, `elbow${S}`]], [4.8, [`elbow${S}`, `wrist${S}`]]],
+      });
+      b.draped(sleeve);
+      roll(sleeve.hem, 0.03, GOLD, 'thread', [`wrist${S}`, `elbow${S}`]);
+      // A collar of dead feathers lies over each shoulder, following the cloth.
+      for (let i = 0; i < 9; i++) {
+        const u = 0.08 + i * 0.105, top = robe.at(x > 0 ? 0.5 - u * 0.5 : 0.5 + u * 0.5, 0.03), low = robe.at(x > 0 ? 0.5 - u * 0.5 : 0.5 + u * 0.5, 0.13), n = robe.normalAt(x > 0 ? 0.5 - u * 0.5 : 0.5 + u * 0.5, 0.08);
+        const mid: V3 = [(top[0] + low[0]) / 2 + n[0] * 0.07, (top[1] + low[1]) / 2 + n[1] * 0.07, (top[2] + low[2]) / 2 + n[2] * 0.07];
+        b.part(tube([[top[0] + n[0] * 0.03, top[1] + 0.02, top[2] + n[2] * 0.03], mid, [low[0] + n[0] * 0.05, low[1] - 0.12, low[2] + n[2] * 0.05]], [0.075, 0.06, 0.004], { radial: 6, flatten: { axis: [n[0], 0, n[2]], amount: 0.6 } }),
+          { color: living ? '#2d2834' : '#3f5a35', shade: living ? '#5a5068' : '#7f9a5a', surface: 'fur', bones: ['chest', `shoulder${S}`] });
       }
-      b.part(tube([[x, y, z], [x, y + 0.2, z]], [0.012], { radial: 4 }), { color: '#3a3128', surface: 'metal', bones: ['head'] });
-      b.part(lathe([[0.02, y + 0.38], [0.07, y + 0.34], [0.09, y + 0.27], [0.09, y + 0.2], [0.03, y + 0.18]], { center: [x, 0, z], segments: 10, closeTop: true, closeBottom: true }), { color: '#3a3128', shade: '#1a1612', surface: 'metal', bones: ['head'] });
-      b.part(ellipsoid([x, y + 0.28, z], [0.045, 0.05, 0.045]), { color: '#ff9a4a', surface: 'glow', glow: 0.25, bones: ['head'] });
     }
-    // Sleeves of night, and hands like the roots of an old tree.
-    b.pair(tube([[0.95, 7.05, 0.05], [1.5, 5.4, 0.4], [1.62, 3.9, 0.85]], [0.42, 0.36, 0.45], { radial: 14, capEnd: false }),
-      { color: NIGHT, shade: NIGHT_EDGE, surface: 'cloth', bones: ['shoulderL', 'elbowL', 'wristL', 'chest'] });
-    b.pair(ellipsoid([1.62, 3.55, 0.95], [0.18, 0.26, 0.14]), { color: KING_BARK, shade: '#120d09', surface: 'bark', bones: ['handL', 'wristL'] });
-    for (const [dx, dz, len] of [[-0.12, 0.08, 1.2], [-0.04, 0.12, 1.35], [0.05, 0.12, 1.3], [0.13, 0.06, 1.1], [0.16, -0.08, 0.8]] as const) {
-      b.pair(tube([[1.62 + dx, 3.4, 0.97 + dz], [1.62 + dx * 1.6, 3.4 - len * 0.5, 1.02 + dz * 1.5], [1.6 + dx * 2, 3.4 - len, 1.1 + dz * 2]], [0.05, 0.035, 0.006], { radial: 6, wobble: 0.25 }),
-        { color: KING_BARK, shade: '#4a3a2b', surface: 'bark', bones: ['handL'] });
+
+    // ── The heart: a mass of every swallowed light, behind a cage of roots. ──
+    b.part(ellipsoid([0, 6.3, 0.62], [0.6, 0.85, 0.36]), { color: '#08060a', surface: 'dark', bones: ['chest'] });
+    b.part(ellipsoid([0, 6.3, 0.82], [0.42, 0.46, 0.3]), { color: '#ffffff', surface: 'glow', glow: 1, bones: ['eyes', 'chest'] });
+    const s = new Sculpt();
+    const root = { color: KING_BARK, shade: '#4a3a2b', surface: 'bark' as const, relief: 0.012, reliefFreq: 14, stretch: 0.4, bones: ['chest'] as string[] };
+    for (let i = 0; i < 7; i++) {
+      const x = -0.54 + i * 0.18, w = Math.sin(i * 2.3) * 0.04;
+      s.chain([[x, 7.05, 0.58], [x * 1.2 + w, 6.55, 1.06], [x * 1.1 - w, 6.0, 1.05], [x * 0.7, 5.5, 0.72]], [0.06, 0.07, 0.065, 0.035], { ...root, blend: 0.05 });
     }
+    s.chain([[-0.6, 6.85, 0.95], [0, 6.95, 1.12], [0.6, 6.85, 0.95]], [0.035, 0.045, 0.035], { ...root, blend: 0.06 });
+    s.chain([[-0.55, 5.85, 0.95], [0, 5.75, 1.08], [0.55, 5.85, 0.95]], [0.03, 0.04, 0.03], { ...root, blend: 0.06 });
+
+    // ── The face: a long mask of bark, carved in planes, the stolen light leaking from its cracks. ──
+    const h = new Sculpt();
+    const bark = { color: KING_BARK, shade: '#2a2019', surface: 'bark' as const, relief: 0.007, reliefFreq: 26, stretch: 0.28, bones: ['head'] as string[] };
+    // Long and gaunt, like the skull of a deer: a narrow face, ridges for brow, cheekbone and jaw
+    // that sweep back toward where ears would be, the flesh between them sunken.
+    h.blob([0, 8.16, 0.36], [0.27, 0.38, 0.3], { ...bark, blend: 0 });
+    h.blob([0, 7.92, 0.6], [0.2, 0.5, 0.2], { ...bark, blend: 0.12 });
+    h.blob([0, 8.3, 0.62], [0.22, 0.16, 0.16], { ...bark, blend: 0.1 });
+    for (const x of [1, -1]) {
+      h.cone([x * 0.02, 8.17, 0.82], [x * 0.25, 8.25, 0.64], 0.044, 0.026, { ...bark, blend: 0.085 });
+      h.cone([x * 0.1, 7.97, 0.79], [x * 0.26, 8.02, 0.58], 0.036, 0.024, { ...bark, blend: 0.09 });
+      h.cone([x * 0.22, 7.95, 0.5], [x * 0.06, 7.34, 0.72], 0.038, 0.026, { ...bark, blend: 0.11 });
+      h.carveBlob([x * 0.25, 8.12, 0.62], [0.05, 0.07, 0.06], 0.05);
+    }
+    h.blob([0, 7.33, 0.74], [0.06, 0.06, 0.05], { ...bark, blend: 0.06 });
+    h.chain([[0, 8.17, 0.84], [0, 7.98, 0.885], [0, 7.87, 0.9]], [0.025, 0.03, 0.022], { ...bark, blend: 0.04 });
+    // Cracks: drawn on the face, cast onto it, then cut in; light lies at the bottom of each.
+    const crackPaths: Array<{ pts: Array<[number, number]>; r: number }> = [
+      { pts: [[0.03, 8.44], [-0.015, 8.34], [0.012, 8.24], [-0.03, 8.14], [-0.035, 8.0], [0.03, 7.84], [0.012, 7.66], [0.02, 7.44]], r: 0.013 },
+      { pts: [[0.14, 8.14], [0.18, 7.98], [0.2, 7.86], [0.2, 7.74]], r: 0.009 },
+      { pts: [[-0.05, 7.7], [-0.1, 7.58], [-0.11, 7.44]], r: 0.008 },
+      { pts: [[-0.12, 8.4], [-0.15, 8.3], [-0.13, 8.22]], r: 0.008 },
+    ];
+    const cracks: Array<{ pts: V3[]; normals: V3[]; r: number }> = [];
+    for (const c of crackPaths) {
+      const hits = c.pts.map(([x, y]) => h.cast([x, y, 1.6], [0, 0, -1], 1.5)).filter((x): x is NonNullable<typeof x> => !!x);
+      cracks.push({ pts: hits.map((x) => x.point), normals: hits.map((x) => x.normal), r: c.r });
+    }
+    for (const x of [1, -1]) {
+      h.carveBlob([x * 0.1, 8.08, 0.86], [0.062, 0.04, 0.15], 0.025, [0, 0, x * -0.3]);
+      h.carveBlob([x * 0.15, 7.75, 0.79], [0.07, 0.11, 0.07], 0.07);
+      h.carveBlob([x * 0.02, 7.86, 0.88], [0.011, 0.008, 0.03], 0.008);
+    }
+    h.carveCone([-0.06, 7.56, 0.8], [0.06, 7.56, 0.8], 0.013, 0.013, 0.012);
+    for (const c of cracks) for (let i = 0; i < c.pts.length - 1; i++) h.carveCone(c.pts[i], c.pts[i + 1], c.r * (1 - i * 0.08), c.r * (1 - (i + 1) * 0.08), 0.008);
+    for (const c of cracks) {
+      const deep = c.pts.map((p, i) => [p[0] - c.normals[i][0] * c.r * 0.9, p[1] - c.normals[i][1] * c.r * 0.9, p[2] - c.normals[i][2] * c.r * 0.9] as V3);
+      b.part(tube(deep, deep.map((_p, i) => c.r * 0.45 * (1 - i / deep.length * 0.6)), { radial: 5, segments: deep.length * 4 }), { color: '#ffd27a', surface: 'glow', glow: 0.45, bones: ['head'] });
+    }
+    for (const x of [1, -1]) {
+      b.part(ellipsoid([x * 0.1, 8.078, 0.75], [0.05, 0.034, 0.03]), { color: '#050304', surface: 'dark', bones: ['head'] });
+      b.part(ellipsoid([x * 0.1, 8.075, 0.775], [0.022, 0.017, 0.014]), { color: '#ffffff', surface: 'glow', glow: 1, bones: ['eyes'] });
+    }
+    // A beard of rootlets hangs from the jaw onto the chest.
+    for (let i = 0; i < 11; i++) {
+      const x = (i / 10 - 0.5) * 0.36, hit = h.cast([x, 7.42 + Math.abs(x) * 0.5, 1.5], [0, 0, -1], 1.5);
+      if (!hit) continue;
+      const [px, py, pz] = hit.point, len = 0.35 + Math.abs(Math.sin(i * 2.7)) * 0.4 - Math.abs(x) * 0.4, sway = Math.sin(i * 1.9) * 0.04;
+      b.part(tube([[px, py + 0.02, pz - 0.02], [px * 1.1 + sway, py - len * 0.4, pz + 0.04], [px * 1.15 - sway, py - len * 0.75, pz + 0.05], [px * 1.2, py - len, pz + 0.03]], [0.016, 0.012, 0.008, 0.002], { radial: 5, segments: 12 }),
+        { color: KING_BARK, shade: '#2a2019', surface: 'bark', bones: ['head', 'neck'] });
+    }
+    b.part(tube([[-0.05, 7.56, 0.78], [0.05, 7.56, 0.78]], [0.006], { radial: 5 }), { color: '#ffd27a', surface: 'glow', glow: 0.3, bones: ['head'] });
+
+    // ── The crown: a circlet of iron seated on the brow, its prongs hung with lanterns gone dark. ──
+    const m = new Sculpt();
+    const iron = { color: '#3a3128', shade: '#1a1612', surface: 'metal' as const, relief: 0.002, reliefFreq: 60, bones: ['head'] as string[] };
+    const ring: V3[] = [];
+    for (let i = 0; i < 28; i++) {
+      const a = (i / 28) * TAU, dir: V3 = [Math.sin(a), 0, Math.cos(a)];
+      const hit = h.cast([dir[0] * 1.2, 8.4, 0.4 + dir[2] * 1.2], [-dir[0], 0, -dir[2]], 1.5);
+      ring.push(hit ? [hit.point[0] + hit.normal[0] * 0.02, 8.4, hit.point[2] + hit.normal[2] * 0.02] : [dir[0] * 0.3, 8.4, 0.4 + dir[2] * 0.3]);
+    }
+    for (let i = 0; i < ring.length; i++) m.cone(ring[i], ring[(i + 1) % ring.length], 0.026, 0.026, { ...iron, blend: 0.01 });
+    if (look.crown === 'leaves') {
+      for (let i = 0; i < 14; i++) {
+        const p = ring[(i * 2) % ring.length], a = (i / 14) * TAU;
+        b.part(ellipsoid([p[0] * 1.08, p[1] + 0.07, p[2] * 1.02 + 0.03], [0.13, 0.04, 0.07], { deform: (_d, q) => q.applyAxisAngle(Y, -a + Math.PI / 2) }), { color: '#7fae5a', shade: '#3f6a2e', surface: 'leaf', bones: ['head'] });
+      }
+    } else {
+      for (const k of [2, 5, 9, 14, 19, 23, 26]) {
+        const p = ring[k], out = Math.hypot(p[0], p[2] - 0.4) || 1, ox = p[0] / out, oz = (p[2] - 0.4) / out;
+        const tip: V3 = [p[0] + ox * 0.12, p[1] + 0.32, p[2] + oz * 0.12], hook: V3 = [tip[0] + ox * 0.08, tip[1] + 0.02, tip[2] + oz * 0.08];
+        m.chain([p, [p[0] + ox * 0.04, p[1] + 0.18, p[2] + oz * 0.04], tip, hook], [0.022, 0.017, 0.013, 0.012], { ...iron, blend: 0.012 });
+        // The lantern hangs from the hook: a cap, four bars, a base, dead glass inside.
+        const c: V3 = [hook[0], hook[1] - 0.17, hook[2]];
+        m.cone([c[0], c[1] + 0.13, c[2]], [c[0], c[1] + 0.08, c[2]], 0.014, 0.06, { ...iron, blend: 0.008 });
+        m.box([c[0], c[1] - 0.075, c[2]], [0.055, 0.012, 0.055], 0.008, { ...iron, blend: 0.006 });
+        for (const [bx, bz] of [[1, 1], [1, -1], [-1, 1], [-1, -1]]) m.cone([c[0] + bx * 0.042, c[1] + 0.075, c[2] + bz * 0.042], [c[0] + bx * 0.042, c[1] - 0.07, c[2] + bz * 0.042], 0.012, 0.012, { ...iron, blend: 0.006 });
+        m.chain([[hook[0], hook[1], hook[2]], [c[0], c[1] + 0.14, c[2]]], [0.008, 0.008], { ...iron, blend: 0.004 });
+        b.part(ellipsoid(c, [0.034, 0.06, 0.034]), { color: '#3a2418', shade: '#1a100c', surface: 'glow', glow: 0.06, bones: ['head'] });
+      }
+    }
+    // A clasp of old gold closing the sash.
+    const clasp = new Sculpt();
+    clasp.box([0, 5.55, 0.84], [0.11, 0.1, 0.03], 0.02, { color: GOLD, shade: GOLD_DARK, surface: 'metal', bones: ['spine', 'hips'], blend: 0 });
+    clasp.carveBlob([0, 5.55, 0.88], [0.05, 0.05, 0.02], 0.01);
+    for (const x of [1, -1]) clasp.cone([x * 0.11, 5.62, 0.84], [x * 0.11, 5.48, 0.84], 0.022, 0.022, { color: GOLD, shade: GOLD_DARK, surface: 'metal', bones: ['spine', 'hips'], blend: 0.01 });
+    b.sculpted(clasp, 0.008);
+    b.part(ellipsoid([0, 5.55, 0.855], [0.035, 0.035, 0.015]), { color: '#ffe7a3', surface: 'glow', glow: living ? 0.6 : 0.2, bones: ['spine'] });
+
+    // ── Antlers wide as the trees. ──
+    const ant = { color: '#211a14', shade: '#4d3e30', surface: 'bark' as const, relief: 0.016, reliefFreq: 11, stretch: 0.45 };
+    for (const x of [1, -1]) {
+      const A = x > 0 ? 'antlerL' : 'antlerR';
+      s.chain([[x * 0.22, 8.42, 0.34], [x * 0.8, 9.0, 0.2], [x * 1.5, 9.4, 0.0], [x * 2.3, 9.7, -0.2], [x * 3.0, 9.8, -0.35]], [0.14, 0.11, 0.08, 0.05, 0.012], { ...ant, bones: [A], blend: 0.05 });
+      s.blob([x * 0.25, 8.46, 0.35], [0.16, 0.1, 0.16], { ...ant, bones: [A, 'head'], blend: 0.05 });
+      for (const tine of [[[0.65, 8.9, 0.22], [0.75, 9.5, 0.4], [0.8, 10.0, 0.5]], [[1.3, 9.3, 0.05], [1.4, 9.95, 0.15], [1.45, 10.4, 0.22]], [[2.0, 9.6, -0.12], [2.2, 10.1, 0.0], [2.3, 10.45, 0.05]], [[2.5, 9.72, -0.25], [2.9, 9.4, -0.1], [3.2, 9.3, 0.05]]] as V3[][]) {
+        s.chain(tine.map((p) => [p[0] * x, p[1], p[2]] as V3), [0.065, 0.04, 0.008], { ...ant, bones: [A], blend: 0.03 });
+      }
+    }
+    // ── Hands like the roots of an old tree, knuckled and long-fingered. ──
+    for (const x of [1, -1]) {
+      const W = x > 0 ? 'wristL' : 'wristR', H = x > 0 ? 'handL' : 'handR';
+      s.cone([x * 1.6, 3.95, 0.82], [x * 1.62, 3.5, 0.95], 0.17, 0.16, { ...ant, color: KING_BARK, bones: [W], blend: 0.05 });
+      s.blob([x * 1.62, 3.5, 0.95], [0.18, 0.24, 0.12], { ...ant, color: KING_BARK, bones: [H, W], blend: 0.06 });
+      for (const [dx, dz, len] of [[-0.12, 0.08, 1.2], [-0.04, 0.12, 1.35], [0.05, 0.12, 1.3], [0.13, 0.06, 1.1], [0.16, -0.08, 0.8]] as const) {
+        const p0: V3 = [x * (1.62 + dx), 3.38, 0.97 + dz], p1: V3 = [x * (1.62 + dx * 1.4), 3.38 - len * 0.38, 1.0 + dz * 1.3], p2: V3 = [x * (1.62 + dx * 1.8), 3.38 - len * 0.72, 1.05 + dz * 1.7], p3: V3 = [x * (1.6 + dx * 2), 3.38 - len, 1.1 + dz * 2];
+        s.chain([p0, p1, p2, p3], [0.06, 0.045, 0.035, 0.008], { ...ant, color: KING_BARK, bones: [H], blend: 0.03 });
+        for (const k of [p1, p2]) s.blob(k, [0.055, 0.05, 0.055], { ...ant, color: KING_BARK, bones: [H], blend: 0.03 });
+      }
+    }
+    b.sculpted(h, 0.011);
+    b.sculpted(m, 0.011);
+    b.sculpted(s, 0.025);
 }
 
 function kingAnimate(a: Anim): void {

@@ -63,6 +63,14 @@ export function inspector(world: World) {
       figures.push(f);
       run((_f, t) => (t < 2 ? { pose: 'windup', progress: Math.min(1, t / 1.5) } : { pose: 'strike', progress: Math.min(1, (t - 2) / 1.5) }));
     },
+    /** Close-up: aim the camera at height `y` on the staged figures from `distance`, with a narrow lens. */
+    focus(y: number, distance = 3, fov = 30, side = 0) {
+      const cam = world.stage().camera;
+      const z0 = 12, g = terrainHeight(0, z0);
+      cam.position.set(side, g + y + distance * 0.08, z0 + distance);
+      cam.lookAt(0, g + y, z0);
+      cam.fov = fov; cam.updateProjectionMatrix(); cam.updateMatrixWorld(true);
+    },
     /** Turn every staged figure to a heading (radians; 0 faces the camera). */
     turn(yaw: number) { for (const f of figures) f.setYaw(yaw); },
     clear() { clear(); world.endCinematic(); },

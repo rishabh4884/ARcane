@@ -51,17 +51,29 @@ function sdRoundCone(p: THREE.Vector3, pr: Prim): { d: number; t: number } {
   return { d: tmpC.copy(pr.a).addScaledVector(ba, t).distanceTo(p) - r, t };
 }
 
+function sdCone(p: THREE.Vector3, pr: Prim): number {
+  const bax = pr.b.x - pr.a.x, bay = pr.b.y - pr.a.y, baz = pr.b.z - pr.a.z;
+  const pax = p.x - pr.a.x, pay = p.y - pr.a.y, paz = p.z - pr.a.z;
+  const len2 = bax * bax + bay * bay + baz * baz;
+  const t = len2 > 1e-12 ? Math.min(1, Math.max(0, (pax * bax + pay * bay + paz * baz) / len2)) : 0;
+  const dx = pax - bax * t, dy = pay - bay * t, dz = paz - baz * t;
+  return Math.sqrt(dx * dx + dy * dy + dz * dz) - (pr.ra + (pr.rb - pr.ra) * t);
+}
+
 function sdEllipsoid(p: THREE.Vector3, pr: Prim): number {
   const l = tmpA.subVectors(p, pr.c).applyQuaternion(pr.qi);
-  const k0 = Math.hypot(l.x / pr.r.x, l.y / pr.r.y, l.z / pr.r.z);
-  const k1 = Math.hypot(l.x / (pr.r.x * pr.r.x), l.y / (pr.r.y * pr.r.y), l.z / (pr.r.z * pr.r.z));
+  const ax = l.x / pr.r.x, ay = l.y / pr.r.y, az = l.z / pr.r.z;
+  const bx = ax / pr.r.x, by = ay / pr.r.y, bz = az / pr.r.z;
+  const k0 = Math.sqrt(ax * ax + ay * ay + az * az);
+  const k1 = Math.sqrt(bx * bx + by * by + bz * bz);
   return k1 > 1e-9 ? (k0 * (k0 - 1)) / k1 : -Math.min(pr.r.x, pr.r.y, pr.r.z);
 }
 
 function sdBox(p: THREE.Vector3, pr: Prim): number {
   const l = tmpA.subVectors(p, pr.c).applyQuaternion(pr.qi);
   const qx = Math.abs(l.x) - pr.r.x + pr.round, qy = Math.abs(l.y) - pr.r.y + pr.round, qz = Math.abs(l.z) - pr.r.z + pr.round;
-  return Math.hypot(Math.max(qx, 0), Math.max(qy, 0), Math.max(qz, 0)) + Math.min(Math.max(qx, qy, qz), 0) - pr.round;
+  const mx = Math.max(qx, 0), my = Math.max(qy, 0), mz = Math.max(qz, 0);
+  return Math.sqrt(mx * mx + my * my + mz * mz) + Math.min(Math.max(qx, qy, qz), 0) - pr.round;
 }
 
 const smin = (a: number, b: number, k: number) => { if (k <= 0) return Math.min(a, b); const h = Math.max(k - Math.abs(a - b), 0) / k; return Math.min(a, b) - h * h * k * 0.25; };
@@ -128,6 +140,34 @@ export class Sculpt {
 
   get empty(): boolean { return this.prims.length === 0; }
 
+  /** The whole field at a point (every form): for placing details on the sculpted surface. */
+  distanceAt(x: number, y: number, z: number): number { return this.field(new THREE.Vector3(x, y, z), this.prims); }
+
+  /**
+   * Cast a ray onto the surface as sculpted so far: where it lands and the outward normal there.
+   * Cracks, studs, glowing seams and circlets are placed with it so they sit on the form exactly.
+   */
+  cast(from: V3, dir: V3, max = 4): { point: V3; normal: V3 } | null {
+    const d = new THREE.Vector3(...dir).normalize(), p = this.v(from);
+    const list = this.prims;
+    let t = 0;
+    for (let i = 0; i < 200 && t < max * this.scale; i++) {
+      const q = p.clone().addScaledVector(d, t);
+      const f = this.field(q, list);
+      if (f < 0.0005 * this.scale) {
+        const e = 0.002 * this.scale;
+        const n = new THREE.Vector3(
+          this.field(q.clone().setX(q.x + e), list) - this.field(q.clone().setX(q.x - e), list),
+          this.field(q.clone().setY(q.y + e), list) - this.field(q.clone().setY(q.y - e), list),
+          this.field(q.clone().setZ(q.z + e), list) - this.field(q.clone().setZ(q.z - e), list)).normalize();
+        const s = 1 / this.scale;
+        return { point: [q.x * s, q.y * s, q.z * s], normal: [n.x, n.y, n.z] };
+      }
+      t += Math.max(f * 0.7, 0.0004 * this.scale);
+    }
+    return null;
+  }
+
   private primDistance(pr: Prim, p: THREE.Vector3): { d: number; t: number } {
     let d: number, t = 0.5;
     if (pr.kind === 0) { const r = sdRoundCone(p, pr); d = r.d; t = r.t; }
@@ -137,11 +177,35 @@ export class Sculpt {
     return { d, t };
   }
 
+  /** A form's distance without its relief: the coarse occlusion grid only needs the masses. */
+  private rawDistance(pr: Prim, p: THREE.Vector3): number {
+    return pr.kind === 0 ? sdCone(p, pr) : pr.kind === 1 ? sdEllipsoid(p, pr) : sdBox(p, pr);
+  }
+
+  /** Distance to one form with its relief, no allocation: the hot path of meshing. */
+  private formDistance(pr: Prim, p: THREE.Vector3): number {
+    let d = pr.kind === 0 ? sdCone(p, pr) : pr.kind === 1 ? sdEllipsoid(p, pr) : sdBox(p, pr);
+    if (pr.relief) d -= (fbm3(p.x * pr.reliefFreq, p.y * pr.reliefFreq * pr.stretch, p.z * pr.reliefFreq, 3) - 0.5) * 2 * pr.relief;
+    return d;
+  }
+
   /** The field at a point, using only the forms whose bounds reach it. */
   private field(p: THREE.Vector3, list: readonly Prim[]): number {
     let d = 1e9;
-    for (const pr of list) {
-      const pd = this.primDistance(pr, p).d;
+    // Forms that share a relief share its noise: evaluate it once per sample.
+    let nf = -1, ns = -1, nv = 0;
+    for (let i = 0; i < list.length; i++) {
+      const pr = list[i];
+      // A form farther than its blend from the surface so far cannot change it.
+      if (!pr.carve && d < 1e8) {
+        const bx = Math.max(pr.min.x - p.x, 0, p.x - pr.max.x), by = Math.max(pr.min.y - p.y, 0, p.y - pr.max.y), bz = Math.max(pr.min.z - p.z, 0, p.z - pr.max.z);
+        if (bx * bx + by * by + bz * bz > (d + pr.blend) * (d + pr.blend) && d > -pr.blend) continue;
+      }
+      let pd = pr.kind === 0 ? sdCone(p, pr) : pr.kind === 1 ? sdEllipsoid(p, pr) : sdBox(p, pr);
+      if (pr.relief) {
+        if (pr.reliefFreq !== nf || pr.stretch !== ns) { nf = pr.reliefFreq; ns = pr.stretch; nv = fbm3(p.x * nf, p.y * nf * ns, p.z * nf, 3) - 0.5; }
+        pd -= nv * 2 * pr.relief;
+      }
       d = pr.carve ? smax(d, -pd, pr.blend) : smin(d, pd, pr.blend);
     }
     return d;
@@ -151,7 +215,7 @@ export class Sculpt {
    * Mesh the field with Surface Nets at `cell` metres. Returns geometry plus, per vertex, a colour,
    * a surface id, a glow, and the bones it may bind to (from the forms nearest it).
    */
-  mesh(cell: number): { geometry: THREE.BufferGeometry; colors: Float32Array; surf: Float32Array; bones: string[][] } {
+  mesh(cell: number): { geometry: THREE.BufferGeometry; colors: Float32Array; surf: Float32Array; bones: string[][]; ao: Float32Array; curv: Float32Array } {
     const solids = this.prims;
     const lo = new THREE.Vector3(Infinity, Infinity, Infinity), hi = new THREE.Vector3(-Infinity, -Infinity, -Infinity);
     for (const pr of solids) if (!pr.carve) { lo.min(pr.min); hi.max(pr.max); }
@@ -170,6 +234,7 @@ export class Sculpt {
     // Narrow band: a block whose centre is farther from the surface than its own half-diagonal lies
     // wholly inside or outside, and is filled without evaluating every sample.
     const half = Math.sqrt(3) * B * cell * 0.5;
+    const exact = new Uint8Array(bx * by * bz);
     for (let kb = 0; kb < bz; kb++) for (let jb = 0; jb < by; jb++) for (let ib = 0; ib < bx; ib++) {
       const list = blocks[ib + bx * (jb + by * kb)];
       const i0 = ib * B, j0 = jb * B, k0 = kb * B;
@@ -181,6 +246,7 @@ export class Sculpt {
         const dc = this.field(p, list);
         if (Math.abs(dc) > half + cell * 2) fill = dc;
       }
+      if (fill === null) exact[ib + bx * (jb + by * kb)] = 1;
       for (let k = k0; k < k1; k++) for (let j = j0; j < j1; j++) for (let i = i0; i < i1; i++) {
         const idx = i + nx * (j + ny * k);
         if (fill !== null) { value[idx] = fill; continue; }
@@ -195,7 +261,16 @@ export class Sculpt {
     const corners = [[0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0], [0, 0, 1], [1, 0, 1], [0, 1, 1], [1, 1, 1]];
     const edges = [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]];
     const cv = new Float32Array(8);
-    for (let k = 0; k < nz - 1; k++) for (let j = 0; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) {
+    // Only blocks evaluated exactly can hold the surface (the rest lie two cells or more from it).
+    const cellsOf = function* (lo1: number, hi1: number) {
+      for (let kb = 0; kb < bz; kb++) for (let jb = 0; jb < by; jb++) for (let ib = 0; ib < bx; ib++) {
+        if (!exact[ib + bx * (jb + by * kb)]) continue;
+        const i0 = Math.max(lo1, ib * B), j0 = Math.max(lo1, jb * B), k0 = Math.max(lo1, kb * B);
+        const i1 = Math.min(nx - hi1, ib * B + B), j1 = Math.min(ny - hi1, jb * B + B), k1 = Math.min(nz - hi1, kb * B + B);
+        for (let k = k0; k < k1; k++) for (let j = j0; j < j1; j++) for (let i = i0; i < i1; i++) yield [i, j, k] as const;
+      }
+    };
+    for (const [i, j, k] of cellsOf(0, 1)) {
       let mask = 0;
       for (let c = 0; c < 8; c++) { cv[c] = at(i + corners[c][0], j + corners[c][1], k + corners[c][2]); if (cv[c] < 0) mask |= 1 << c; }
       if (mask === 0 || mask === 255) continue;
@@ -215,7 +290,7 @@ export class Sculpt {
     const index: number[] = [];
     const vid = (i: number, j: number, k: number) => vertexOf[i + (nx - 1) * (j + (ny - 1) * k)];
     // A quad for every grid edge the surface crosses, joining the four cells around it.
-    for (let k = 1; k < nz - 1; k++) for (let j = 1; j < ny - 1; j++) for (let i = 1; i < nx - 1; i++) {
+    for (const [i, j, k] of cellsOf(1, 1)) {
       const v0 = at(i, j, k);
       const inside = v0 < 0;
       if ((at(i + 1, j, k) < 0) !== inside && i < nx - 1) {
@@ -270,6 +345,7 @@ export class Sculpt {
       bones[v] = [...boneSet];
       void bestT;
     }
+    const { ao, curv } = this.bakeDetail(positions, normals, { lo, cell, nx, ny, nz, B, bx, by, bz, value, exact });
     // Every triangle must wind outward (the shader trusts gl_FrontFacing): check against the field.
     const fa = new THREE.Vector3(), fb = new THREE.Vector3(), fc = new THREE.Vector3(), fn = new THREE.Vector3();
     for (let t = 0; t < index.length; t += 3) {
@@ -283,6 +359,87 @@ export class Sculpt {
     geometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
     geometry.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
     geometry.setIndex(index);
-    return { geometry, colors, surf, bones };
+    return { geometry, colors, surf, bones, ao, curv };
+  }
+
+  /**
+   * Bake what a sculptor's texture artist would bake from a high-poly model, straight from the field:
+   *  - ambient occlusion, by marching the distance field outward over a hemisphere around each normal
+   *    (an armpit, the gap under a jaw, the inside of an orbit go dark; an open cheek does not);
+   *  - curvature, from the field's Laplacian at two scales: positive on convex edges (where paint
+   *    wears and bark weathers pale), negative in crevices (where dirt and darkness gather).
+   * Near the surface the fine grid is exact; farther out a coarse grid of the bare masses stands in.
+   */
+  private bakeDetail(positions: number[], normals: Float32Array, g: { lo: THREE.Vector3; cell: number; nx: number; ny: number; nz: number; B: number; bx: number; by: number; bz: number; value: Float32Array; exact: Uint8Array }): { ao: Float32Array; curv: Float32Array } {
+    const { lo, cell, nx, ny, nz, B, bx, by, bz, value, exact } = g;
+    const count = positions.length / 3;
+    const ao = new Float32Array(count).fill(1), curv = new Float32Array(count);
+    if (!count) return { ao, curv };
+    const solids = this.prims.filter((pr) => !pr.carve);
+    const diag = Math.hypot(nx, ny, nz) * cell;
+    const R = Math.max(cell * 8, diag * 0.045);
+    // Coarse grid on the block corners: the nearest bare mass, capped at 2R, culled by bounds.
+    const G = B * cell, cx = bx + 1, cy = by + 1, cz = bz + 1;
+    const coarse = new Float32Array(cx * cy * cz);
+    const q = new THREE.Vector3();
+    const boxDist = (pr: Prim, x: number, y: number, z: number) => Math.hypot(Math.max(pr.min.x - x, 0, x - pr.max.x), Math.max(pr.min.y - y, 0, y - pr.max.y), Math.max(pr.min.z - z, 0, z - pr.max.z));
+    for (let k = 0; k < cz; k++) for (let j = 0; j < cy; j++) for (let i = 0; i < cx; i++) {
+      const x = lo.x + i * G, y = lo.y + j * G, z = lo.z + k * G;
+      let d = R * 2;
+      q.set(x, y, z);
+      for (const pr of solids) {
+        if (boxDist(pr, x, y, z) >= d) continue;
+        const pd = this.rawDistance(pr, q);
+        if (pd < d) d = pd;
+      }
+      coarse[i + cx * (j + cy * k)] = d;
+    }
+    const tri = (arr: Float32Array, sx: number, sy: number, fx: number, fy: number, fz: number) => {
+      const i = Math.floor(fx), j = Math.floor(fy), k = Math.floor(fz);
+      const u = fx - i, v = fy - j, w = fz - k;
+      const at = (a: number, b: number, c: number) => arr[a + sx * (b + sy * c)];
+      const c00 = at(i, j, k) * (1 - u) + at(i + 1, j, k) * u, c10 = at(i, j + 1, k) * (1 - u) + at(i + 1, j + 1, k) * u;
+      const c01 = at(i, j, k + 1) * (1 - u) + at(i + 1, j, k + 1) * u, c11 = at(i, j + 1, k + 1) * (1 - u) + at(i + 1, j + 1, k + 1) * u;
+      return (c00 * (1 - v) + c10 * v) * (1 - w) + (c01 * (1 - v) + c11 * v) * w;
+    };
+    const sample = (x: number, y: number, z: number): number => {
+      const fx = (x - lo.x) / cell, fy = (y - lo.y) / cell, fz = (z - lo.z) / cell;
+      if (fx < 0 || fy < 0 || fz < 0 || fx >= nx - 1 || fy >= ny - 1 || fz >= nz - 1) return R * 2;
+      const ib = Math.min(bx - 1, Math.floor(fx / B)), jb = Math.min(by - 1, Math.floor(fy / B)), kb = Math.min(bz - 1, Math.floor(fz / B));
+      if (exact[ib + bx * (jb + by * kb)]) return tri(value, nx, ny, fx, fy, fz);
+      return tri(coarse, cx, cy, Math.min(fx / B, cx - 1.0001), Math.min(fy / B, cy - 1.0001), Math.min(fz / B, cz - 1.0001));
+    };
+    // A fixed hemisphere: the normal, then two rings tilted 35° and 65° from it.
+    const dirs: Array<[number, number, number]> = [[0, 0, 1]];
+    for (const [tilt, n] of [[0.61, 6], [1.13, 8]] as const) for (let a = 0; a < n; a++) {
+      const phi = (a / n) * Math.PI * 2 + tilt;
+      dirs.push([Math.sin(tilt) * Math.cos(phi), Math.sin(tilt) * Math.sin(phi), Math.cos(tilt)]);
+    }
+    const STEPS = 5;
+    const t1 = new THREE.Vector3(), t2 = new THREE.Vector3(), nn = new THREE.Vector3(), up = new THREE.Vector3();
+    const e1 = cell * 1.5, e2 = cell * 4;
+    for (let v = 0; v < count; v++) {
+      const px = positions[v * 3], py = positions[v * 3 + 1], pz = positions[v * 3 + 2];
+      nn.set(normals[v * 3], normals[v * 3 + 1], normals[v * 3 + 2]);
+      up.set(Math.abs(nn.y) < 0.9 ? 0 : 1, Math.abs(nn.y) < 0.9 ? 1 : 0, 0);
+      t1.crossVectors(up, nn).normalize(); t2.crossVectors(nn, t1);
+      let occ = 0, wsum = 0;
+      for (const [dx, dy, dz] of dirs) {
+        const wx = t1.x * dx + t2.x * dy + nn.x * dz, wy = t1.y * dx + t2.y * dy + nn.y * dz, wz = t1.z * dx + t2.z * dy + nn.z * dz;
+        const cosw = 0.35 + dz;
+        for (let s = 1; s <= STEPS; s++) {
+          const h = R * Math.pow(s / STEPS, 1.6) + cell * 0.75;
+          const d = sample(px + wx * h, py + wy * h, pz + wz * h);
+          const w = cosw / Math.sqrt(s);
+          occ += Math.min(1, Math.max(0, (h - d) / h)) * w;
+          wsum += w;
+        }
+      }
+      ao[v] = Math.max(0.12, 1 - Math.pow(occ / wsum, 0.85) * 1.9);
+      // Laplacian of the field: ≈ 2/radius on a convex form, negative in a crease.
+      const lap = (e: number) => (sample(px + e, py, pz) + sample(px - e, py, pz) + sample(px, py + e, pz) + sample(px, py - e, pz) + sample(px, py, pz + e) + sample(px, py, pz - e) - 6 * sample(px, py, pz)) / (e * e);
+      curv[v] = Math.max(-1, Math.min(1, lap(e1) * cell * 1.6 + lap(e2) * cell * 3.2));
+    }
+    return { ao, curv };
   }
 }

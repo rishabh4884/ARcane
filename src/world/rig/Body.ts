@@ -12,9 +12,9 @@ import { mergeVertices } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
  * silhouette that turns with the body, and no texture to blur at any distance.
  */
 
-export type Surface = 'skin' | 'bark' | 'cloth' | 'bone' | 'metal' | 'fur' | 'moss' | 'glow' | 'leaf' | 'stone' | 'wing' | 'hair' | 'dark' | 'chitin';
+export type Surface = 'skin' | 'bark' | 'cloth' | 'bone' | 'metal' | 'fur' | 'moss' | 'glow' | 'leaf' | 'stone' | 'wing' | 'hair' | 'dark' | 'chitin' | 'fabric' | 'thread';
 export const SURFACES: Record<Surface, number> = {
-  skin: 0, bark: 1, cloth: 2, bone: 3, metal: 4, fur: 5, moss: 6, glow: 7, leaf: 8, stone: 9, wing: 10, hair: 11, dark: 12, chitin: 13,
+  skin: 0, bark: 1, cloth: 2, bone: 3, metal: 4, fur: 5, moss: 6, glow: 7, leaf: 8, stone: 9, wing: 10, hair: 11, dark: 12, chitin: 13, fabric: 14, thread: 15,
 };
 
 export type V3 = readonly [number, number, number];
@@ -268,7 +268,7 @@ export interface PartOptions {
   relief?: number;
 }
 
-interface PartRecord { geometry: THREE.BufferGeometry; o: PartOptions; perVertex?: { colors: Float32Array; surf: Float32Array; bones: string[][] } }
+interface PartRecord { geometry: THREE.BufferGeometry; o: PartOptions; perVertex?: { colors: Float32Array; surf: Float32Array; bones: string[][]; ao: Float32Array; curv: Float32Array } }
 
 const sideSwap = (name: string) => name.endsWith('L') ? `${name.slice(0, -1)}R` : name.endsWith('R') ? `${name.slice(0, -1)}L` : name;
 
@@ -326,6 +326,16 @@ export class Body {
   sculpted(form: import("./Sculpt.ts").Sculpt, cell: number): this {
     const m = form.mesh(cell * this.scale);
     this.parts.push({ geometry: m.geometry, o: { color: '#ffffff', bones: ['root'], relief: 0 }, perVertex: m });
+    return this;
+  }
+
+  /**
+   * Add a draped garment (see Cloth.ts): a cloth sheet already settled over the body, with its own
+   * colours, bands, fold shading and bones per vertex.
+   */
+  draped(d: import('./Cloth.ts').Drape): this {
+    if (this.scale !== 1) d.geometry.scale(this.scale, this.scale, this.scale);
+    this.parts.push({ geometry: d.geometry, o: { color: '#ffffff', bones: ['root'], relief: 0 }, perVertex: d });
     return this;
   }
 
@@ -398,6 +408,7 @@ export class Body {
     const skinIndex = new Uint16Array(vertexCount * 4);
     const skinWeight = new Float32Array(vertexCount * 4);
     const partOf = new Uint16Array(vertexCount);
+    const bakedAO = new Float32Array(vertexCount).fill(1), curv = new Float32Array(vertexCount);
     const index = new Uint32Array(indexCount);
     const p = new THREE.Vector3(), closest = new THREE.Vector3(), line = new THREE.Line3();
     const c0 = new THREE.Color(), c1 = new THREE.Color(), mixed = new THREE.Color();
@@ -423,6 +434,8 @@ export class Body {
           color.set([perVertex.colors[i * 3], perVertex.colors[i * 3 + 1], perVertex.colors[i * 3 + 2]], k * 3);
           surf[k * 2] = perVertex.surf[i * 2];
           surf[k * 2 + 1] = perVertex.surf[i * 2 + 1];
+          bakedAO[k] = perVertex.ao[i];
+          curv[k] = perVertex.curv[i];
         } else {
           mixed.copy(c0).lerp(c1, grad ? grad.getX(i) : 0);
           color.set([mixed.r, mixed.g, mixed.b], k * 3);
@@ -457,7 +470,10 @@ export class Body {
       geometry.dispose();
     }
     const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('aAO', new THREE.BufferAttribute(contactOcclusion(position, normal, partOf, color, surf), 1));
+    const contact = contactOcclusion(position, normal, partOf, color, surf);
+    for (let i = 0; i < vertexCount; i++) contact[i] *= bakedAO[i];
+    geometry.setAttribute('aAO', new THREE.BufferAttribute(contact, 1));
+    geometry.setAttribute('aCurv', new THREE.BufferAttribute(curv, 1));
     geometry.setAttribute('position', new THREE.BufferAttribute(position, 3));
     geometry.setAttribute('normal', new THREE.BufferAttribute(normal, 3));
     geometry.setAttribute('color', new THREE.BufferAttribute(color, 3));
@@ -500,8 +516,9 @@ function contactOcclusion(position: Float32Array, normal: Float32Array, part: Ui
   const cell = R;
   const grid = new Map<string, number[]>();
   const key = (x: number, y: number, z: number) => `${Math.floor(x / cell)},${Math.floor(y / cell)},${Math.floor(z / cell)}`;
-  // A thinned set of occluders keeps the bake fast on dense meshes.
-  for (let i = 0; i < count; i += 2) {
+  // A thinned set of occluders keeps the bake fast on dense meshes (about 12k at most).
+  const stride = Math.max(2, Math.ceil(count / 12000));
+  for (let i = 0; i < count; i += stride) {
     const k = key(position[i * 3], position[i * 3 + 1], position[i * 3 + 2]);
     let list = grid.get(k);
     if (!list) grid.set(k, (list = []));
@@ -525,7 +542,7 @@ function contactOcclusion(position: Float32Array, normal: Float32Array, part: Ui
         if (facing > 0.05) occ += (1 - d / R) * facing;
       }
     }
-    ao[i] = 1 - Math.min(0.72, occ * 0.09);
+    ao[i] = 1 - Math.min(0.72, occ * 0.09 * (stride / 2));
   }
   // Smooth once over neighbours so the shading has no speckle.
   return ao;

@@ -78,6 +78,7 @@ export function figureMaterial(edge = new THREE.Color('#ffb066')): { material: T
       #include <fog_pars_vertex>
       attribute vec2 aSurf;
       attribute float aAO;
+      attribute float aCurv;
       uniform float uTime;
       uniform vec4 uCloth;
       varying vec3 vColor;
@@ -86,8 +87,10 @@ export function figureMaterial(edge = new THREE.Color('#ffb066')): { material: T
       varying vec3 vRest;
       varying vec2 vSurf;
       varying float vAO;
+      varying float vCurv;
       void main() {
         vColor = color;
+        vCurv = aCurv;
         vSurf = aSurf;
         vRest = position;
         vAO = aAO;
@@ -97,7 +100,7 @@ export function figureMaterial(edge = new THREE.Color('#ffb066')): { material: T
         #include <defaultnormal_vertex>
         #include <begin_vertex>
         // Cloth and hair hang: slow overlapping waves that grow toward the free edge.
-        if ((aSurf.x > 1.5 && aSurf.x < 2.5) || (aSurf.x > 10.5 && aSurf.x < 11.5)) {
+        if ((aSurf.x > 1.5 && aSurf.x < 2.5) || (aSurf.x > 10.5 && aSurf.x < 11.5) || aSurf.x > 13.5) {
           float hang = clamp((uCloth.y - position.y) / max(uCloth.y - uCloth.z, 0.001), 0.0, 1.0);
           float w = hang * hang * uCloth.x;
           float t = uTime;
@@ -120,7 +123,7 @@ export function figureMaterial(edge = new THREE.Color('#ffb066')): { material: T
       uniform float uTime; uniform float uDissolve; uniform vec3 uEdge; uniform float uFlash; uniform vec3 uFlashColor;
       uniform float uFrost; uniform float uGroundY; uniform float uMist; uniform float uHeight;
       uniform vec3 uEyeColor; uniform float uEyes; uniform float uOpacity; uniform float uExposure;
-      varying vec3 vColor; varying vec3 vWorld; varying vec3 vNormalW; varying vec3 vRest; varying vec2 vSurf; varying float vAO;
+      varying vec3 vColor; varying vec3 vWorld; varying vec3 vNormalW; varying vec3 vRest; varying vec2 vSurf; varying float vAO; varying float vCurv;
       ${SPELL_LIGHT_GLSL}
       float h31(vec3 p) { p = fract(p * 0.3183099 + vec3(0.71, 0.113, 0.419)); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
       float vnoise(vec3 x) {
@@ -160,6 +163,8 @@ export function figureMaterial(edge = new THREE.Color('#ffb066')): { material: T
         vec3 p = vRest;
         vec3 base = vColor;
         float h = 0.0, spec = 0.0, rough = 0.6, sss = 0.0, sheen = 0.0, trans = 0.0, cavity = 1.0;
+        vec3 emit = vec3(0.0);
+        float rimK = 1.0;
         vec3 sssColor = vec3(0.9, 0.35, 0.25);
         if (sid < 0.5) {                       // skin: mottled, pored, creased
           float mott = fbm(p * 13.0);
@@ -235,11 +240,61 @@ export function figureMaterial(edge = new THREE.Color('#ffb066')): { material: T
           spec = 0.3; rough = 0.4; sheen = 0.5;
         } else if (sid < 12.5) {               // hollows: mouths, sockets
           base *= 0.55;
-        } else {                               // chitin: overlapping glossy plates
+        } else if (sid < 13.5) {               // chitin: overlapping glossy plates
           float plate = cells(p * 12.0);
           base *= 0.82 + 0.28 * fbm(p * 20.0);
           h = (smoothstep(0.2, 0.6, plate) * 0.003) * near;
           spec = 0.75; rough = 0.3;
+        } else if (sid < 14.5) {               // fabric: draped, so the folds are real; weave, slubs, wear
+          float twill = sin((p.x + p.z) * 520.0 + p.y * 520.0) * 0.5 + 0.5;
+          float slub = vnoise(vec3(p.x * 30.0, p.y * 220.0, p.z * 30.0));
+          float wear = smoothstep(0.62, 0.9, fbm(p * 5.0 + 2.0));
+          base *= (0.86 + 0.1 * twill * near + 0.12 * slub) * (1.0 - wear * 0.22);
+          base = mix(base, base * vec3(1.06, 1.0, 0.92) + 0.01, wear * 0.4);
+          h = (twill * 0.00025 + slub * 0.0006) * near;
+          sheen = 0.4; rough = 0.8; rimK = 0.4;
+          // Living cloth: faint motes and threads of swallowed light drifting up through the weave.
+          if (glow > 0.0) {
+            float drift = fbm(vec3(p.x * 2.6, p.y * 1.1 - uTime * 0.11, p.z * 2.6));
+            float vein = (1.0 - smoothstep(0.0, 0.012, abs(drift - 0.52))) * smoothstep(0.55, 0.75, fbm(p * 0.9 + vec3(0.0, uTime * 0.05, 0.0)));
+            vec3 cellP = p * 30.0 + vec3(0.0, -uTime * 0.5, 0.0);
+            float mote = step(0.985, h31(floor(cellP))) * (1.0 - smoothstep(0.1, 0.42, length(fract(cellP) - 0.5)));
+            float breath = 0.6 + 0.4 * sin(uTime * 0.7 + p.y * 1.3 + h31(floor(cellP)) * 6.28);
+            emit = vec3(0.62, 0.74, 1.0) * (vein * 0.18 + mote * 2.2 * breath) * glow;
+          }
+        } else {                               // thread: embroidery in metal thread, scrolling vines
+          float ang = atan(p.x, p.z);
+          vec2 q = vec2(ang * 20.0, p.y * 26.0);
+          float scroll = abs(sin(q.x) * cos(q.y * 0.9 + sin(q.x * 0.5) * 1.4) + 0.4 * sin(q.x * 2.2 + q.y * 1.1));
+          float motif = smoothstep(0.5, 0.58, scroll) * (1.0 - smoothstep(0.86, 0.95, scroll));
+          float stitch = sin((q.x * 3.0 + q.y * 3.0) * 30.0) * 0.5 + 0.5;
+          float tarnish = smoothstep(0.5, 0.85, fbm(p * 6.0));
+          vec3 ground = base * vec3(0.22, 0.18, 0.2);
+          vec3 gold = base * (1.05 + 0.25 * stitch) * (1.0 - tarnish * 0.35);
+          base = mix(ground, gold, motif);
+          h = (motif * 0.0018 + stitch * motif * 0.0003) * near;
+          spec = mix(0.1, 1.0, motif); rough = mix(0.8, 0.3, motif); sheen = 0.3;
+          if (glow > 0.0) emit = base * motif * glow * (0.55 + 0.45 * sin(uTime * 0.9 - q.x * 0.35)) * 1.6;
+        }
+        // Baked curvature: wear on the edges a hand or the weather would catch, dirt in the creases.
+        float wearMask = smoothstep(0.35, 0.62, fbm(p * 19.0 + 3.0) + 0.12);
+        float edge = smoothstep(0.1, 0.6, vCurv) * wearMask;
+        float crev = smoothstep(0.05, 0.55, -vCurv);
+        vec3 grey = vec3(dot(base, vec3(0.3, 0.59, 0.11)));
+        if (sid > 0.5 && sid < 1.5) {          // bark weathers silver on its ridges, black in its splits
+          base = mix(base, mix(grey, base, 0.45) * 1.9 + 0.022, edge * 0.75);
+          base *= 1.0 - crev * 0.7;
+        } else if (sid > 2.5 && sid < 3.5) {   // bone polishes on its crests, stains brown in its hollows
+          base = mix(base, base * 1.35 + 0.03, edge * 0.6);
+          base = mix(base, base * vec3(0.42, 0.31, 0.2), crev * 0.85);
+          spec += edge * 0.3;
+        } else if (sid > 3.5 && sid < 4.5) {   // metal rubs bright at the edges, tarnishes in recesses
+          base = mix(base, base * 2.1 + 0.05, edge * 0.85);
+          base *= 1.0 - crev * 0.6;
+          spec += edge * 0.6;
+        } else if (sid < 6.5 || sid > 7.5) {
+          base = mix(base, base * 1.22 + 0.012, edge * 0.45);
+          base = mix(base, base * vec3(0.5, 0.4, 0.34), crev * 0.65);
         }
         n = bump(n, vWorld, h);
         float ao = mix(1.0, vAO, 0.9) * cavity;
@@ -270,8 +325,9 @@ export function figureMaterial(edge = new THREE.Color('#ffb066')): { material: T
         // The moon wraps the silhouette from behind; the rim is what lifts a figure off the dark wood.
         float rim = pow(1.0 - facing, 2.8);
         float backlit = clamp(dot(-V, uMoon) * 0.5 + 0.7, 0.0, 1.0);
-        col += uRim * rim * (0.35 + 0.65 * smoothstep(-0.3, 0.5, n.y + moonN)) * backlit * 1.0 * mix(0.6, 1.0, ao);
+        col += uRim * rim * (0.35 + 0.65 * smoothstep(-0.3, 0.5, n.y + moonN)) * backlit * rimK * mix(0.4, 1.0, ao);
         col += base * spellIllumination(vWorld) * 1.5;
+        col += emit;
         col *= uExposure;
         bool emissive = sid > 6.5 && sid < 7.5;
         if (emissive) {
