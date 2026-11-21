@@ -20,6 +20,12 @@ drawings, not lit as 3D:
 - **Timing:** figures move on twos (12 drawings a second); strikes and hits go to ones.
 - **Air:** in a painted set, figures take the painting's own aerial haze, so a creature at forty metres
   sinks into the same air as the trees around it.
+- **Calm against the paintings:** a figure carries no finer variation than the painting behind it. Band
+  edges bend with one broad brush pattern, colour and occlusion are read broad so the sculpt's grain
+  never speckles the shadows, only the deepest creases are inked, the warm turn between light and
+  shadow is a soft band rather than a line, the brightest band stays on broad forms (slim fingers,
+  ears and straps read in two tones), the outline boils quietly every other drawing, and inner ink
+  marks only real folds and overlaps, fading on small distant figures.
 
 ## The sets: painted backgrounds
 
@@ -98,7 +104,9 @@ pass inks it. What glows keeps its glow.
 Effects follow the effects-animation tradition rather than particle simulation. The shared particle
 system draws motes as hard-edged discs with a pale core, sparks as four-pointed glints redrawn every
 drawing, and smoke and dust as lobed cel puffs inside an ink line, held a drawing at a time (sparks on
-ones, smoke on twos). Ember Lash
+ones, smoke on twos). The spells' own light (ribbons, wards, bolts, halos) is drawn as cel light
+(`src/world/render/CelLightPass.ts`): slim shapes of light are cut into flat bands with a hard core,
+broad flashes and beams stay soft fill, and the bloom lays the soft halo around the hard cores. Ember Lash
 (`src/world/fx/emberLash.ts`) is the model: designed flame shapes in flat bands inside a dark ink
 line, redrawn on twos so the fire boils like drawings; licks peeling off the lash; a starburst held for
 three drawings on ones at the crack; tongues tossing off flame bits; smoke as cel-shaded puffs that
