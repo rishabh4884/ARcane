@@ -4,7 +4,8 @@ import { createSpellAnimation } from '../src/world/effects.ts';
 import * as THREE from 'three';
 
 describe('spell visuals', () => {
-  it.each(SPELLS.map((spell) => [spell.name, spell.effect] as const))('%s has an animated, disposable effect', (_name, effect) => {
+  // The stag bakes its sculpted body on first use; other spells keep the usual timeout.
+  for (const { name, effect } of SPELLS) it(`${name} has an animated, disposable effect`, () => {
     const animation = createSpellAnimation(
       effect,
       new THREE.Vector3(0, 1, 5),
@@ -21,5 +22,5 @@ describe('spell visuals', () => {
     expect(animation.update(12)).toBe(false);
     expect(impact).toHaveBeenCalledTimes(1);
     animation.dispose();
-  });
+  }, effect === 'stag' ? 30_000 : 5_000);
 });

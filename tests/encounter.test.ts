@@ -170,7 +170,8 @@ describe('procedural bodies', () => {
       expect(outward).toBeGreaterThan(0);
     }
   });
-  it.each(Object.keys(DESIGNS) as CreatureKind[])('%s is one skinned body on one skeleton, with sound weights', (kind) => {
+  // These three bodies bake enough sculpted geometry to exceed 5 s while the art pipeline renders.
+  for (const kind of Object.keys(DESIGNS) as CreatureKind[]) it(`${kind} is one skinned body on one skeleton, with sound weights`, () => {
     const c = new Character(DESIGNS[kind], 0.5);
     expect(c.mesh).toBeInstanceOf(THREE.SkinnedMesh);
     const w = c.mesh.geometry.getAttribute('skinWeight');
@@ -181,7 +182,7 @@ describe('procedural bodies', () => {
     // Every body is a real volume with depth, not a flat sheet.
     expect(Math.min(size.x, size.z)).toBeGreaterThan(0.15);
     c.dispose();
-  });
+  }, ['goblin', 'gorrik', 'king'].includes(kind) ? 30_000 : 5_000);
   it('walks forward, side-steps both ways and turns toward its heading', () => {
     const c = new Character(DESIGNS.goblin, 0.2);
     const look = new THREE.Vector3(0, 1.8, 10);

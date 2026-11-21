@@ -22,9 +22,11 @@ export const SHOT_FOV_PAD = 1.18;
 const SCREEN_ASPECT = 16 / 9;
 
 function basis(position: THREE.Vector3, lookAt: THREE.Vector3) {
-  const fwd = lookAt.clone().sub(position).normalize();
-  const right = new THREE.Vector3().crossVectors(fwd, new THREE.Vector3(0, 1, 0)).normalize();
-  const up = new THREE.Vector3().crossVectors(right, fwd);
+  // Use the renderer's pole handling too: a canopy view looking straight up still has a full frame.
+  const matrix = new THREE.Matrix4().lookAt(position, lookAt, new THREE.Vector3(0, 1, 0));
+  const fwd = new THREE.Vector3().setFromMatrixColumn(matrix, 2).negate();
+  const right = new THREE.Vector3().setFromMatrixColumn(matrix, 0);
+  const up = new THREE.Vector3().setFromMatrixColumn(matrix, 1);
   return { fwd, right, up };
 }
 
@@ -79,10 +81,16 @@ export function planShots(scripts: readonly Script[], gameplay: PaintCamera): Pl
  * with distance and turn. Used to choose (and blend) the paintings to project.
  */
 export function viewScore(p: PaintCamera, camera: THREE.PerspectiveCamera, eye = new THREE.Vector3(), dir = new THREE.Vector3()): number {
+  return Math.exp(viewLogScore(p, camera, eye, dir));
+}
+
+/** The same score in log space, so distant camera moves can still rank and blend their paintings. */
+export function viewLogScore(p: PaintCamera, camera: THREE.PerspectiveCamera, eye = new THREE.Vector3(), dir = new THREE.Vector3()): number {
   camera.getWorldPosition(eye);
   camera.getWorldDirection(dir);
-  const d = eye.distanceToSquared(new THREE.Vector3(...p.position));
-  const pd = new THREE.Vector3(...p.lookAt).sub(new THREE.Vector3(...p.position)).normalize();
-  const turn = Math.acos(THREE.MathUtils.clamp(dir.dot(pd), -1, 1));
-  return Math.exp(-d / 0.64) * Math.exp(-((turn / 0.21) ** 2));
+  const d = (eye.x - p.position[0]) ** 2 + (eye.y - p.position[1]) ** 2 + (eye.z - p.position[2]) ** 2;
+  const dx = p.lookAt[0] - p.position[0], dy = p.lookAt[1] - p.position[1], dz = p.lookAt[2] - p.position[2];
+  const length = Math.hypot(dx, dy, dz) || 1;
+  const turn = Math.acos(THREE.MathUtils.clamp((dir.x * dx + dir.y * dy + dir.z * dz) / length, -1, 1));
+  return -d / 0.64 - (turn / 0.21) ** 2;
 }

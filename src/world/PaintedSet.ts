@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { SPELL_LIGHT_GLSL, SPELL_LIGHTS } from './LanternLighting.ts';
-import { type PaintCamera, viewScore } from './paintedShots.ts';
+import { type PaintCamera, viewLogScore } from './paintedShots.ts';
 import { forestLayout } from './spatial.ts';
 import { groundData, rockPlacements, treePlacements } from './woodlandLayout.ts';
 
@@ -124,11 +124,19 @@ function projectedMaterial(slots: Slots, surface: Surface, fallback: THREE.Color
 }
 
 async function loadPainting(dir: string, name: string): Promise<Painting> {
-  const [meta, paint, depth] = await Promise.all([
+  const [metadata, painted, depthMap] = await Promise.allSettled([
     fetch(`${dir}/meta.json`).then((r) => { if (!r.ok) throw new Error(`no painting at ${dir} (${r.status})`); return r.json() as Promise<SetMeta>; }),
     new THREE.TextureLoader().loadAsync(`${dir}/paint.webp`),
     new THREE.TextureLoader().loadAsync(`${dir}/depth.png`),
   ]);
+  if (metadata.status === 'rejected' || painted.status === 'rejected' || depthMap.status === 'rejected') {
+    // The other resources can finish after the first failure; retain them until they can be freed.
+    if (painted.status === 'fulfilled') painted.value.dispose();
+    if (depthMap.status === 'fulfilled') depthMap.value.dispose();
+    const failure = [metadata, painted, depthMap].find((r) => r.status === 'rejected') as PromiseRejectedResult;
+    throw failure.reason;
+  }
+  const meta = metadata.value, paint = painted.value, depth = depthMap.value;
   paint.colorSpace = THREE.SRGBColorSpace;
   paint.anisotropy = 8;
   depth.colorSpace = THREE.NoColorSpace;
@@ -153,6 +161,9 @@ export class PaintedSet {
   private readonly tint = { value: new THREE.Color(1, 1, 1) };
   private readonly time = { value: 0 };
   private readonly shots = new Map<string, Painting>();
+  private shotScript: string | null = null;
+  private shotGeneration = 0;
+  private loadingShots: Promise<void> | null = null;
   private manifest: Array<{ name: string; script: string }> = [];
   private slotA: Painting | null = null;
   private slotB: Painting | null = null;
@@ -160,7 +171,9 @@ export class PaintedSet {
   private readonly dir = new THREE.Vector3();
   /** The gameplay view painted in each region's light (the same view, so only the painting differs). */
   private readonly regionPaints = new Map<string, THREE.Texture>();
+  private readonly regionLoads = new Map<string, Promise<THREE.Texture | null>>();
   private region = '';
+  private disposed = false;
 
   private constructor(private readonly name: string, private readonly gameplay: Painting) { this.group.name = 'Painted set'; }
 
@@ -260,13 +273,27 @@ export class PaintedSet {
 
   /** Load a cutscene's own backgrounds (the shots its camera keys were painted for). */
   async prepareShots(script: string): Promise<void> {
+    if (this.disposed) return;
+    if (this.shotScript !== script) { this.releaseShots(); this.shotScript = script; }
+    if (this.loadingShots) return this.loadingShots;
+    const generation = this.shotGeneration;
     const wanted = this.manifest.filter((m) => m.script === script && !this.shots.has(m.name));
-    const loaded = await Promise.all(wanted.map((m) => loadPainting(`${BASE}${this.name}/shots/${m.name}`, m.name).catch(() => null)));
-    for (const p of loaded) if (p) this.shots.set(p.name, p);
+    const pending = Promise.all(wanted.map((m) => loadPainting(`${BASE}${this.name}/shots/${m.name}`, m.name).catch(() => null))).then((loaded) => {
+      for (const p of loaded) if (p) {
+        if (this.disposed || generation !== this.shotGeneration) { p.paint.dispose(); p.depth.dispose(); }
+        else this.shots.set(p.name, p);
+      }
+    });
+    this.loadingShots = pending;
+    try { await pending; }
+    finally { if (this.loadingShots === pending) this.loadingShots = null; }
   }
 
   /** Let the cutscene's backgrounds go; the gameplay painting stays. */
   releaseShots(): void {
+    this.shotGeneration++;
+    this.shotScript = null;
+    this.loadingShots = null;
     this.assign(this.gameplay, this.gameplay, 0);
     for (const p of this.shots.values()) { p.paint.dispose(); p.depth.dispose(); }
     this.shots.clear();
@@ -276,15 +303,26 @@ export class PaintedSet {
 
   /** Paint the gameplay view in a region's own light; a region not yet painted keeps the set's own. */
   async useRegion(key: string): Promise<void> {
-    if (key === this.region) return;
+    if (this.disposed || key === this.region) return;
     this.region = key;
     if (!this.regionPaints.has(this.name)) this.regionPaints.set(this.name, this.gameplay.paint);
     let paint = this.regionPaints.get(key);
     if (!paint) {
-      paint = await new THREE.TextureLoader().loadAsync(`${BASE}${this.name}/regions/${key}/paint.webp`).catch(() => this.regionPaints.get(this.name)!);
-      paint.colorSpace = THREE.SRGBColorSpace;
-      paint.anisotropy = 8;
-      this.regionPaints.set(key, paint);
+      let pending = this.regionLoads.get(key);
+      if (!pending) {
+        pending = new THREE.TextureLoader().loadAsync(`${BASE}${this.name}/regions/${key}/paint.webp`).catch(() => null).then((loaded) => {
+          if (this.disposed) { loaded?.dispose(); return null; }
+          const result = loaded ?? this.regionPaints.get(this.name)!;
+          result.colorSpace = THREE.SRGBColorSpace;
+          result.anisotropy = 8;
+          this.regionPaints.set(key, result);
+          return result;
+        }).finally(() => this.regionLoads.delete(key));
+        this.regionLoads.set(key, pending);
+      }
+      const loaded = await pending;
+      if (!loaded || this.disposed) return;
+      paint = loaded;
     }
     if (this.region !== key) return;          // a later region was asked for meanwhile
     this.gameplay.paint = paint;
@@ -299,21 +337,27 @@ export class PaintedSet {
       return;
     }
     // The two paintings that best serve this camera, weighed by how well each does.
-    const scored = [this.gameplay, ...this.shots.values()].map((p) => ({ p, s: viewScore(p.camera, camera, this.eye, this.dir) + 1e-6 }));
+    // Rank in log space: long camera moves can put every raw exponential below floating-point
+    // precision. Adding a floor there made unrelated paintings tie (including the gameplay view).
+    const scored = [this.gameplay, ...this.shots.values()].map((p) => ({ p, s: viewLogScore(p.camera, camera, this.eye, this.dir) }));
     scored.sort((x, y) => y.s - x.s);
     const [first, second] = scored;
     // Keep each painting in the slot it already holds, so the weighing never jumps.
     let a = first, b = second;
     if (this.slotB === first.p || this.slotA === second.p) { a = second; b = first; }
-    this.assign(a.p, b.p, b.s / (a.s + b.s));
+    const weightA = Math.exp(a.s - first.s), weightB = Math.exp(b.s - first.s);
+    this.assign(a.p, b.p, weightB / (weightA + weightB));
   }
 
   dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
+    this.releaseShots();
     for (const m of this.materials) m.dispose();
     for (const g of this.geometries) g.dispose();
-    this.gameplay.paint.dispose(); this.gameplay.depth.dispose();
-    for (const t of new Set(this.regionPaints.values())) t.dispose();
-    for (const p of this.shots.values()) { p.paint.dispose(); p.depth.dispose(); }
+    for (const t of new Set([this.gameplay.paint, this.gameplay.depth, ...this.regionPaints.values()])) t.dispose();
+    this.regionPaints.clear();
+    this.regionLoads.clear();
     this.group.removeFromParent();
   }
 }

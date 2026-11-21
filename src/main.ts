@@ -181,13 +181,19 @@ async function prefetchModel(step: (f: number, label: string) => void): Promise<
 }
 
 const game = new Game({ world, audio, book, settings, hudRoot, startCamera: () => tracker.start() });
-void game.boot(async (step) => {
+const boot = game.boot(async (step) => {
   await world.warmup(step);
   await prefetchModel(step);
 });
 
 // Development-only console hooks for checking levels, scenes and spells without a camera.
 if (import.meta.env.DEV) {
+  if (new URLSearchParams(location.search).has('review')) {
+    void boot.then(async () => {
+      const { artReview } = await import('./dev/artReview.ts');
+      await artReview(world);
+    });
+  }
   void import('./dev/inspect.ts').then(({ inspector }) => Object.assign((window as unknown as { arcane: object }).arcane, { inspect: inspector(world) }));
   Object.assign(window, {
     arcane: {
