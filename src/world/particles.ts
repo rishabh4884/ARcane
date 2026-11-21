@@ -1,6 +1,11 @@
 import * as THREE from 'three';
+import { INK } from './render/InkPaint.ts';
 
-/** Sprite look. Glow: hot core, soft halo. Spark: tight bright point. Mist: broad, soft, dim. */
+/**
+ * Sprite look, drawn as an effects animator draws them: glow, a hard-edged mote with a pale core and a
+ * faint airbrushed halo; spark, a four-pointed glint redrawn every drawing; mist, a lobed cel-shaded
+ * puff with an ink rim (in the mist system) or a soft-edged wisp of light (in the spell system).
+ */
 export type ParticleStyle = 'glow' | 'spark' | 'mist';
 const STYLE_ID: Record<ParticleStyle, number> = { glow: 0, spark: 1, mist: 2 };
 
@@ -43,9 +48,13 @@ export class ParticleSystem {
   private readonly look: THREE.BufferAttribute;
   private count = 0;
   private disposed = false;
+  /** Drawn on ones (spell sparks) or twos (smoke): what shows moves a drawing at a time. */
+  private readonly step: number;
+  private held = 0;
 
   constructor(capacity = 6000, pixelRatio = 1, blending: THREE.Blending = THREE.AdditiveBlending) {
     this.capacity = capacity;
+    this.step = blending === THREE.AdditiveBlending ? 1 / 24 : 1 / 12;
     this.data = new Float32Array(capacity * STRIDE);
     this.colors = new Float32Array(capacity * 3);
     const geometry = new THREE.BufferGeometry();
@@ -64,6 +73,7 @@ export class ParticleSystem {
       vertexColors: true,
       uniforms: {
         uProjScale: { value: 600 * pixelRatio },
+        uDrawing: INK.uDrawing,
       },
       vertexShader: `
         attribute vec4 look; // size, alpha, style, seed
@@ -80,26 +90,48 @@ export class ParticleSystem {
           gl_Position = projectionMatrix * mv;
         }`,
       fragmentShader: `
+        uniform float uDrawing;
         varying vec3 vColor; varying float vAlpha; varying float vStyle; varying float vSeed;
+        float ph(float x) { return fract(sin(x * 127.1) * 43758.5453); }
         void main(){
-          float d = length(gl_PointCoord - 0.5) * 2.0;
+          vec2 p = (gl_PointCoord - 0.5) * 2.0;
+          float d = length(p);
           if (d > 1.0) discard;
+          // Each particle is redrawn every drawing: a little turn, a little change of shape.
+          float draw = uDrawing + floor(vSeed * 7.0);
           float a;
           vec3 c = vColor;
           if (vStyle < 0.5) {
-            float core = exp(-d * d * 18.0);
-            float halo = exp(-d * d * 3.2);
-            a = core * 0.9 + halo * 0.45;
-            c = mix(vColor, vec3(1.0), core * 0.55);
+            float wob = (ph(vSeed * 31.0 + draw) - 0.5) * 0.06;
+            float body = 1.0 - smoothstep(0.5 + wob, 0.56 + wob, d);
+            float core = 1.0 - smoothstep(0.22, 0.27, d);
+            float halo = (1.0 - smoothstep(0.0, 1.0, d)) * ${additive ? '0.2' : '0.0'};
+            a = max(body * 0.9, halo);
+            c = mix(vColor, vec3(1.0), core * 0.6);
+            ${additive ? '' : 'c = mix(c, vColor * 0.35, smoothstep(0.42, 0.5, d) * body * 0.8);   // an ink edge'}
           } else if (vStyle < 1.5) {
-            float core = exp(-d * d * 40.0);
-            a = core + exp(-d * d * 7.0) * 0.25;
-            c = mix(vColor, vec3(1.0), core * 0.7);
+            float rot = (ph(vSeed * 91.0 + draw) - 0.5) * 1.4;
+            vec2 q = vec2(cos(rot) * p.x - sin(rot) * p.y, sin(rot) * p.x + cos(rot) * p.y);
+            float star = abs(q.x) * abs(q.y) * 16.0 + (abs(q.x) + abs(q.y)) * 0.95;
+            a = 1.0 - smoothstep(0.82, 0.96, star);
+            c = mix(vColor, vec3(1.0), (1.0 - smoothstep(0.15, 0.45, star)) * 0.75);
           } else {
-            float soft = 1.0 - smoothstep(0.0, 1.0, d);
-            a = soft * soft * (0.75 + 0.25 * sin(vSeed * 6.2831 + d * 4.0));
+            float ang = atan(p.y, p.x);
+            float r = 0.78 + 0.1 * sin(ang * 3.0 + vSeed * 6.28) + 0.06 * sin(ang * 5.0 + vSeed * 13.0 + floor(draw * 0.5));
+            // Faint banks of mist stay soft; puffs dense enough to be things are drawn hard-edged.
+            float drawnness = smoothstep(0.15, 0.35, vAlpha);
+            float body = 1.0 - smoothstep(r - mix(0.3, 0.04, drawnness), r, d);
+            ${additive ? `
+            a = body * 0.45;` : `
+            // Two tones of smoke, lit from above and to the left, inside an ink line.
+            float lit = smoothstep(-0.15, 0.05, dot(p / max(d, 1e-3), normalize(vec2(-0.5, 0.6))) * d - 0.1);
+            c = mix(vColor * 0.78, vColor * 1.12, lit);
+            float rim = body * smoothstep(r - 0.16, r - 0.08, d) * drawnness;
+            c = mix(c, vColor * 0.4, rim * 0.85);
+            a = body * 0.92;`}
           }
-          gl_FragColor = vec4(c * ${additive ? '1.4' : '1.0'}, a * vAlpha);
+          if (a < 0.01) discard;
+          gl_FragColor = vec4(c * ${additive ? '1.3' : '1.0'}, a * vAlpha);
         }`,
     });
     this.points = new THREE.Points(geometry, material);
@@ -167,6 +199,9 @@ export class ParticleSystem {
     const pos = this.position.array as Float32Array;
     const col = this.color.array as Float32Array;
     const look = this.look.array as Float32Array;
+    this.held += dt;
+    const draw = this.held >= this.step;
+    if (draw) this.held %= this.step;
     let i = 0;
     while (i < this.count) {
       const o = i * STRIDE;
@@ -185,6 +220,7 @@ export class ParticleSystem {
       const damp = Math.max(0, 1 - d[o + DRAG] * dt);
       d[o + VX] *= damp; d[o + VY] = d[o + VY] * damp - d[o + GRAV] * dt; d[o + VZ] *= damp;
       d[o + PX] += d[o + VX] * dt; d[o + PY] += d[o + VY] * dt; d[o + PZ] += d[o + VZ] * dt;
+      if (!draw) { i++; continue; }
       const u = d[o + AGE] / d[o + TTL];
       const fadeIn = d[o + FADE] > 0 ? Math.min(1, d[o + AGE] / d[o + FADE]) : 1;
       const fadeOut = 1 - u * u;
@@ -196,6 +232,7 @@ export class ParticleSystem {
       look[i * 4 + 3] = d[o + SEED];
       i++;
     }
+    if (!draw) return;
     this.points.geometry.setDrawRange(0, this.count);
     if (this.count > 0) {
       this.position.clearUpdateRanges(); this.position.addUpdateRange(0, this.count * 3); this.position.needsUpdate = true;
