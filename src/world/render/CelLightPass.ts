@@ -26,6 +26,9 @@ export class CelLightPass extends Pass {
   constructor(private readonly scene: THREE.Scene, private readonly camera: THREE.Camera) {
     super();
     this.target = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
+    // Mipmapped, so the composite can tell a broad flash from a slim shape of light.
+    this.target.texture.generateMipmaps = true;
+    this.target.texture.minFilter = THREE.LinearMipmapLinearFilter;
     this.material = new THREE.ShaderMaterial({
       uniforms: { tDiffuse: { value: null }, tLight: { value: this.target.texture } },
       vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
@@ -46,7 +49,12 @@ export class CelLightPass extends Pass {
           vec3 cel = hue * (body * 0.3 + core * 0.55) * 1.15;
           cel = mix(cel, vec3(1.0), band(l, 0.85, w) * 0.5);
           vec3 soft = light * mix(0.62, 0.15, body);
-          gl_FragColor = vec4(base.rgb + cel + soft, base.a);
+          // A broad flash or beam (light all around, not just here) is drawn as a soft fill: cut into
+          // bands it would read as flat bars. Only slim shapes of light take the cel.
+          vec3 around = texture2D(tLight, vUv, 6.0).rgb;
+          float broad = smoothstep(0.08, 0.22, max(around.r, max(around.g, around.b)));
+          vec3 drawn = mix(cel + soft, light, broad);
+          gl_FragColor = vec4(base.rgb + drawn, base.a);
         }`,
     });
     this.quad = new FullScreenQuad(this.material);
