@@ -557,10 +557,6 @@ const KINDLER: Script = {
     if (t > 18.8 && t < 19) s.stage.flash('#ffffff', 0.9);
     s.act('hands', t < 19 ? 'idle' : 'strike', smooth(20, 27, t));
     if (t >= 19) s.act('hands', t < 22 ? 'windup' : 'strike', t < 22 ? smooth(19, 22, t) : smooth(22, 27, t));
-    const h = s.get('hands');
-    h.u.uExposure.value = 1 + smooth(19, 24, t) * 0.25;
-    h.overrides.flash = 0.14 * bump(19, 30, t);
-    h.u.uFlashColor.value.set('#ffd9a0');
   },
 };
 

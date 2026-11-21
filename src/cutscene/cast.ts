@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { UNLIT_KING, WARDEN_LOOK, buildRegal } from '../world/characters/bosses.ts';
 import { ellipsoid, lathe, tube, type Body, type V3 } from '../world/rig/Body.ts';
+import { Sculpt } from '../world/rig/Sculpt.ts';
 import type { Design } from '../world/rig/Character.ts';
 import { biped, blink, clamp, idleLife, lookAt, smooth, TAU, type Anim } from '../world/rig/Rig.ts';
 import { glowTexture } from '../world/vfx.ts';
@@ -27,8 +28,9 @@ const SKIN = '#d6a990', SKIN_DEEP = '#b5806a', NAIL = '#ecd0c2';
 
 /**
  * Two forearms and hands seen from the caster's own eyes: the backs toward you, thumbs inward.
- * Each finger is one continuous tube through three phalanges, skinned to three bones, with knuckle
- * swells, nails and creases; the palm carries the knuckle heads; veins of light run under the skin.
+ * Plain human hands, nothing magical about them: each hand is one sculpted surface (palm, fingers
+ * through three phalanges skinned to three bones, the thumb, nails), so it reads as a hand and not as
+ * jointed pieces. The magic is in what they cast.
  */
 export const KINDLER_HANDS: Design = {
   kind: 'hands', name: 'Your hands', height: 0.6, radius: 0.3, turnRate: 0, stride: 1, pace: 1,
@@ -46,20 +48,17 @@ export const KINDLER_HANDS: Design = {
       b.part(tube([[X(0.33), -0.64, 0.17], [X(0.29), -0.5, 0.25], [X(0.24), -0.38, 0.33], [X(0.2), -0.28, 0.41], [X(0.17), -0.205, 0.46], [X(0.152), -0.15, 0.497]], [0.05, 0.05, 0.043, 0.034, 0.03, 0.027], {
         radial: 16, segments: 30, flatten: { axis: [0, 0, 1], amount: 0.3 },
       }), { color: SKIN, shade: SKIN_DEEP, surface: 'skin', bones: [`elbow${S}`, `wrist${S}`] });
-      b.part(ellipsoid([X(0.192), -0.215, 0.452], [0.008, 0.009, 0.007]), { color: SKIN, surface: 'skin', bones: [`wrist${S}`] });
-      // The wrist: a bridge of flesh from forearm into the heel of the hand.
-      b.part(ellipsoid([X(0.16), -0.175, 0.482], [0.033, 0.034, 0.023]), { color: SKIN, shade: SKIN_DEEP, surface: 'skin', bones: [`wrist${S}`, `hand${S}`] });
-      // The palm and back of the hand: thick at the wrist, the knuckle heads in a slight arc.
-      b.part(ellipsoid([X(0.142), -0.115, 0.513], [0.047, 0.06, 0.022], {
-        deform: (d, p) => {
-          // Squarer than an oval: broad across the knuckles, narrowing into the wrist.
-          p.x *= (1 + 0.22 * Math.max(0, d.y) - 0.18 * Math.max(0, -d.y)) * (Math.abs(d.x) > 0.55 ? 1.06 : 1);
-          if (d.z < 0) p.z *= 0.65;                                   // flatter back of the hand
-          p.x += -s * Math.max(0, -d.y) * 0.006;                      // narrows toward the wrist
-          if (d.y > 0.55) p.y -= (d.y - 0.55) * 0.012 * (1 - Math.abs(d.x)); // knuckle arc
-          if (d.x * s < -0.4 && d.y < 0.2 && d.z > -0.2) p.z += 0.006 * (-d.x * s - 0.4); // thenar pad
-        },
-      }), { color: SKIN, shade: SKIN_DEEP, surface: 'skin', bones: [`wrist${S}`, `hand${S}`] });
+      // The hand is one sculpted surface, smoothly blended, so it reads as a hand and not as jointed
+      // pieces: the wrist flowing out of the forearm, a squarish palm with the mound of the thumb and
+      // the heel of the hand, knuckles, fingers growing from the palm, the thumb from its mound, nails.
+      const h = new Sculpt();
+      h.scale = b.scale;
+      const skin = { color: SKIN, shade: SKIN_DEEP, surface: 'skin' as const };
+      h.blob([X(0.185), -0.207, 0.454], [0.008, 0.009, 0.007], { ...skin, bones: [`wrist${S}`], blend: 0.005 });
+      h.blob([X(0.157), -0.168, 0.488], [0.026, 0.031, 0.018], { ...skin, bones: [`wrist${S}`, `hand${S}`], blend: 0.012 }, [0.59, 0, 0]);
+      h.box([X(0.138), -0.112, 0.515], [0.037, 0.047, 0.011], 0.01, { ...skin, bones: [`hand${S}`, `wrist${S}`], blend: 0.016 }, [0.38, 0, 0]);
+      h.blob([X(0.118), -0.138, 0.523], [0.017, 0.026, 0.013], { ...skin, bones: [`hand${S}`, `t1${S}`], blend: 0.012 }, [0.38, 0, s * 0.35]);
+      h.blob([X(0.163), -0.142, 0.522], [0.013, 0.024, 0.011], { ...skin, bones: [`hand${S}`], blend: 0.01 }, [0.38, 0, 0]);
       for (const f of FINGERS) {
         const shape = FINGER_SHAPE[f];
         const base = new THREE.Vector3(X(shape.x), -0.068, 0.53);
@@ -71,37 +70,32 @@ export const KINDLER_HANDS: Design = {
         b.bone(`${f}1${S}`, `hand${S}`, v(base));
         b.bone(`${f}2${S}`, `${f}1${S}`, v(p1));
         b.bone(`${f}3${S}`, `${f}2${S}`, v(p2), v(p3));
-        // Knuckle head on the back of the hand.
-        b.part(ellipsoid(v(base.clone().add(new THREE.Vector3(0, 0, -0.008))), [shape.r * 0.95, shape.r * 0.75, shape.r * 0.8]), { color: SKIN, surface: 'skin', bones: [`hand${S}`, `${f}1${S}`] });
-        // One continuous finger tapering to a rounded pad: drawn, a finger is one line from knuckle to
-        // tip, not a string of beads, so the joints barely swell.
-        const r = shape.r;
-        b.part(tube([v(base), v(base.clone().lerp(p1, 0.5)), v(p1), v(p1.clone().lerp(p2, 0.5)), v(p2), v(p2.clone().lerp(p3, 0.55)), v(p3)],
-          [r * 1.02, r * 0.96, r * 0.93, r * 0.88, r * 0.84, r * 0.78, r * 0.66], { radial: 12, segments: 34, flatten: { axis: [0, 0, 1], amount: 0.18 } }),
-        { color: SKIN, shade: '#dcae98', surface: 'skin', bones: [`${f}1${S}`, `${f}2${S}`, `${f}3${S}`], falloff: 6 });
-        // The nail, glossy, on the back of the last phalanx.
-        const nail = p2.clone().lerp(p3, 0.62).add(new THREE.Vector3(0, 0, -r * 0.62));
-        b.part(ellipsoid(v(nail), [r * 0.62, r * 0.85, r * 0.2], { deform: (d, pp) => { pp.z -= (1 - d.x * d.x) * r * 0.08; } }),
-          { color: NAIL, shade: '#f4ded2', surface: 'bone', bones: [`${f}3${S}`], relief: 0 });
+        // Each finger grows out of the palm and tapers to a rounded pad; past the knuckle it is not
+        // blended with its neighbours, so the four stay four fingers.
+        const r = shape.r * 0.84;
+        const tip = p3.clone().addScaledVector(dir, -r * 0.55);
+        h.cone(v(base.clone().addScaledVector(dir, -0.012)), v(p1), r * 1.04, r * 0.94, { ...skin, shade: '#dcae98', bones: [`${f}1${S}`, `${f}2${S}`], blend: 0.004 });
+        h.cone(v(p1), v(p2), r * 0.94, r * 0.86, { ...skin, shade: '#dcae98', bones: [`${f}1${S}`, `${f}2${S}`, `${f}3${S}`], blend: 0 });
+        h.cone(v(p2), v(tip), r * 0.86, r * 0.74, { ...skin, shade: '#dcae98', bones: [`${f}2${S}`, `${f}3${S}`], blend: 0 });
+        // The nail, sunk almost flush with the back of the last joint: a colour, not a bump.
+        const nail = p2.clone().lerp(p3, 0.6).add(new THREE.Vector3(0, 0, -r * 0.52));
+        h.blob(v(nail), [r * 0.62, r * 0.82, r * 0.33], { color: NAIL, shade: '#f4ded2', surface: 'bone', bones: [`${f}3${S}`], blend: 0 }, [0.36, 0, 0]);
       }
-      // The thumb: a metacarpal from the wrist, then two phalanges.
+      // The thumb: a metacarpal from the mound of the thumb, then two phalanges.
       const t0: V3 = [X(0.128), -0.158, 0.502], t1: V3 = [X(0.103), -0.118, 0.528], t2: V3 = [X(0.085), -0.09, 0.556], t3: V3 = [X(0.074), -0.066, 0.574];
       b.bone(`t1${S}`, `hand${S}`, t0);
       b.bone(`t2${S}`, `t1${S}`, t1);
       b.bone(`t3${S}`, `t2${S}`, t2, t3);
-      b.part(tube([t0, t1, t2, t3], [0.017, 0.0135, 0.0125, 0.0092], { radial: 12, segments: 24 }), { color: SKIN, shade: '#dcae98', surface: 'skin', bones: [`t1${S}`, `t2${S}`, `t3${S}`, `hand${S}`] });
-      b.part(ellipsoid([X(0.078), -0.072, 0.566], [0.0068, 0.0085, 0.0022]), { color: NAIL, surface: 'bone', bones: [`t3${S}`], relief: 0 });
-      // Faint veins of light under the skin, wrist to knuckles.
-      for (const k of [0, 1, 2]) {
-        const x = 0.16 - k * 0.02;
-        b.part(tube([[X(0.19), -0.25, 0.432], [X(0.17), -0.18, 0.47], [X(x), -0.11, 0.497], [X(x - 0.003), -0.075, 0.512]], [0.0018, 0.0016, 0.0014, 0.0008], { radial: 5 }),
-          { color: '#ffd39a', surface: 'glow', glow: 0.45, bones: [`wrist${S}`, `hand${S}`] });
-      }
+      h.cone(t0, t1, 0.0165, 0.0132, { ...skin, shade: '#dcae98', bones: [`t1${S}`, `hand${S}`], blend: 0.01 });
+      h.cone(t1, t2, 0.0132, 0.012, { ...skin, shade: '#dcae98', bones: [`t1${S}`, `t2${S}`], blend: 0.0015 });
+      h.cone(t2, [X(0.077), -0.072, 0.569], 0.012, 0.0095, { ...skin, shade: '#dcae98', bones: [`t2${S}`, `t3${S}`], blend: 0.0015 });
+      h.blob([X(0.078), -0.072, 0.5625], [0.0066, 0.0082, 0.0035], { color: NAIL, shade: '#f4ded2', surface: 'bone', bones: [`t3${S}`], blend: 0 });
+      b.sculpted(h, 0.0021);
     }
   },
   animate(a: Anim) {
     const r = a.rig;
-    // progress: 0 hands lowered out of sight … 1 raised before the eyes; strike = open and burning.
+    // progress: 0 hands lowered out of sight … 1 raised before the eyes; strike = fingers opened wide.
     const raise = a.pose === 'idle' ? 0 : smooth(0, 1, a.progress);
     r.pos('chest', 0, -0.5 * (1 - raise), 0);
     const open = a.pose === 'strike' ? smooth(0, 0.6, a.progress) : 0;
