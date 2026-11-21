@@ -887,13 +887,18 @@ function rise(target: THREE.Vector3, color: THREE.Color, ctx: SpellContext): Spe
   const pillarMat = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
     uniforms: { uColor: { value: color.clone() }, uOpacity: { value: 0 }, uTime: { value: 0 } },
-    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-    fragmentShader: `uniform vec3 uColor; uniform float uOpacity; uniform float uTime; varying vec2 vUv;
+    vertexShader: `varying vec2 vUv; varying float vFacing;
+      void main(){ vUv = uv; vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        vFacing = abs(dot(normalize(normalMatrix * normal), normalize(-mv.xyz)));
+        gl_Position = projectionMatrix * mv; }`,
+    fragmentShader: `uniform vec3 uColor; uniform float uOpacity; uniform float uTime; varying vec2 vUv; varying float vFacing;
       void main(){
         float fall = pow(1.0 - vUv.y, 1.6);
         float bands = 0.7 + 0.3 * sin(vUv.y * 22.0 - uTime * 9.0 + sin(vUv.x * 37.7) * 0.6);
         float edge = 0.55 + 0.45 * pow(abs(sin(vUv.x * 3.14159 * 6.0 + uTime)), 0.5);
-        gl_FragColor = vec4(mix(uColor * 1.5, vec3(1.2), fall * 0.4), fall * bands * edge * uOpacity * 0.55);
+        // A column of light, not a glass tube: it thins away where its surface turns from the eye.
+        float soft = smoothstep(0.08, 0.7, vFacing);
+        gl_FragColor = vec4(mix(uColor * 1.5, vec3(1.2), fall * 0.4), fall * bands * edge * soft * uOpacity * 0.55);
       }`,
   });
   const pillar = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.35, 7, 40, 1, true), pillarMat);
