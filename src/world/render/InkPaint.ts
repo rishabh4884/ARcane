@@ -114,7 +114,7 @@ export function inkPaintMaterial(maps: InkMaps | null, u: FigureUniforms): THREE
         #else
           vec3 base = vCol;
           float ao = vAOv;
-          vec3 fx = vec3(0.0, 0.0, 0.35);
+          vec3 fx = vec3(0.0, 0.0, 0.25);
           vec3 emit = vec3(0.0);
         #endif
         vec3 V = normalize(cameraPosition - vWorld);
@@ -132,8 +132,10 @@ export function inkPaintMaterial(maps: InkMaps | null, u: FigureUniforms): THREE
         vec3 mid = base * uMidColor;
         vec3 light = base * uLitColor;
         vec3 col = mix(shadow, mix(mid, light, top), lit);
-        // Skin and thin things warm at the shadow edge.
-        col += base * vec3(0.55, 0.16, 0.08) * fx.b * (1.0 - abs(lit * 2.0 - 1.0)) * 0.7;
+        // Skin and thin things warm where light turns to shadow: a soft band across the turn of the
+        // form (measured in shading, not pixels), so it never draws as a thin glowing wire.
+        float turn = 1.0 - smoothstep(0.0, 0.1, abs(t - 0.5));
+        col += base * vec3(0.55, 0.16, 0.08) * fx.b * turn * 0.32;
         // Only the deepest creases are inked in.
         col = mix(col, uInk, smoothstep(0.2, 0.05, ao) * 0.35);
         // The moon behind paints a crisp silver edge only on what turns toward it at the silhouette.
