@@ -6,6 +6,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { InkEdgePass } from './render/InkEdgePass.ts';
+import { CelLightPass } from './render/CelLightPass.ts';
 
 /**
  * Depth of field, the way a painted 2D world stages depth: the playing ground stays crisp, the
@@ -132,6 +133,7 @@ export class PostFX {
   private time = 0;
 
   private readonly ink: InkEdgePass | null = null;
+  private readonly celLight: CelLightPass | null = null;
 
   constructor(private readonly renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.PerspectiveCamera, enabled = true, authored = false, drawn = false) {
     // The scene renders into a target that keeps its depth, so the depth of field can read it.
@@ -140,6 +142,8 @@ export class PostFX {
     this.composer.addPass(new RenderPass(scene, camera));
     // Drawn figures: ink the folds and overlaps inside their silhouettes.
     if (drawn) { this.ink = new InkEdgePass(scene, camera); this.composer.addPass(this.ink); }
+    // Drawn effects: spells' light cut into flat cel bands before the bloom softens around them.
+    if (drawn) { this.celLight = new CelLightPass(scene, camera); this.composer.addPass(this.celLight); }
     // No depth of field: the playing ground and every figure on it stay crisp at any distance.
     // The near frame carries its own softness, painted into its textures.
     this.depthOfField = new ShaderPass(DepthOfFieldShader);
@@ -168,6 +172,9 @@ export class PostFX {
     u.uTint.value.copy(tint); u.uLift.value.copy(lift); u.uSat.value = saturation; u.uExposure.value = exposure; u.uVignette.value = vignette;
   }
 
+  /** Whether spell light is in the air this frame (the cel-light pass costs nothing otherwise). */
+  setSpellLight(active: boolean): void { if (this.celLight) this.celLight.enabled = active; }
+
   /** 0 … 1 the King's devouring darkness. */
   setDark(amount: number): void { this.grade.uniforms.uDark.value = amount; }
 
@@ -178,6 +185,7 @@ export class PostFX {
     this.composer.setPixelRatio(pixelRatio);
     this.composer.setSize(width, height);
     this.ink?.setSize(Math.round(width * pixelRatio), Math.round(height * pixelRatio));
+    this.celLight?.setSize(Math.round(width * pixelRatio), Math.round(height * pixelRatio));
     // Bloom is a blur: half resolution is indistinguishable and a quarter of the cost.
     this.bloom.setSize(Math.max(1, Math.round(width * pixelRatio * 0.5)), Math.max(1, Math.round(height * pixelRatio * 0.5)));
     this.grade.uniforms.uAspect.value = width / Math.max(1, height);
@@ -199,6 +207,7 @@ export class PostFX {
 
   dispose(): void {
     this.ink?.dispose();
+    this.celLight?.dispose();
     this.bloom.dispose();
     this.composer.dispose();
   }

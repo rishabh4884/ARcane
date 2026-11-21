@@ -13,6 +13,7 @@ import { AUTHORED_WORLD, ForestEnvironment, PAINTED_WORLD } from './ForestEnviro
 import { DRAWN_LOOK } from './authored.ts';
 import { WOODLAND_MODELS } from './Woodland.ts';
 import { INK } from './render/InkPaint.ts';
+import { tagSpellLight } from './render/CelLightPass.ts';
 import { preloadModels } from './render/models.ts';
 import { FrameBudget } from './FrameBudget.ts';
 import { CasterView, worldInputBlocked } from './CasterView.ts';
@@ -856,6 +857,10 @@ export class World {
     this.camera.quaternion.multiply(this.shakeQuaternion.setFromEuler(this.shakeEuler));
     this.camera.position.y += Math.sin(time * 1.7 + 0.4) * 0.03 * k + inhale * 0.012;
     this.camera.updateMatrixWorld(true);
+    // Spells' additive light is drawn as cel light (see render/CelLightPass.ts).
+    let spellLight = 0;
+    if (DRAWN_LOOK) for (const a of this.spellAnimations) spellLight += tagSpellLight(a.group);
+    this.post.setSpellLight(spellLight > 0);
     this.post.render(dt, this.scene, this.camera);
     this.camera.position.copy(this.basePosition);
     this.camera.quaternion.copy(this.baseQuaternion);
