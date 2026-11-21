@@ -126,6 +126,9 @@ export class Character {
         material = inkPaintMaterial(null, u);
         b = baked(design);
       }
+      // The caster's own hands are seen up close: drawn in two tones, since the brightest band on a
+      // slim finger draws as a bright broken strip, like a wire. They keep the region's light.
+      if (design.kind === 'hands') { const pu = (material as THREE.ShaderMaterial).uniforms; pu.uLitColor = pu.uMidColor; }
     } else if (canUseModel(design.model)) {
       // An authored model: its baked maps under the shared stylised lighting.
       const m = modelBody(design.model);
