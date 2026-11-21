@@ -1,5 +1,73 @@
 [
  {
+  "name": "flowers-1",
+  "script": "flowers",
+  "key": 1,
+  "position": [
+   -0.4,
+   2.289,
+   12.6
+  ],
+  "lookAt": [
+   0.2,
+   1.748,
+   10.6
+  ],
+  "fov": 51.92000057964833,
+  "aspect": 2.0
+ },
+ {
+  "name": "flowers-3",
+  "script": "flowers",
+  "key": 3,
+  "position": [
+   0.4,
+   3.084,
+   14.4
+  ],
+  "lookAt": [
+   1.6,
+   1.833,
+   9.5
+  ],
+  "fov": 56.640002805585645,
+  "aspect": 2.0
+ },
+ {
+  "name": "grael-1",
+  "script": "grael",
+  "key": 1,
+  "position": [
+   -1.5,
+   1.028,
+   0
+  ],
+  "lookAt": [
+   0,
+   5,
+   -14
+  ],
+  "fov": 56.640002805585645,
+  "aspect": 2.0
+ },
+ {
+  "name": "grael-3",
+  "script": "grael",
+  "key": 3,
+  "position": [
+   1.5,
+   2.2,
+   -4
+  ],
+  "lookAt": [
+   0,
+   4.4,
+   -13
+  ],
+  "fov": 51.92000057964833,
+  "aspect": 2.0
+ },
+ {
   "name": "intro-0",
   "script": "intro",
   "key": 0,
@@ -65,6 +133,74 @@
    -10
   ],
   "fov": 68.43999812514517,
+  "aspect": 2.0
+ },
+ {
+  "name": "matron-0",
+  "script": "matron",
+  "key": 0,
+  "position": [
+   -4,
+   1.355,
+   3
+  ],
+  "lookAt": [
+   0,
+   7,
+   -12
+  ],
+  "fov": 59.00000050345972,
+  "aspect": 2.0
+ },
+ {
+  "name": "matron-1",
+  "script": "matron",
+  "key": 1,
+  "position": [
+   -2.2,
+   1.602,
+   -1.5
+  ],
+  "lookAt": [
+   0,
+   5,
+   -12
+  ],
+  "fov": 54.280005107711574,
+  "aspect": 2.0
+ },
+ {
+  "name": "matron-2",
+  "script": "matron",
+  "key": 2,
+  "position": [
+   0.6,
+   3.2,
+   -5.2
+  ],
+  "lookAt": [
+   0,
+   5.2,
+   -12
+  ],
+  "fov": 42.47999954286829,
+  "aspect": 2.0
+ },
+ {
+  "name": "matron-3",
+  "script": "matron",
+  "key": 3,
+  "position": [
+   0.2,
+   1.994,
+   2.5
+  ],
+  "lookAt": [
+   0,
+   4.2,
+   -12
+  ],
+  "fov": 61.36000161642837,
   "aspect": 2.0
  },
  {

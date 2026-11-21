@@ -1,0 +1,28 @@
+{
+  "name": "grael-fall-1",
+  "script": "grael-fall",
+  "key": 1,
+  "region": "fen",
+  "position": [
+    0,
+    1.504,
+    -2
+  ],
+  "lookAt": [
+    0,
+    6.5,
+    -12
+  ],
+  "fov": 63.720002729397024,
+  "aspect": 2.0,
+  "near": 0.15000000596046448,
+  "far": 400.0,
+  "width": 2560,
+  "height": 1280,
+  "depthMax": 400.0,
+  "moon": [
+    -0.34,
+    0.33,
+    -0.88
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "name": "matron-fall-1",
+  "script": "matron-fall",
+  "key": 1,
+  "region": "edge",
+  "position": [
+    0.5,
+    1.8,
+    -4.5
+  ],
+  "lookAt": [
+    0,
+    2.6,
+    -11
+  ],
+  "fov": 49.55999946667968,
+  "aspect": 2.0,
+  "near": 0.15000000596046448,
+  "far": 400.0,
+  "width": 2560,
+  "height": 1280,
+  "depthMax": 400.0,
+  "moon": [
+    -0.34,
+    0.33,
+    -0.88
+  ]
+}
