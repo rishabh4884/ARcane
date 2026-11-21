@@ -73,13 +73,12 @@ export const KINDLER_HANDS: Design = {
         b.bone(`${f}3${S}`, `${f}2${S}`, v(p2), v(p3));
         // Knuckle head on the back of the hand.
         b.part(ellipsoid(v(base.clone().add(new THREE.Vector3(0, 0, -0.008))), [shape.r * 0.95, shape.r * 0.75, shape.r * 0.8]), { color: SKIN, surface: 'skin', bones: [`hand${S}`, `${f}1${S}`] });
-        // One continuous finger: swelling at each joint, narrowing between, a rounded pad at the tip.
+        // One continuous finger tapering to a rounded pad: drawn, a finger is one line from knuckle to
+        // tip, not a string of beads, so the joints barely swell.
         const r = shape.r;
         b.part(tube([v(base), v(base.clone().lerp(p1, 0.5)), v(p1), v(p1.clone().lerp(p2, 0.5)), v(p2), v(p2.clone().lerp(p3, 0.55)), v(p3)],
-          [r, r * 0.88, r * 0.92, r * 0.8, r * 0.82, r * 0.74, r * 0.62], { radial: 12, segments: 34, flatten: { axis: [0, 0, 1], amount: 0.18 } }),
+          [r * 1.02, r * 0.96, r * 0.93, r * 0.88, r * 0.84, r * 0.78, r * 0.66], { radial: 12, segments: 34, flatten: { axis: [0, 0, 1], amount: 0.18 } }),
         { color: SKIN, shade: '#dcae98', surface: 'skin', bones: [`${f}1${S}`, `${f}2${S}`, `${f}3${S}`], falloff: 6 });
-        // Joint creases show as small swells on the back.
-        for (const q of [p1, p2]) b.part(ellipsoid(v(q.clone().add(new THREE.Vector3(0, 0, -r * 0.6))), [r * 0.7, r * 0.45, r * 0.35]), { color: '#c99881', surface: 'skin', bones: [q === p1 ? `${f}2${S}` : `${f}3${S}`] });
         // The nail, glossy, on the back of the last phalanx.
         const nail = p2.clone().lerp(p3, 0.62).add(new THREE.Vector3(0, 0, -r * 0.62));
         b.part(ellipsoid(v(nail), [r * 0.62, r * 0.85, r * 0.2], { deform: (d, pp) => { pp.z -= (1 - d.x * d.x) * r * 0.08; } }),
