@@ -1,5 +1,7 @@
 # Painted sets and the drawn look
 
+> Picking the project up? Start with [HANDOFF.md](HANDOFF.md).
+
 Arcane looks like a 2D animated series: drawn characters in ink and paint, standing in painted
 backgrounds, with effects drawn the way an effects animator draws them. All of it is made in this
 repository, by the pipeline described here. [ART_BIBLE.md](ART_BIBLE.md) is the design brief; this
