@@ -54,15 +54,14 @@ export class InkEdgePass extends Pass {
             vec3 n1 = texture2D(tNormal, vUv + off).xyz * 2.0 - 1.0;
             float zn = viewZ(vUv + off);
             // A fold: the surface turns sharply.
-            float fold = smoothstep(0.35, 0.8, 1.0 - dot(n0, n1));
+            float fold = smoothstep(0.5, 0.9, 1.0 - dot(n0, n1));
             // An overlap: one part in front of another (depth jumps relative to distance).
-            float overlap = smoothstep(0.06, 0.16, abs(zn - dc) / max(dc, 0.5));
+            float overlap = smoothstep(0.08, 0.2, abs(zn - dc) / max(dc, 0.5));
             edge = max(edge, max(fold, overlap) * step(d0, 0.9999) * step(dn, 0.9999));
           }
-          // Lines lighten with distance and break a little, like ink on a brush.
-          float fade = 1.0 - smoothstep(14.0, 45.0, dc);
-          float broken = 0.75 + 0.25 * h(floor(vUv / uTexel / 3.0) + uDrawing);
-          gl_FragColor = vec4(mix(base.rgb, uInk, edge * fade * broken * 0.85), base.a);
+          // Lines lighten with distance: a small far figure keeps its silhouette, not its folds.
+          float fade = 1.0 - smoothstep(9.0, 30.0, dc);
+          gl_FragColor = vec4(mix(base.rgb, uInk, edge * fade * 0.8), base.a);
         }`,
     });
     this.quad = new FullScreenQuad(this.material);

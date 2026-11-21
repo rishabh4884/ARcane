@@ -105,9 +105,10 @@ export function inkPaintMaterial(maps: InkMaps | null, u: FigureUniforms): THREE
       ${INK_NOISE}
       void main() {
         #ifdef INK_TEXTURED
-          // Colour read a little soft: painted masses, not texture noise.
-          vec3 base = texture2D(map, vUv, 1.4).rgb;
-          float ao = texture2D(ormMap, vUv).r;
+          // Colour read soft: painted masses, not texture noise; occlusion read broad, so only the
+          // big forms shade, never the sculpt's grain.
+          vec3 base = texture2D(map, vUv, 2.2).rgb;
+          float ao = texture2D(ormMap, vUv, 3.0).r;
           vec3 fx = texture2D(fxMap, vUv).rgb;
           vec3 emit = texture2D(emitMap, vUv).rgb;
         #else
@@ -119,26 +120,26 @@ export function inkPaintMaterial(maps: InkMaps | null, u: FigureUniforms): THREE
         vec3 V = normalize(cameraPosition - vWorld);
         vec3 n = normalize(vNormalW);
         if (!gl_FrontFacing) n = -n;
-        // The brush: a pattern stuck to the body that breaks every band edge into painted strokes.
-        float brush = ipFbm(vRest * 9.0 + vec3(0.0, 0.0, floor(uDrawing * 0.5) * 0.0)) - 0.5;
-        float fine = ipNoise(vRest * 38.0) - 0.5;
-        float t = dot(n, uFillDir) * 0.5 + 0.5 + brush * 0.16 + fine * 0.04;
-        t *= mix(0.55, 1.0, smoothstep(0.25, 0.85, ao));
+        // The brush: a broad pattern stuck to the body that bends each band edge the way a stroke
+        // would, without breaking it into specks.
+        float brush = ipFbm(vRest * 3.2) - 0.5;
+        float t = dot(n, uFillDir) * 0.5 + 0.5 + brush * 0.07;
+        t *= mix(0.78, 1.0, smoothstep(0.25, 0.85, ao));
         float aa = max(fwidth(t), 0.002);
         float lit = smoothstep(0.5 - aa * 1.5, 0.5 + aa * 1.5, t);
-        float top = smoothstep(0.8 - aa * 1.5, 0.8 + aa * 1.5, t + brush * 0.08);
-        vec3 shadow = base * uShadeColor * mix(0.62, 1.0, ao);
+        float top = smoothstep(0.8 - aa * 1.5, 0.8 + aa * 1.5, t + brush * 0.04);
+        vec3 shadow = base * uShadeColor * mix(0.75, 1.0, ao);
         vec3 mid = base * uMidColor;
         vec3 light = base * uLitColor;
         vec3 col = mix(shadow, mix(mid, light, top), lit);
         // Skin and thin things warm at the shadow edge.
         col += base * vec3(0.55, 0.16, 0.08) * fx.b * (1.0 - abs(lit * 2.0 - 1.0)) * 0.7;
-        // Deep creases inked in where the body folds.
-        col = mix(col, uInk, smoothstep(0.32, 0.12, ao) * 0.55);
+        // Only the deepest creases are inked in.
+        col = mix(col, uInk, smoothstep(0.2, 0.05, ao) * 0.35);
         // The moon behind paints a crisp silver edge only on what turns toward it at the silhouette.
         float facing = clamp(dot(n, V), 0.0, 1.0);
         float rimAmt = (1.0 - facing) * clamp(dot(n, uMoonDir) * 0.8 + 0.45, 0.0, 1.0);
-        float rim = smoothstep(0.5, 0.56, rimAmt + brush * 0.06);
+        float rim = smoothstep(0.47, 0.6, rimAmt + brush * 0.03);
         col = mix(col, base * 0.35 + uRimColor * 0.62, rim * 0.8);
         col += base * spellIllumination(vWorld) * 1.2;
         // Eyes and captive light: pure-white emission takes the creature's living eye colour.
@@ -202,7 +203,8 @@ export function inkLineMaterial(u: FigureUniforms): THREE.ShaderMaterial {
         float depth = -mv.z;
         // Line weight: constant on screen, lighter on distant figures, pressure varying along the line,
         // re-drawn (boiled) with each new drawing.
-        float pressure = 0.7 + 0.6 * ipNoise(position * 14.0 + vec3(uDrawing * 1.7));
+        // (A quiet boil: the line breathes along its length and is redrawn every other drawing.)
+        float pressure = 0.88 + 0.24 * ipNoise(position * 5.0 + vec3(floor(uDrawing * 0.5) * 1.7));
         float px = uLineWeight * (uResolution.y / 1080.0) * clamp(9.0 / depth, 0.42, 1.0) * pressure;
         clip.xy += dir * px * 2.0 / uResolution * clip.w;
         clip.z += 0.0004 * clip.w;
