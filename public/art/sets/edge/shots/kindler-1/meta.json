@@ -1,0 +1,28 @@
+{
+  "name": "kindler-1",
+  "script": "kindler",
+  "key": 1,
+  "region": "throne",
+  "position": [
+    0,
+    2.893,
+    16.4
+  ],
+  "lookAt": [
+    0,
+    2.168,
+    13
+  ],
+  "fov": 56.640002805585645,
+  "aspect": 2.0,
+  "near": 0.15000000596046448,
+  "far": 400.0,
+  "width": 2560,
+  "height": 1280,
+  "depthMax": 400.0,
+  "moon": [
+    -0.34,
+    0.33,
+    -0.88
+  ]
+}

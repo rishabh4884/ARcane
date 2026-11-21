@@ -1,0 +1,28 @@
+{
+  "name": "ending-5",
+  "script": "ending",
+  "key": 5,
+  "region": "dawn",
+  "position": [
+    0,
+    9.031,
+    18
+  ],
+  "lookAt": [
+    0,
+    3,
+    -16
+  ],
+  "fov": 70.80000606830299,
+  "aspect": 2.0,
+  "near": 0.15000000596046448,
+  "far": 400.0,
+  "width": 2560,
+  "height": 1280,
+  "depthMax": 400.0,
+  "moon": [
+    -0.34,
+    0.33,
+    -0.88
+  ]
+}

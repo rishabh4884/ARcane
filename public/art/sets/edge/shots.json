@@ -1,5 +1,124 @@
 [
  {
+  "name": "ending-0",
+  "script": "ending",
+  "key": 0,
+  "position": [
+   0,
+   1.949,
+   2
+  ],
+  "lookAt": [
+   0,
+   5,
+   -12
+  ],
+  "fov": 59.00000050345972,
+  "aspect": 2.0
+ },
+ {
+  "name": "ending-1",
+  "script": "ending",
+  "key": 1,
+  "position": [
+   0,
+   3.436,
+   8
+  ],
+  "lookAt": [
+   0,
+   9,
+   -12
+  ],
+  "fov": 68.43999812514517,
+  "aspect": 2.0
+ },
+ {
+  "name": "ending-2",
+  "script": "ending",
+  "key": 2,
+  "position": [
+   -6,
+   2.15,
+   4
+  ],
+  "lookAt": [
+   0,
+   1.6,
+   -6
+  ],
+  "fov": 61.36000161642837,
+  "aspect": 2.0
+ },
+ {
+  "name": "ending-3",
+  "script": "ending",
+  "key": 3,
+  "position": [
+   3.6,
+   1.335,
+   -1.5
+  ],
+  "lookAt": [
+   0,
+   0.8,
+   -7.5
+  ],
+  "fov": 54.280005107711574,
+  "aspect": 2.0
+ },
+ {
+  "name": "ending-4",
+  "script": "ending",
+  "key": 4,
+  "position": [
+   0,
+   7.911,
+   14
+  ],
+  "lookAt": [
+   0,
+   2,
+   -14
+  ],
+  "fov": 68.43999812514517,
+  "aspect": 2.0
+ },
+ {
+  "name": "ending-5",
+  "script": "ending",
+  "key": 5,
+  "position": [
+   0,
+   9.031,
+   18
+  ],
+  "lookAt": [
+   0,
+   3,
+   -16
+  ],
+  "fov": 70.80000606830299,
+  "aspect": 2.0
+ },
+ {
+  "name": "flowers-0",
+  "script": "flowers",
+  "key": 0,
+  "position": [
+   -1.5,
+   2.425,
+   15
+  ],
+  "lookAt": [
+   0.5,
+   1.531,
+   9
+  ],
+  "fov": 56.640002805585645,
+  "aspect": 2.0
+ },
+ {
   "name": "flowers-1",
   "script": "flowers",
   "key": 1,
@@ -14,6 +133,23 @@
    10.6
   ],
   "fov": 51.92000057964833,
+  "aspect": 2.0
+ },
+ {
+  "name": "flowers-2",
+  "script": "flowers",
+  "key": 2,
+  "position": [
+   -0.2,
+   2.249,
+   12.3
+  ],
+  "lookAt": [
+   0.1,
+   1.707,
+   10.8
+  ],
+  "fov": 47.199998353711024,
   "aspect": 2.0
  },
  {
@@ -34,6 +170,23 @@
   "aspect": 2.0
  },
  {
+  "name": "grael-0",
+  "script": "grael",
+  "key": 0,
+  "position": [
+   -3,
+   1.362,
+   4
+  ],
+  "lookAt": [
+   0,
+   3,
+   -14
+  ],
+  "fov": 61.36000161642837,
+  "aspect": 2.0
+ },
+ {
   "name": "grael-1",
   "script": "grael",
   "key": 1,
@@ -51,6 +204,23 @@
   "aspect": 2.0
  },
  {
+  "name": "grael-2",
+  "script": "grael",
+  "key": 2,
+  "position": [
+   0.4,
+   2.8,
+   -6.5
+  ],
+  "lookAt": [
+   0,
+   5.8,
+   -13.2
+  ],
+  "fov": 44.84000065583695,
+  "aspect": 2.0
+ },
+ {
   "name": "grael-3",
   "script": "grael",
   "key": 3,
@@ -65,6 +235,91 @@
    -13
   ],
   "fov": 51.92000057964833,
+  "aspect": 2.0
+ },
+ {
+  "name": "grael-4",
+  "script": "grael",
+  "key": 4,
+  "position": [
+   0,
+   2.414,
+   6
+  ],
+  "lookAt": [
+   0,
+   4.5,
+   -14
+  ],
+  "fov": 66.0799970121765,
+  "aspect": 2.0
+ },
+ {
+  "name": "grael-fall-0",
+  "script": "grael-fall",
+  "key": 0,
+  "position": [
+   0,
+   1.8,
+   -3
+  ],
+  "lookAt": [
+   0,
+   3,
+   -12
+  ],
+  "fov": 59.00000050345972,
+  "aspect": 2.0
+ },
+ {
+  "name": "grael-fall-1",
+  "script": "grael-fall",
+  "key": 1,
+  "position": [
+   0,
+   1.504,
+   -2
+  ],
+  "lookAt": [
+   0,
+   6.5,
+   -12
+  ],
+  "fov": 63.720002729397024,
+  "aspect": 2.0
+ },
+ {
+  "name": "grael-fall-2",
+  "script": "grael-fall",
+  "key": 2,
+  "position": [
+   -2,
+   1.407,
+   -1
+  ],
+  "lookAt": [
+   0,
+   0.2,
+   -10
+  ],
+  "fov": 59.00000050345972,
+  "aspect": 2.0
+ },
+ {
+  "name": "grael-fall-3",
+  "script": "grael-fall",
+  "key": 3,
+  "position": [
+   0,
+   2.549,
+   2
+  ],
+  "lookAt": [
+   4,
+   13.26,
+   -40
+  ],
+  "fov": 66.0799970121765,
   "aspect": 2.0
  },
  {
@@ -136,6 +391,159 @@
   "aspect": 2.0
  },
  {
+  "name": "kindler-0",
+  "script": "kindler",
+  "key": 0,
+  "position": [
+   0,
+   2.569,
+   15.6
+  ],
+  "lookAt": [
+   0,
+   1.968,
+   13
+  ],
+  "fov": 49.55999946667968,
+  "aspect": 2.0
+ },
+ {
+  "name": "kindler-1",
+  "script": "kindler",
+  "key": 1,
+  "position": [
+   0,
+   2.893,
+   16.4
+  ],
+  "lookAt": [
+   0,
+   2.168,
+   13
+  ],
+  "fov": 56.640002805585645,
+  "aspect": 2.0
+ },
+ {
+  "name": "kindler-2",
+  "script": "kindler",
+  "key": 2,
+  "position": [
+   0,
+   2.369,
+   14.2
+  ],
+  "lookAt": [
+   0,
+   2.118,
+   13
+  ],
+  "fov": 40.11999842989964,
+  "aspect": 2.0
+ },
+ {
+  "name": "kindler-3",
+  "script": "kindler",
+  "key": 3,
+  "position": [
+   0,
+   2.233,
+   13.35
+  ],
+  "lookAt": [
+   0,
+   2.085,
+   12.4
+  ],
+  "fov": 35.39999961905691,
+  "aspect": 2.0
+ },
+ {
+  "name": "king-0",
+  "script": "king",
+  "key": 0,
+  "position": [
+   0,
+   2.136,
+   8
+  ],
+  "lookAt": [
+   0,
+   5,
+   -16
+  ],
+  "fov": 59.00000050345972,
+  "aspect": 2.0
+ },
+ {
+  "name": "king-1",
+  "script": "king",
+  "key": 1,
+  "position": [
+   -1.2,
+   1.315,
+   2
+  ],
+  "lookAt": [
+   0,
+   6,
+   -16
+  ],
+  "fov": 54.280005107711574,
+  "aspect": 2.0
+ },
+ {
+  "name": "king-2",
+  "script": "king",
+  "key": 2,
+  "position": [
+   -0.6,
+   1.4,
+   -4
+  ],
+  "lookAt": [
+   0,
+   8.6,
+   -15.4
+  ],
+  "fov": 47.199998353711024,
+  "aspect": 2.0
+ },
+ {
+  "name": "king-3",
+  "script": "king",
+  "key": 3,
+  "position": [
+   0.4,
+   5.2,
+   -9.4
+  ],
+  "lookAt": [
+   0,
+   6.6,
+   -15
+  ],
+  "fov": 40.11999842989964,
+  "aspect": 2.0
+ },
+ {
+  "name": "king-4",
+  "script": "king",
+  "key": 4,
+  "position": [
+   0,
+   2.414,
+   6
+  ],
+  "lookAt": [
+   0,
+   6,
+   -16
+  ],
+  "fov": 68.43999812514517,
+  "aspect": 2.0
+ },
+ {
   "name": "matron-0",
   "script": "matron",
   "key": 0,
@@ -199,6 +607,142 @@
    0,
    4.2,
    -12
+  ],
+  "fov": 61.36000161642837,
+  "aspect": 2.0
+ },
+ {
+  "name": "matron-4",
+  "script": "matron",
+  "key": 4,
+  "position": [
+   0,
+   2.414,
+   6
+  ],
+  "lookAt": [
+   0,
+   4,
+   -12
+  ],
+  "fov": 66.0799970121765,
+  "aspect": 2.0
+ },
+ {
+  "name": "matron-fall-0",
+  "script": "matron-fall",
+  "key": 0,
+  "position": [
+   0,
+   1.7,
+   -3
+  ],
+  "lookAt": [
+   0,
+   2.6,
+   -11
+  ],
+  "fov": 56.640002805585645,
+  "aspect": 2.0
+ },
+ {
+  "name": "matron-fall-1",
+  "script": "matron-fall",
+  "key": 1,
+  "position": [
+   0.5,
+   1.8,
+   -4.5
+  ],
+  "lookAt": [
+   0,
+   2.6,
+   -11
+  ],
+  "fov": 49.55999946667968,
+  "aspect": 2.0
+ },
+ {
+  "name": "matron-fall-2",
+  "script": "matron-fall",
+  "key": 2,
+  "position": [
+   -1,
+   1.72,
+   2
+  ],
+  "lookAt": [
+   0,
+   4.748,
+   -26
+  ],
+  "fov": 66.0799970121765,
+  "aspect": 2.0
+ },
+ {
+  "name": "matron-fall-3",
+  "script": "matron-fall",
+  "key": 3,
+  "position": [
+   -0.5,
+   1.899,
+   4
+  ],
+  "lookAt": [
+   -2.5,
+   1.511,
+   7.5
+  ],
+  "fov": 59.00000050345972,
+  "aspect": 2.0
+ },
+ {
+  "name": "name-0",
+  "script": "name",
+  "key": 0,
+  "position": [
+   0,
+   3.611,
+   14
+  ],
+  "lookAt": [
+   0,
+   3.564,
+   6
+  ],
+  "fov": 54.280005107711574,
+  "aspect": 2.0
+ },
+ {
+  "name": "name-1",
+  "script": "name",
+  "key": 1,
+  "position": [
+   0,
+   3.706,
+   12
+  ],
+  "lookAt": [
+   0,
+   3.044,
+   0
+  ],
+  "fov": 59.00000050345972,
+  "aspect": 2.0
+ },
+ {
+  "name": "name-2",
+  "script": "name",
+  "key": 2,
+  "position": [
+   0,
+   3.572,
+   9
+  ],
+  "lookAt": [
+   0,
+   3.4,
+   -6
   ],
   "fov": 61.36000161642837,
   "aspect": 2.0
@@ -337,6 +881,125 @@
    -6
   ],
   "fov": 51.92000057964833,
+  "aspect": 2.0
+ },
+ {
+  "name": "widow-0",
+  "script": "widow",
+  "key": 0,
+  "position": [
+   0,
+   1.926,
+   4
+  ],
+  "lookAt": [
+   0,
+   8,
+   -12
+  ],
+  "fov": 63.720002729397024,
+  "aspect": 2.0
+ },
+ {
+  "name": "widow-1",
+  "script": "widow",
+  "key": 1,
+  "position": [
+   -1,
+   1.769,
+   1
+  ],
+  "lookAt": [
+   0,
+   3.6,
+   -11
+  ],
+  "fov": 54.280005107711574,
+  "aspect": 2.0
+ },
+ {
+  "name": "widow-2",
+  "script": "widow",
+  "key": 2,
+  "position": [
+   0.8,
+   3.4,
+   -4.5
+  ],
+  "lookAt": [
+   0,
+   3.8,
+   -10.5
+  ],
+  "fov": 42.47999954286829,
+  "aspect": 2.0
+ },
+ {
+  "name": "widow-3",
+  "script": "widow",
+  "key": 3,
+  "position": [
+   0,
+   2.289,
+   5
+  ],
+  "lookAt": [
+   0,
+   3,
+   -11
+  ],
+  "fov": 63.720002729397024,
+  "aspect": 2.0
+ },
+ {
+  "name": "widow-fall-0",
+  "script": "widow-fall",
+  "key": 0,
+  "position": [
+   0,
+   1.949,
+   2
+  ],
+  "lookAt": [
+   0,
+   3,
+   -11
+  ],
+  "fov": 61.36000161642837,
+  "aspect": 2.0
+ },
+ {
+  "name": "widow-fall-1",
+  "script": "widow-fall",
+  "key": 1,
+  "position": [
+   0,
+   1.488,
+   1
+  ],
+  "lookAt": [
+   0,
+   8,
+   -14
+  ],
+  "fov": 68.43999812514517,
+  "aspect": 2.0
+ },
+ {
+  "name": "widow-fall-2",
+  "script": "widow-fall",
+  "key": 2,
+  "position": [
+   0,
+   1.429,
+   3
+  ],
+  "lookAt": [
+   0,
+   16,
+   -18
+  ],
+  "fov": 70.80000606830299,
   "aspect": 2.0
  }
 ]

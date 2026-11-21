@@ -1,0 +1,28 @@
+{
+  "name": "ending-1",
+  "script": "ending",
+  "key": 1,
+  "region": "throne",
+  "position": [
+    0,
+    3.436,
+    8
+  ],
+  "lookAt": [
+    0,
+    9,
+    -12
+  ],
+  "fov": 68.43999812514517,
+  "aspect": 2.0,
+  "near": 0.15000000596046448,
+  "far": 400.0,
+  "width": 2560,
+  "height": 1280,
+  "depthMax": 400.0,
+  "moon": [
+    -0.34,
+    0.33,
+    -0.88
+  ]
+}

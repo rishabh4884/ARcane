@@ -1,0 +1,28 @@
+{
+  "name": "widow-fall-1",
+  "script": "widow-fall",
+  "key": 1,
+  "region": "deeps",
+  "position": [
+    0,
+    1.488,
+    1
+  ],
+  "lookAt": [
+    0,
+    8,
+    -14
+  ],
+  "fov": 68.43999812514517,
+  "aspect": 2.0,
+  "near": 0.15000000596046448,
+  "far": 400.0,
+  "width": 2560,
+  "height": 1280,
+  "depthMax": 400.0,
+  "moon": [
+    -0.34,
+    0.33,
+    -0.88
+  ]
+}
