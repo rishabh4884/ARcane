@@ -1,4 +1,6 @@
 import * as THREE from 'three';
+import { DRAWN_LOOK } from '../world/authored.ts';
+import { drawn } from '../world/render/DrawnProp.ts';
 import type { Mood } from '../game/campaign.ts';
 import { Character, type CharacterInput, type Design } from '../world/rig/Character.ts';
 import type { CreaturePose } from '../world/rig/Rig.ts';
@@ -113,7 +115,7 @@ export class Shot {
     return { sprite, trail, place: (p) => { sprite.position.copy(p); trail.push(p); } };
   }
 
-  add<T extends THREE.Object3D>(object: T): T { this.root.add(object); return object; }
+  add<T extends THREE.Object3D>(object: T): T { this.root.add(object); return DRAWN_LOOK ? drawn(object) : object; }
   onDispose(fn: () => void): void { this.disposers.push(fn); }
 
   /** Interpolate the camera through its keys. */

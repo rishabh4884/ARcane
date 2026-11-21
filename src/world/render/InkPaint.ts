@@ -37,7 +37,7 @@ export const INK = {
   uPaintedAir: { value: 0 },
 };
 
-const COMMON = /* glsl */`
+export const INK_NOISE = /* glsl */`
   float ipHash(vec3 p) { p = fract(p * 0.3183099 + vec3(0.71, 0.113, 0.419)); p *= 17.0; return fract(p.x * p.y * p.z * (p.x + p.y + p.z)); }
   float ipNoise(vec3 x) {
     vec3 i = floor(x), f = fract(x); f = f * f * (3.0 - 2.0 * f);
@@ -102,7 +102,7 @@ export function inkPaintMaterial(maps: InkMaps | null, u: FigureUniforms): THREE
       uniform float uOpacity; uniform float uExposure;
       varying vec2 vUv; varying vec3 vNormalW; varying vec3 vWorld; varying vec3 vRest; varying vec3 vCol; varying float vAOv;
       ${SPELL_LIGHT_GLSL}
-      ${COMMON}
+      ${INK_NOISE}
       void main() {
         #ifdef INK_TEXTURED
           // Colour read a little soft: painted masses, not texture noise.
@@ -185,7 +185,7 @@ export function inkLineMaterial(u: FigureUniforms): THREE.ShaderMaterial {
       uniform vec2 uResolution; uniform float uLineWeight; uniform float uDrawing;
       varying vec3 vWorld;
       varying vec3 vRest;
-      ${COMMON}
+      ${INK_NOISE}
       void main() {
         vRest = position;
         #include <skinbase_vertex>
@@ -213,7 +213,7 @@ export function inkLineMaterial(u: FigureUniforms): THREE.ShaderMaterial {
       uniform vec3 uInk; uniform vec3 uAir; uniform float uPaintedAir; uniform float uDissolve; uniform float uGroundY; uniform float uHeight; uniform float uOpacity;
       varying vec3 vWorld;
       varying vec3 vRest;
-      ${COMMON}
+      ${INK_NOISE}
       void main() {
         if (uDissolve > 0.0) {
           float hh = clamp((vWorld.y - uGroundY) / max(uHeight, 0.1), 0.0, 1.0);
