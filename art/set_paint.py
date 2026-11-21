@@ -21,6 +21,7 @@ ROOT = os.path.dirname(HERE)
 sys.path.insert(0, HERE)
 
 from arcane_art import painter  # noqa: E402
+from arcane_art.set_artifacts import painting_complete, passes_complete, read_meta, write_json_atomic  # noqa: E402
 
 G, T, R, L, LA, GA, WA = painter.GROUND, painter.TRUNK, painter.ROCK, painter.LEAF, painter.LANTERN, painter.GATE, painter.WATER
 
@@ -142,23 +143,23 @@ def main() -> None:
                 continue
             if shot in order and order.index(shot) % parts != mine:
                 continue        # another painter's share
-            if shot not in planned or not os.path.exists(os.path.join(root, shot, 'meta.json')):
+            if shot not in planned or not passes_complete(os.path.join(root, shot)):
                 continue        # not rendered yet, or still rendering (its meta is written last)
-            if '--missing' in argv and os.path.exists(os.path.join(public, 'shots', shot, 'paint.webp')):
+            if '--missing' in argv and painting_complete(os.path.join(public, 'shots', shot)):
                 continue
             # Each shot in the light of its moment: a scene that turns paints its later keys in the new light.
             light = DIRECTIONS.get(planned[shot].get('region', name), direction)
+            if not quick:
+                write_json_atomic(os.path.join(public, 'shots', shot, 'meta.json'), read_meta(os.path.join(root, shot)))
             paint_one(os.path.join(root, shot), os.path.join(public, 'shots', shot), f'{name}-{shot}', layout, light, seed + 1, quick, sheets=quick)
         # The manifest: every painted shot, for the game to find a cutscene's backgrounds.
         manifest = []
         pub = os.path.join(public, 'shots')
         for shot in sorted(os.listdir(pub)) if os.path.isdir(pub) else []:
-            meta_path = os.path.join(pub, shot, 'meta.json')
-            if os.path.exists(os.path.join(pub, shot, 'paint.webp')) and os.path.exists(meta_path):
-                m = json.load(open(meta_path))
+            if shot in planned and painting_complete(os.path.join(pub, shot)):
+                m = read_meta(os.path.join(pub, shot))
                 manifest.append({k: m[k] for k in ('name', 'script', 'key', 'position', 'lookAt', 'fov', 'aspect')})
-        with open(os.path.join(public, 'shots.json'), 'w') as f:
-            json.dump(manifest, f, indent=1)
+        write_json_atomic(os.path.join(public, 'shots.json'), manifest, indent=1)
 
 
 main()

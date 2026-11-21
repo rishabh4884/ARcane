@@ -25,6 +25,7 @@ import numpy as np  # noqa: E402
 
 from arcane_art import bl, setscene  # noqa: E402
 from arcane_art.pipeline import ROOT  # noqa: E402
+from arcane_art.set_artifacts import passes_complete, read_meta, write_json_atomic  # noqa: E402
 
 TREE_KINDS = ['oak_edge_a', 'oak_edge_b', 'birch_edge_a', 'snag_edge_a']
 DEPTH_MAX = 400.0
@@ -105,6 +106,11 @@ def render_shot(shot: dict, build: str, public: str, scale: float, moon) -> None
     W, H = int(2560 * scale), int(1280 * scale)
     cam = setscene.paint_camera(shot['position'], shot['lookAt'], shot['fov'], W, H)
     out = os.path.join(build, 'shots', shot['name'])
+    # Metadata is the completion marker. Invalidate the old marker before replacing any passes,
+    # including an explicit rebuild of a previously completed shot.
+    meta_path = os.path.join(out, 'meta.json')
+    if os.path.exists(meta_path):
+        os.remove(meta_path)
     t = time.time()
     rig = {'moon': bpy.data.objects['moon'], 'lamps': [o for o in bpy.data.objects if o.name.startswith('lamp-')]}
     for path in setscene.render_passes(os.path.join(out, 'exr'), rig, samples=40):
@@ -113,10 +119,9 @@ def render_shot(shot: dict, build: str, public: str, scale: float, moon) -> None
     meta = {'name': shot['name'], 'script': shot['script'], 'key': shot['key'], 'region': shot.get('region', 'edge'), 'position': shot['position'], 'lookAt': shot['lookAt'],
             'fov': math.degrees(cam.data.angle_y), 'aspect': W / H, 'near': cam.data.clip_start, 'far': cam.data.clip_end,
             'width': W, 'height': H, 'depthMax': DEPTH_MAX, 'moon': moon}
-    for d in (out, os.path.join(public, 'shots', shot['name'])):
-        os.makedirs(d, exist_ok=True)
-        with open(os.path.join(d, 'meta.json'), 'w') as f:
-            json.dump(meta, f, indent=2)
+    # Publish the build marker last, after the painter's output directory has its camera metadata.
+    for d in (os.path.join(public, 'shots', shot['name']), out):
+        write_json_atomic(os.path.join(d, 'meta.json'), meta)
     print(f"[set] shot {shot['name']} in {time.time() - t:.0f}s", flush=True)
 
 
@@ -135,7 +140,10 @@ def main() -> None:
         for shot in layout.get('shots', []):
             if wanted and shot['name'] not in wanted:
                 continue
-            if '--missing' in argv and os.path.exists(os.path.join(build, 'shots', shot['name'], 'moon.npy')):
+            shot_build = os.path.join(build, 'shots', shot['name'])
+            if '--missing' in argv and passes_complete(shot_build):
+                # Restoring a lost output metadata file does not require another Blender render.
+                write_json_atomic(os.path.join(public, 'shots', shot['name'], 'meta.json'), read_meta(shot_build))
                 continue
             render_shot(shot, build, public, scale, layout['moon'])
         print(f'[set] {name} shots rendered in {time.time() - t0:.0f}s', flush=True)
