@@ -5,6 +5,7 @@ import {
   ringTexture, rng, type FxContext,
 } from './vfx.ts';
 import { createSpellAnimation2 } from './effects2.ts';
+import { frostbind } from './fx/frostbind.ts';
 
 export interface SpellAnimation {
   group: THREE.Group;
@@ -57,7 +58,7 @@ export function createSpellAnimation(
   switch (kind) {
     case 'arrow': return arrow(origin, target, color, detail, ctx);
     case 'lightning': return lightning(target, color, ctx);
-    case 'frost': return frost(target, color, ctx);
+    case 'frost': return frostbind(target, color, ctx);
     case 'healing': return mend(origin, color, detail, ctx);
     case 'summon': return rise(target, color, ctx);
     case 'shield': return aegis(origin, color, ctx);
@@ -655,147 +656,6 @@ function lightning(target: THREE.Vector3, color: THREE.Color, ctx: SpellContext)
     groundRing.scale.setScalar(0.3 + easeOutCubic(ringAge) * THREE.MathUtils.clamp(width * 110, 3, 8));
     groundRing.material.opacity = clamp01(1 - ringAge) * 0.7;
   }, impactAt, onImpact);
-}
-
-/* ═══════════════════════════════ FROST ═══════════════════════════════ */
-
-/** One smooth, tapering thorn of ice: a lathe surface with a curved profile instead of a faceted cone. */
-function iceThornGeometry(): THREE.LatheGeometry {
-  const profile: THREE.Vector2[] = [];
-  const rows = 14;
-  for (let i = 0; i <= rows; i++) {
-    const u = i / rows;
-    const belly = Math.sin(Math.min(1, u * 1.9) * Math.PI * 0.5);
-    const radius = Math.max(0.0015, 0.5 * (1 - Math.pow(u, 1.45)) * (0.55 + 0.45 * belly) * (u < 0.04 ? 0.8 + u * 5 : 1));
-    profile.push(new THREE.Vector2(radius, u));
-  }
-  return new THREE.LatheGeometry(profile, 18);
-}
-
-function iceMaterial(deep: THREE.Color, light: THREE.Color): THREE.ShaderMaterial {
-  return new THREE.ShaderMaterial({
-    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
-    uniforms: { uOpacity: { value: 1 }, uDeep: { value: deep }, uLight: { value: light }, uTime: { value: 0 } },
-    vertexShader: `varying vec3 vN; varying vec3 vV; varying float vH;
-      void main(){ vH = uv.y; vN = normalize(normalMatrix * normal); vec4 mv = modelViewMatrix * vec4(position,1.0); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }`,
-    fragmentShader: `uniform float uOpacity; uniform vec3 uDeep; uniform vec3 uLight; uniform float uTime; varying vec3 vN; varying vec3 vV; varying float vH;
-      void main(){
-        float facing = abs(dot(normalize(vN), normalize(vV)));
-        float rim = pow(1.0 - facing, 1.8);
-        float core = pow(facing, 2.5) * (1.0 - vH);
-        float glint = pow(max(0.0, sin(vH * 24.0 - uTime * 3.0)), 18.0) * rim;
-        vec3 c = mix(uDeep, uLight, smoothstep(0.0, 1.0, vH * 0.85 + rim * 0.55)) * (0.5 + core * 0.55) + uLight * (rim * 0.45 + glint);
-        float a = (0.16 + rim * 0.55 + core * 0.22 + vH * 0.2 + glint) * uOpacity;
-        gl_FragColor = vec4(c, a);
-        #include <tonemapping_fragment>
-        #include <colorspace_fragment>
-      }`,
-  });
-}
-
-function frost(target: THREE.Vector3, color: THREE.Color, ctx: SpellContext): SpellAnimation {
-  const group = new THREE.Group();
-  group.position.copy(target);
-  const random = rng(Math.floor(target.x * 97 + target.z * 53 + 1013));
-  // Spikes erupt from the ground under the impact point (falls back to an offset in headless use).
-  const base = THREE.MathUtils.clamp(ctx.groundY - target.y + 0.02, -3.5, -0.05);
-  const reach = 1 + Math.min(1.2, -base * 0.45);
-  const deep = color.clone().multiplyScalar(0.55).lerp(new THREE.Color('#1d4f7a'), 0.4);
-  const light = color.clone().lerp(new THREE.Color('#f2fbff'), 0.7);
-  const material = iceMaterial(deep, light);
-  const geometry = iceThornGeometry();
-
-  // Soft frozen ground patch: feathered, irregular edge with fine radial cracks, not a hard ring.
-  const patch = new THREE.Mesh(new THREE.CircleGeometry(1, 64), new THREE.ShaderMaterial({
-    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide,
-    uniforms: { uOpacity: { value: 0 }, uColor: { value: light.clone() }, uSeed: { value: random() * 20 } },
-    vertexShader: 'varying vec2 vP; void main(){ vP = position.xy; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
-    fragmentShader: `uniform float uOpacity; uniform vec3 uColor; uniform float uSeed; varying vec2 vP;
-      void main(){
-        float r = length(vP); float a = atan(vP.y, vP.x);
-        float edge = 0.78 + 0.16 * sin(a * 5.0 + uSeed) + 0.07 * sin(a * 11.0 - uSeed * 2.0);
-        float body = (1.0 - smoothstep(edge - 0.42, edge, r));
-        float cracks = pow(max(0.0, sin(a * 9.0 + sin(r * 7.0 + uSeed) * 1.3)), 28.0) * smoothstep(0.08, 0.3, r) * (1.0 - smoothstep(0.45, edge, r));
-        float frostGrain = 0.55 + 0.45 * sin(vP.x * 38.0 + uSeed) * sin(vP.y * 41.0 - uSeed);
-        float alpha = (body * 0.17 * frostGrain + cracks * 0.5) * uOpacity;
-        gl_FragColor = vec4(uColor, alpha);
-        #include <tonemapping_fragment>
-        #include <colorspace_fragment>
-      }`,
-  }));
-  patch.rotation.x = -Math.PI / 2;
-  patch.position.y = base + 0.03;
-  patch.renderOrder = 2;
-  group.add(patch);
-
-  interface Thorn { mesh: THREE.Mesh; delay: number; height: number; width: number; tip: THREE.Vector3 }
-  const thorns: Thorn[] = [];
-  const addThorn = (x: number, z: number, height: number, width: number, lean: number, delay: number) => {
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.position.set(x, base, z);
-    const away = Math.atan2(z, x);
-    mesh.rotation.set(Math.sin(away) * lean, random() * Math.PI, -Math.cos(away) * lean);
-    mesh.scale.set(0.001, 0.001, 0.001);
-    mesh.renderOrder = 3;
-    group.add(mesh);
-    const tip = new THREE.Vector3(0, 1, 0).applyEuler(mesh.rotation).multiplyScalar(height).add(mesh.position).add(target);
-    thorns.push({ mesh, delay, height, width, tip });
-  };
-  // Central tall cluster, an irregular ring of mid thorns, then many tiny frost needles at the edge.
-  addThorn(0, 0, (1.55 + random() * 0.3) * reach, 0.36, 0.04, 0);
-  addThorn(0.18, 0.1, 1.05 * reach, 0.26, 0.28, 0.03);
-  addThorn(-0.17, -0.08, 0.9 * reach, 0.24, -0.3, 0.05);
-  const ringCount = 9;
-  for (let i = 0; i < ringCount; i++) {
-    const angle = (i + random() * 0.6) / ringCount * Math.PI * 2;
-    const radius = 0.5 + random() * 0.38;
-    addThorn(Math.cos(angle) * radius, Math.sin(angle) * radius, (0.55 + random() * 0.75) * reach, 0.15 + random() * 0.1, 0.18 + random() * 0.22, 0.05 + random() * 0.14);
-  }
-  for (let i = 0; i < 14; i++) {
-    const angle = random() * Math.PI * 2;
-    const radius = 0.25 + random() * 1.15;
-    addThorn(Math.cos(angle) * radius, Math.sin(angle) * radius, (0.18 + random() * 0.32) * reach, 0.06 + random() * 0.05, 0.25 + random() * 0.35, 0.1 + random() * 0.2);
-  }
-
-  const groundPoint = target.clone().setY(target.y + base + 0.1);
-  const frostWhite = new THREE.Color('#e6f6ff');
-  const onImpact = () => {
-    ctx.mist?.burst(groundPoint, 14, { speed: 1.6, color: new THREE.Color('#cfe6f2'), size: 0.8, sizeEnd: 2.2, alpha: 0.36, ttl: 1.8, drag: 1.6, gravity: -0.1, style: 'mist' });
-    ctx.particles?.burst(groundPoint, 30, { speed: 3.4, direction: UP, spread: 1.4, color: light, size: 0.06, ttl: 0.9, gravity: 3, drag: 1.2, style: 'spark' });
-    ctx.light?.(target, light, 10, 0.8, 10);
-    ctx.screen?.shake(0.08);
-  };
-  const duration = 1.5;
-  let shattered = false;
-  return animate(group, duration, (t, age, dt) => {
-    material.uniforms.uTime.value = age;
-    const open = easeOutCubic(t / 0.15);
-    (patch.material as THREE.ShaderMaterial).uniforms.uOpacity.value = clamp01(open) * clamp01(1 - Math.max(0, t - 0.6) / 0.4);
-    patch.scale.setScalar(0.35 + easeOutCubic(Math.min(1, t / 0.35)) * 1.45);
-    const thaw = clamp01((age - 0.95) / 0.35);
-    material.uniforms.uOpacity.value = 1 - thaw;
-    thorns.forEach(({ mesh, delay, height, width, tip }) => {
-      const grow = easeOutCubic((age - delay) / 0.26);
-      // Slight overshoot-and-settle makes the burst feel like brittle crystal snapping up.
-      const settle = 1 + Math.sin(clamp01((age - delay) / 0.4) * Math.PI) * 0.06;
-      mesh.visible = grow > 0 && thaw < 1;
-      const shrink = 1 - thaw * 0.6;
-      mesh.scale.set(width * (0.35 + grow * 0.65) * shrink, height * grow * settle * shrink, width * (0.35 + grow * 0.65) * shrink);
-      // Cold glints twinkle along the crystal while it stands.
-      if (grow > 0.9 && thaw === 0 && Math.random() < dt * 4) {
-        ctx.particles?.emit({ x: tip.x, y: tip.y, z: tip.z, vx: 0, vy: 0.1, vz: 0, color: frostWhite, size: 0.16, sizeEnd: 0.01, ttl: 0.35, style: 'spark' });
-      }
-    });
-    if (!shattered && age >= 0.95) {
-      shattered = true;
-      // The ice breaks apart rather than simply fading.
-      for (const thorn of thorns.slice(0, 12)) {
-        const mid = thorn.tip.clone().lerp(groundPoint, 0.5);
-        ctx.particles?.burst(mid, 5, { speed: 2.6, color: light, size: 0.07, ttl: 0.7, gravity: 8, drag: 0.6, style: 'spark' });
-      }
-      ctx.mist?.burst(groundPoint, 8, { speed: 0.8, color: new THREE.Color('#d8eef8'), size: 1, sizeEnd: 2, alpha: 0.25, ttl: 1.2, style: 'mist' });
-    }
-  }, 0.12, onImpact);
 }
 
 /* ═══════════════════════════════ RUNE SIGILS ═══════════════════════════════ */
