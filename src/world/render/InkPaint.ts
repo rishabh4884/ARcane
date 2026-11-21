@@ -12,8 +12,8 @@ import { FIGURE_LIGHT, type FigureUniforms } from '../rig/figureMaterial.ts';
  *    shapes, not as shading); shadows painted cool, never black; warmth at the shadow edge of skin;
  *    a crisp silver rim only where the moon behind catches the silhouette; no specular gloss.
  *  - ink: an inked outline drawn around the figure at a constant line weight on screen, thinner on
- *    distant figures, fading into the air with depth like ink in a painted scene, and boiling — its
- *    wobble re-drawn each time the drawing changes (12 times a second) — the way hand-drawn lines do.
+ *    distant figures, fading into the air with depth like ink in a painted scene. Pressure variation
+ *    stays attached to the contour, so a held drawing stays still instead of crawling with noise.
  *
  * The same material paints the authored models (their baked colour maps) and the older procedural
  * bodies (their vertex colours), so the whole cast shares one drawn look.
@@ -28,7 +28,7 @@ export const INK = {
   uShadeColor: { value: new THREE.Color('#4f5d7a') },
   uRimColor: { value: new THREE.Color('#d6e6f2') },
   uInk: { value: new THREE.Color('#15100d') },
-  /** The drawing's frame: changes 12 times a second, re-seeding the line boil. */
+  /** The drawing's frame, shared by effects; character ink stays fixed to the drawn contour. */
   uDrawing: { value: 0 },
   uResolution: { value: new THREE.Vector2(1280, 720) },
   /** Line weight in pixels at 1080 lines of resolution. */
@@ -68,12 +68,14 @@ export function inkPaintMaterial(maps: InkMaps | null, u: FigureUniforms): THREE
       #include <common>
       #include <skinning_pars_vertex>
       attribute float aAO;
+      attribute vec2 aSurf;
       varying vec2 vUv;
       varying vec3 vNormalW;
       varying vec3 vWorld;
       varying vec3 vRest;
       varying vec3 vCol;
       varying float vAOv;
+      varying vec2 vSurf;
       void main() {
         vUv = uv;
         vRest = position;
@@ -83,6 +85,7 @@ export function inkPaintMaterial(maps: InkMaps | null, u: FigureUniforms): THREE
           vCol = vec3(1.0);
         #endif
         vAOv = aAO;
+        vSurf = aSurf;
         #include <skinbase_vertex>
         #include <beginnormal_vertex>
         #include <skinnormal_vertex>
@@ -100,7 +103,7 @@ export function inkPaintMaterial(maps: InkMaps | null, u: FigureUniforms): THREE
       uniform float uTime; uniform float uDissolve; uniform vec3 uEdge; uniform float uFlash; uniform vec3 uFlashColor;
       uniform float uFrost; uniform float uGroundY; uniform float uMist; uniform float uHeight; uniform vec3 uEyeColor; uniform float uEyes;
       uniform float uOpacity; uniform float uExposure;
-      varying vec2 vUv; varying vec3 vNormalW; varying vec3 vWorld; varying vec3 vRest; varying vec3 vCol; varying float vAOv;
+      varying vec2 vUv; varying vec3 vNormalW; varying vec3 vWorld; varying vec3 vRest; varying vec3 vCol; varying float vAOv; varying vec2 vSurf;
       ${SPELL_LIGHT_GLSL}
       ${INK_NOISE}
       void main() {
@@ -115,7 +118,9 @@ export function inkPaintMaterial(maps: InkMaps | null, u: FigureUniforms): THREE
           vec3 base = vCol;
           float ao = vAOv;
           vec3 fx = vec3(0.0, 0.0, 0.25);
-          vec3 emit = vec3(0.0);
+          // Procedural figures carry their captive light and eye masks as surface attributes.
+          // Dropping this channel made their expression lights disappear in the drawn look.
+          vec3 emit = abs(vSurf.x - 7.0) < 0.1 ? base * max(vSurf.y, 0.6) : vec3(0.0);
         #endif
         vec3 V = normalize(cameraPosition - vWorld);
         vec3 n = normalize(vNormalW);
@@ -152,7 +157,7 @@ export function inkPaintMaterial(maps: InkMaps | null, u: FigureUniforms): THREE
         vec3 glow = (emit - eyeK) + eyeK * uEyeColor * uEyes * 1.6;
         col += glow;
         if (uFrost > 0.0) {
-          vec3 ice = mix(vec3(0.62, 0.8, 0.95), vec3(0.9, 0.97, 1.0), lit) + step(0.985, ipHash(floor(vRest * 90.0 + floor(uTime * 3.0)))) * 0.8;
+          vec3 ice = mix(vec3(0.62, 0.8, 0.95), vec3(0.9, 0.97, 1.0), lit);
           col = mix(col, ice, uFrost * 0.7);
         }
         col += uFlashColor * uFlash * 0.5;
@@ -209,7 +214,7 @@ export function inkLineMaterial(u: FigureUniforms): THREE.ShaderMaterial {
         // Line weight: constant on screen, lighter on distant figures, pressure varying along the line,
         // re-drawn (boiled) with each new drawing.
         // (A quiet boil: the line breathes along its length and is redrawn every other drawing.)
-        float pressure = 0.88 + 0.24 * ipNoise(position * 5.0 + vec3(floor(uDrawing * 0.5) * 1.7));
+        float pressure = 0.94 + 0.12 * ipNoise(position * 2.0);
         float px = uLineWeight * (uResolution.y / 1080.0) * clamp(9.0 / depth, 0.42, 1.0) * pressure;
         clip.xy += dir * px * 2.0 / uResolution * clip.w;
         clip.z += 0.0004 * clip.w;

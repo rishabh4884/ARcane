@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { fieldFlowerGeometry, petalGeometry } from './botany.ts';
 import { UNLIT_KING, WARDEN_LOOK, buildRegal } from '../world/characters/bosses.ts';
 import { ellipsoid, lathe, tube, type Body, type V3 } from '../world/rig/Body.ts';
 import { Sculpt } from '../world/rig/Sculpt.ts';
@@ -184,19 +185,25 @@ function mesh(geometry: THREE.BufferGeometry, color: THREE.ColorRepresentation, 
 }
 
 /** A lantern-flower: a drooping stem with a bud of five petals that can open and shine. */
-export function lanternFlower(height = 0.9): { group: THREE.Group; set(open: number, glow: number): void } {
+export function lanternFlower(height = 0.9): { group: THREE.Group; set(open: number, glow: number, time?: number): void } {
   const group = new THREE.Group();
   const stemPts: V3[] = [[0, 0, 0], [0.03, height * 0.5, 0.0], [0.08, height * 0.9, 0.06], [0.12, height, 0.14]];
-  group.add(mesh(tube(stemPts, [0.022, 0.016, 0.012, 0.01], { radial: 6 }), '#3e5a32'));
+  group.add(mesh(tube(stemPts, [0.018, 0.013, 0.009, 0.007], { radial: 8 }), '#3e5a32'));
   for (const s of [1, -1]) {
-    const leaf = mesh(ellipsoid([0.12 * s, height * 0.25, 0.02], [0.13, 0.012, 0.045]), '#47683a');
-    leaf.rotation.z = s * 0.4;
+    const leaf = mesh(petalGeometry(0.24, 0.052, 0.055), '#47683a');
+    (leaf.material as THREE.MeshStandardMaterial).vertexColors = true;
+    leaf.position.set(0.015, height * (s > 0 ? 0.3 : 0.48), 0);
+    leaf.rotation.set(0.3, s * 0.5, s * 1.08);
     group.add(leaf);
   }
   const head = new THREE.Group();
   head.position.set(0.12, height, 0.14);
-  head.rotation.x = 1.1;
+  head.rotation.x = 0.35;
   group.add(head);
+  const calyx = mesh(petalGeometry(0.08, 0.025, 0.018), '#586242');
+  (calyx.material as THREE.MeshStandardMaterial).vertexColors = true;
+  calyx.rotation.x = Math.PI;
+  head.add(calyx);
   const core = new THREE.Mesh(new THREE.SphereGeometry(0.05, 12, 8), new THREE.MeshBasicMaterial({ color: '#ffcf7a', transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
   core.position.y = -0.06;
   head.add(core);
@@ -208,22 +215,27 @@ export function lanternFlower(height = 0.9): { group: THREE.Group; set(open: num
   for (let i = 0; i < 5; i++) {
     const hinge = new THREE.Object3D();
     hinge.rotation.y = (i / 5) * TAU;
-    const petal = mesh(ellipsoid([0, -0.07, 0.035], [0.035, 0.08, 0.012], { deform: (d, p) => { p.z += (1 - Math.abs(d.y)) * 0.01; } }), '#c9a46a', { emissive: '#000000' });
+    const petal = mesh(petalGeometry(0.20 + (i % 2) * 0.025, 0.075, 0.075 + i * 0.003), '#c9b48d', { emissive: '#000000', rough: 1 });
+    (petal.material as THREE.MeshStandardMaterial).vertexColors = true;
     hinge.add(petal);
     head.add(hinge);
     petals.push(hinge);
   }
   const petalMats = petals.map((h) => ((h.children[0] as THREE.Mesh).material as THREE.MeshStandardMaterial));
+  const openedPaint = new THREE.Color('#ead9ad');
   return {
     group,
-    set(open: number, glow: number) {
+    set(open: number, glow: number, time = 0) {
       const o = clamp(open);
-      for (const h of petals) h.children[0].rotation.x = -0.15 - o * 1.25;
-      head.rotation.x = 1.1 - o * 0.9;
+      for (let i = 0; i < petals.length; i++) {
+        const unfurl = smooth(i * 0.025, 0.9 + i * 0.025, o);
+        petals[i].children[0].rotation.x = Math.PI - 0.22 - unfurl * 1.9 + Math.sin(time * 1.4 - i * 0.7) * 0.025 * unfurl;
+      }
+      head.rotation.x = 0.35 - o * 0.3 + Math.sin(time * 0.8 + height * 3) * 0.035 * o;
       (core.material as THREE.MeshBasicMaterial).opacity = glow;
       halo.material.opacity = glow * 0.9;
       halo.scale.setScalar(0.4 + glow * 0.8);
-      for (const m of petalMats) { m.emissive.set('#ffb35a').multiplyScalar(glow * 0.6); m.color.set(glow > 0.05 ? '#f0c98a' : '#7a6a4f'); }
+      for (const m of petalMats) { m.emissive.set('#ffb35a').multiplyScalar(glow * 0.12); m.color.set('#95866b').lerp(openedPaint, clamp(glow)); }
     },
   };
 }
@@ -265,29 +277,26 @@ export function rootThrone(): THREE.Group {
 }
 
 /** A spread of small flowers that can bloom outward from a point. */
-export function flowerField(center: THREE.Vector3, radius: number, count: number, ground: (x: number, z: number) => number): { mesh: THREE.InstancedMesh; set(t: number): void } {
-  // A five-petalled head held a hand's breadth above the grass.
-  const petals = new THREE.Shape();
-  for (let i = 0; i <= 60; i++) {
-    const a = (i / 60) * TAU, r = 0.05 + 0.045 * Math.pow(Math.abs(Math.cos(a * 2.5)), 0.6);
-    if (i === 0) petals.moveTo(Math.cos(a) * r, Math.sin(a) * r); else petals.lineTo(Math.cos(a) * r, Math.sin(a) * r);
-  }
-  const geometry = new THREE.ShapeGeometry(petals, 1).rotateX(-Math.PI / 2 + 0.25).translate(0, 0.17, 0);
-  const material = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide });
+export function flowerField(center: THREE.Vector3, radius: number, count: number, ground: (x: number, z: number) => number): { mesh: THREE.InstancedMesh; set(t: number, time?: number): void } {
+  const geometry = fieldFlowerGeometry();
+  const material = new THREE.MeshStandardMaterial({ color: '#ffffff', vertexColors: true, roughness: 1, metalness: 0 });
   const im = new THREE.InstancedMesh(geometry, material, count);
   const palette = ['#ffd6f0', '#fff3a8', '#bfe8ff', '#ffb3c4', '#d8ffb0', '#ffffff', '#ffcf7a'].map((c) => new THREE.Color(c));
-  const spots: Array<{ x: number; z: number; d: number; s: number; r: number }> = [];
+  const spots: Array<{ x: number; y: number; z: number; d: number; s: number; r: number }> = [];
   for (let i = 0; i < count; i++) {
     const a = Math.random() * TAU, d = Math.sqrt(Math.random()) * radius;
-    spots.push({ x: center.x + Math.cos(a) * d, z: center.z + Math.sin(a) * d, d, s: 0.6 + Math.random() * 0.9, r: Math.random() * TAU });
+    const x = center.x + Math.cos(a) * d, z = center.z + Math.sin(a) * d;
+    spots.push({ x, y: ground(x, z), z, d, s: 0.6 + Math.random() * 0.9, r: Math.random() * TAU });
     im.setColorAt(i, palette[i % palette.length]);
   }
   const m = new THREE.Matrix4(), q = new THREE.Quaternion(), p = new THREE.Vector3(), sc = new THREE.Vector3();
-  const set = (t: number) => {
+  const sway = new THREE.Euler();
+  const set = (t: number, time = 0) => {
     spots.forEach((s, i) => {
       const k = clamp((t * radius * 1.2 - s.d) / 3);
-      p.set(s.x, ground(s.x, s.z), s.z);
-      q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), s.r);
+      p.set(s.x, s.y, s.z);
+      sway.set(Math.sin(time * 1.2 + s.x * 0.3 + s.z * 0.2) * 0.08 * k, s.r, Math.sin(time * 0.9 + s.r) * 0.06 * k);
+      q.setFromEuler(sway);
       sc.setScalar(Math.max(0.0001, k * s.s * 1.6));
       im.setMatrixAt(i, m.compose(p, q, sc));
     });

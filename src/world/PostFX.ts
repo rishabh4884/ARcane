@@ -63,6 +63,7 @@ const GradeShader = {
     uTime: { value: 0 },
     uVignette: { value: 0.5 },
     uGrain: { value: 0.045 },
+    uSharpen: { value: 0.35 },
     uAspect: { value: 1 },
     uHush: { value: 0 },
     uTint: { value: new THREE.Vector3(1, 1, 1) },
@@ -78,7 +79,7 @@ const GradeShader = {
   fragmentShader: `
     uniform sampler2D tDiffuse; uniform float uTime; uniform float uVignette; uniform float uGrain; uniform float uAspect; uniform float uHush;
     uniform vec3 uTint; uniform vec3 uLift; uniform float uSat; uniform float uExposure; uniform float uDark; uniform vec2 uTexel;
-    uniform float uAuthored;
+    uniform float uAuthored; uniform float uSharpen;
     varying vec2 vUv;
     float hash(vec2 p){ return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
     vec3 shoulder(vec3 c){
@@ -95,7 +96,7 @@ const GradeShader = {
       // A light unsharp mask: fine detail in skin, bark and grass reads crisply.
       vec3 blur = (texture2D(tDiffuse, vUv + vec2(uTexel.x, 0.0)).rgb + texture2D(tDiffuse, vUv - vec2(uTexel.x, 0.0)).rgb
                  + texture2D(tDiffuse, vUv + vec2(0.0, uTexel.y)).rgb + texture2D(tDiffuse, vUv - vec2(0.0, uTexel.y)).rgb) * 0.25;
-      c = max(c + (c - blur) * mix(0.35, 0.18, uAuthored), 0.0);
+      c = max(c + (c - blur) * uSharpen, 0.0);
       // Chapter mood: a tint and lift over the painted world, its saturation, and the King's darkness.
       c = c * uTint * uExposure + uLift;
       float l0 = dot(c, vec3(0.2126, 0.7152, 0.0722));
@@ -158,6 +159,10 @@ export class PostFX {
     this.composer.addPass(new SMAAPass());
     this.grade = new ShaderPass(GradeShader);
     this.grade.uniforms.uAuthored.value = authored ? 1 : 0;
+    // The paintings already carry their paper texture. Animated display-space grain was landing
+    // on the otherwise clean cels, and sharpening after SMAA brought their edge aliasing back.
+    this.grade.uniforms.uGrain.value = drawn ? 0 : 0.045;
+    this.grade.uniforms.uSharpen.value = drawn ? 0 : authored ? 0.18 : 0.35;
     this.composer.addPass(this.grade);
     this.enabledFlag = enabled;
   }

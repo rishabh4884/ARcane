@@ -140,7 +140,7 @@ const TUCK: Script = {
       // Kneels and cups the closed flower in both hands, then lifts it to show you.
       const k = bump(13, 21, t);
       extra = (a) => a.rig.rotPair('thigh', -0.9 * k).rotPair('knee', 1.4 * k).pos('hips', 0, -0.1 * k, 0).rot('spine', 0.4 * k).rotPair('shoulder', -1.1 * k, 0, -0.2 * k).rotPair('elbow', -0.8 * k);
-      flower.set(0.15 * k, 0.05 * k);
+      flower.set(0.15 * k, 0.05 * k, t);
     } else if (t < 25) { s.act('tuck', 'idle'); s.face('tuck', 0.2); extra = (a) => a.rig.rot('head', 0.15, 0, 0.2).rot('shoulderL', -0.9 * bump(21, 25, t)).rot('elbowL', -1.2 * bump(21, 25, t)); }
     else if (t < 29) { s.act('tuck', 'idle'); extra = wave('L', bump(25, 29, t)); }
     else s.act('tuck', 'dead', 0.45 + smooth(29, 31, t) * 0.55);
@@ -274,7 +274,7 @@ const FLOWERS: Script = {
     const { near } = (s as Shot & { fl: { near: ReturnType<typeof lanternFlower> } }).fl;
     s.act('hands', t > 8 && t < 21 ? 'windup' : 'idle', smooth(8, 11, t) * (1 - smooth(19, 21, t)));
     const glow = smooth(11, 14, t) * (1 - smooth(17.5, 20.5, t));
-    near.set(glow * 0.9, glow);
+    near.set(glow * 0.9, glow, t);
     if (glow > 0.1) s.stage.illuminate(0, near.group.position.clone().setY(near.group.position.y + 0.7), new THREE.Color('#ffcf7a'), glow * 1.2, 4);
     s.look('tuck', t < 11 || t > 19 ? s.camera.position : near.group.position);
     const a = s.actors.get('tuck');
@@ -338,7 +338,7 @@ const GRAEL_FALL: Script = {
     heart.place(up.lerp(away, smooth(15, 19, t)));
     heart.sprite.scale.setScalar(2.2 + Math.sin(t * 3) * 0.2 + smooth(4, 10, t) * 2);
     s.stage.illuminate(0, heart.sprite.position, new THREE.Color('#ffe7a3'), 2.4 * (1 - smooth(17, 20, t)), 22);
-    field.set(smooth(8, 15, t) * (1 - smooth(19, 22, t) * 0.6));
+    field.set(smooth(8, 15, t) * (1 - smooth(19, 22, t) * 0.6), t);
   },
 };
 
@@ -545,7 +545,7 @@ const KINDLER: Script = {
     const { flower, gather } = (s as Shot & { kd: { flower: ReturnType<typeof lanternFlower>; gather: Array<{ l: ReturnType<Shot['lumen']>; from: THREE.Vector3 }> } }).kd;
     const closing = 0.5 * (1 - smooth(0, 8, t));
     const burst = smooth(15, 17, t);
-    flower.set(closing + burst, 0.35 * (1 - smooth(0, 8, t)) + burst * 1.5);
+    flower.set(closing + burst, 0.35 * (1 - smooth(0, 8, t)) + burst * 1.5, t);
     const heart = flower.group.position.clone().setY(flower.group.position.y + 0.72);
     gather.forEach(({ l, from }, i) => {
       const k = smooth(8 + i * 0.25, 14 + i * 0.1, t);
@@ -673,9 +673,9 @@ const ENDING: Script = {
     const wa = s.actors.get('warden');
     if (wa) wa.input.extra = (an) => an.rig.rot('spine', 0.6 * bow).rot('head', 0.5 * bow).rotPair('shoulder', 0.3 * bow);
     // The freed wood: flowers open outward, lantern-flowers bloom, butterflies, gnomes dancing.
-    field.set(smooth(14, 32, t));
+    field.set(smooth(14, 32, t), t);
     flies.update(t);
-    blooms.forEach((f, i) => f.set(smooth(16 + i * 0.4, 18 + i * 0.4, t), smooth(16 + i * 0.4, 18 + i * 0.4, t)));
+    blooms.forEach((f, i) => f.set(smooth(16 + i * 0.4, 18 + i * 0.4, t), smooth(16 + i * 0.4, 18 + i * 0.4, t), t + i * 0.7));
     for (let i = 0; i < 4; i++) {
       const g = s.get(`g${i}`);
       if (t > 20 + i * 0.5 && g.overrides.dissolve === 1) { delete g.overrides.dissolve; g.awaken(1.1); }

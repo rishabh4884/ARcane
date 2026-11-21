@@ -472,6 +472,7 @@ export class Regions {
     const field = flowerField(new THREE.Vector3(0, 0, -6), 26, 1100, terrainHeight);
     field.set(1);
     this.add(field.mesh);
+    this.animated.push((t) => field.set(1, t));
     const flies = butterflies(30, new THREE.Vector3(0, terrainHeight(0, -6), -6), 10);
     this.add(flies.group);
     this.animated.push((t) => flies.update(t));
@@ -481,6 +482,7 @@ export class Regions {
       f.group.position.copy(p);
       f.set(1, 1);
       this.add(f.group);
+      this.animated.push((t) => f.set(1, 1, t + i * 0.8));
     }
   }
 

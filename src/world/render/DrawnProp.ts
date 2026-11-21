@@ -103,6 +103,13 @@ function inkPropMaterial(source: THREE.MeshStandardMaterial | THREE.MeshBasicMat
       }`,
   });
   m.name = `${source.name || source.type} (drawn)`;
+  // Prop animation retains its original material handles (flowers opening, lanterns warming).
+  // Copying these only at conversion froze their colour and emission at the unopened state.
+  m.onBeforeRender = () => {
+    if (s.color) m.uniforms.uColor.value.copy(s.color);
+    if (s.emissive) m.uniforms.uEmissive.value.copy(s.emissive).multiplyScalar(s.emissiveIntensity ?? 1);
+    m.uniforms.uOpacity.value = s.opacity;
+  };
   return m;
 }
 

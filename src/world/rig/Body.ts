@@ -260,6 +260,8 @@ export interface PartOptions {
   glow?: number;
   /** Bones this part may bind to. Vertices weight to the nearest of them. */
   bones: readonly string[];
+  /** Restrict a garment's anchors per vertex: sewn edges must not follow free hanging bones. */
+  bonesAt?: (position: THREE.Vector3) => readonly string[];
   /** Bind entirely to the first bone (skulls, noses, rocks in hand). */
   rigid?: boolean;
   /** How sharply weights fall off with distance (higher = crisper joints). */
@@ -442,7 +444,7 @@ export class Body {
           surf[k * 2] = sid;
           surf[k * 2 + 1] = o.glow ?? 0;
         }
-        const candidateBones = perVertex ? perVertex.bones[i] : o.bones;
+        const candidateBones = perVertex ? perVertex.bones[i] : o.bonesAt?.(p) ?? o.bones;
         if (!perVertex && (o.rigid || o.bones.length === 1)) {
           skinIndex[k * 4] = boneIndex.get(o.bones[0])!;
           skinWeight[k * 4] = 1;

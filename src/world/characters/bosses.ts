@@ -6,6 +6,7 @@ import { flap, mothWing, pitchAbout, quadruped, serpent } from './creatures.ts';
 import { Sculpt } from '../rig/Sculpt.ts';
 import { BodyProxy, drape, RadialHull, union, vAtHeight } from '../rig/Cloth.ts';
 import { BRAMBLE_GOBLIN } from './spirits.ts';
+import { stagHideGeometry } from './stagHide.ts';
 
 /**
  * THE ONES WHO RULE THE HUSHWOOD
@@ -170,7 +171,7 @@ const BONE = '#d8ceb6', BONE_DARK = '#7d6f58', COLDFIRE = '#8fdcff';
 export const HOLLOW_STAG: Design = {
   kind: 'stag', name: 'The Hollow Stag', height: 4.0, radius: 1.1, turnRate: 2.6, stride: 3.4, pace: 1.6,
   eye: '#a8e8ff', eyeAngry: '#ffffff', edge: '#9fe8ff', mist: 0.6,
-  stiffness: { antlerL: 12, antlerR: 12, hide: 5, tail: 6 },
+  stiffness: { antlerL: 12, antlerR: 12, hide: 5, hideL: 4, hideR: 5.2, tail: 6 },
   castBone: 'head', coreBone: 'chest',
   build(b: Body) {
     b.bone('hips', 'root', [0, 1.95, -0.9])
@@ -181,6 +182,7 @@ export const HOLLOW_STAG: Design = {
       .bone('jaw', 'head', [0, 2.92, 1.6], [0, 2.82, 2.0])
       .bone('eyes', 'head', [0, 3.08, 1.72])
       .bone('hide', 'hips', [0, 2.15, -0.55], [0, 1.4, -0.6])
+      .pairBone('hideL', 'hips', [0.34, 2.13, -0.65], [0.42, 1.25, -0.65])
       .bone('tail', 'hips', [0, 2.0, -1.3], [0, 1.7, -1.45])
       .pairBone('antlerL', 'head', [0.12, 3.18, 1.42])
       .pairBone('antler2L', 'antlerL', [0.6, 3.75, 1.1], [1.1, 4.1, 0.85])
@@ -283,28 +285,13 @@ export const HOLLOW_STAG: Design = {
     b.part(ellipsoid([0, 1.88, 0.5], [0.1, 0.12, 0.1]), { color: '#ffffff', surface: 'glow', glow: 1, bones: ['eyes', 'chest'] });
     for (const x of [1, -1]) b.part(ellipsoid([x * 0.098, 3.07, 1.66], [0.026, 0.026, 0.014]), { color: '#ffffff', surface: 'glow', glow: 1, bones: ['eyes'] });
     for (let i = 0; i < 6; i++) for (const x of [1, -1]) b.part(tube([[x * (0.04 - i * 0.002), 2.9, 1.66 + i * 0.045], [x * (0.04 - i * 0.002), 2.86, 1.665 + i * 0.045]], [0.012, 0.004], { radial: 5 }), { color: '#e8dfc8', surface: 'bone', bones: ['jaw'] });
-    // Tattered hide draped over the spine and haunches: a torn sheet, ragged at the hem, the bones
-    // showing through its holes.
-    {
-      const cols = 26, rows = 30, pos: number[] = [], idx: number[] = [];
-      for (let j = 0; j <= rows; j++) for (let i = 0; i <= cols; i++) {
-        const u = j / rows, v = i / cols, z = -1.32 + u * 1.25;
-        const a = (v - 0.5) * Math.PI * 1.25;
-        const r = 0.36 + Math.sin(u * Math.PI) * 0.1;
-        const torn = Math.max(0, Math.abs(a) - 0.95) * (0.9 + 0.7 * fbm3(u * 6, v * 9, 1.7));
-        pos.push(Math.sin(a) * r * (1 + torn * 0.2), 2.16 + Math.cos(a) * r - torn * 0.9 - (Math.abs(a) > 1 ? 0.1 : 0), z);
-        if (i < cols && j < rows) {
-          const k = j * (cols + 1) + i;
-          if (fbm3(u * 7 + 3, v * 7, 2) > 0.62) continue;
-          idx.push(k, k + cols + 1, k + 1, k + 1, k + cols + 1, k + cols + 2);
-        }
-      }
-      const sheet = new THREE.BufferGeometry();
-      sheet.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-      sheet.setIndex(idx);
-      sheet.computeVertexNormals();
-      b.part(sheet, { color: '#4f4237', shade: '#221b15', surface: 'fur', bones: ['hips', 'hide', 'spine'], relief: 0.6 });
-    }
+    // The ridge follows the spine; only the hanging lobes follow the loose hide bones.
+    const back = ['hips', 'spine'], leftHide = ['hips', 'spine', 'hideL'], rightHide = ['hips', 'spine', 'hideR'];
+    b.part(stagHideGeometry(), {
+      color: '#645442', shade: '#302a23', surface: 'fur', relief: 0,
+      bones: ['hips', 'spine', 'hideL', 'hideR'],
+      bonesAt: (p) => p.y > 2.08 || Math.abs(p.x) < 0.26 ? back : p.x > 0 ? leftHide : rightHide,
+    });
     b.part(tube([[0, 2.02, -1.28], [0, 1.88, -1.4], [0, 1.7, -1.46]], [0.04, 0.03, 0.008], { radial: 6 }), { color: BONE, surface: 'bone', bones: ['tail'] });
     // Cold fire licking the antler tips, and split hooves.
     for (const x of [1, -1]) {
@@ -327,17 +314,39 @@ export const HOLLOW_STAG: Design = {
     blink(a, 99);
     r.rot('neck', 0.1 + Math.sin(a.t * 0.4 + a.seed) * 0.06 * a.life).rot('hide', -a.swayF * 0.6 + Math.sin(a.t * 1.1) * 0.05, 0, a.swayS * 0.6);
     r.rot('tail', Math.sin(a.t * 1.7) * 0.15);
+    // Weight reaches each loose lobe after the body; the heavier left hem settles later.
+    r.rot('hideL', -a.swayF * 0.22 + Math.sin(a.t * 1.1 + a.seed * 4) * 0.025 * a.life, 0, a.swayS * 0.2);
+    r.rot('hideR', -a.swayF * 0.17 + Math.sin(a.t * 1.1 + a.seed * 4 - 0.65) * 0.02 * a.life, 0, a.swayS * 0.16);
+    if (a.move < 0.15 && a.pose === 'idle') {
+      const listen = bump(1, 3.5, (a.t + a.seed * 9) % 10) * a.life;
+      r.rot('head', -0.05 * listen, 0.12 * listen, -0.07 * listen).rot('neck', 0.025 * listen);
+      r.rot('jaw', 0.018 * listen);
+    }
     const p = a.progress, c = smooth(0, 0.7, p), hit = smooth(0, 0.3, p);
     if (a.pose === 'windup') {
-      if (a.attack === 'charge') { r.rot('spine', -0.3 * c).rot('chest', -0.25 * c).rotPair('fthigh', -0.9 * c).rotPair('fknee', -1.1 * c).pos('hips', 0, -0.2 * c, 0).rot('neck', -0.3 * c).rot('head', 0.2 * c); }
+      if (a.attack === 'charge') {
+        const paw = bump(0.08, 0.5, p), brace = smooth(0.5, 0.92, p);
+        r.pos('hips', -0.035 * paw, -0.1 * brace, -0.12 * brace).rot('spine', 0.08 * brace);
+        r.rot('fthighR', -0.48 * paw).rot('fkneeR', -0.75 * paw).rot('fankleR', 0.32 * paw);
+        r.rotPair('hthigh', -0.16 * brace).rotPair('hknee', 0.24 * brace);
+        r.rot('neck', 0.45 * c).rot('head', 0.36 * c).rotPair('antler', -0.04 * brace);
+      }
       else if (a.attack === 'antlers') { r.rot('neck', 0.35 * c, 0.6 * c).rot('head', 0.35 * c); }
-      else if (a.attack === 'coldfire') { r.rot('neck', -0.4 * c).rot('head', -0.35 * c).rot('jaw', 0.3 * c); }
+      else if (a.attack === 'coldfire') { r.rot('neck', -0.4 * c, 0.15 * bump(0.15, 0.8, p)).rot('head', -0.35 * c).rot('jaw', 0.3 * c); r.scl('chest', 0.035 * c, 0.015 * c, 0.02 * c).rotPair('antler', -0.06 * c, 0, 0.05 * c); }
       else { r.rot('spine', -0.35 * c).rotPair('fthigh', -1.1 * c).rotPair('fknee', -1.3 * c).pos('hips', 0, -0.25 * c, 0); }
     } else if (a.pose === 'strike') {
       if (charging) r.rot('neck', 0.5).rot('head', 0.45);
       else if (a.attack === 'antlers') r.rot('neck', 0.35, 0.6 - 1.6 * hit).rot('head', 0.35, -0.3 * hit);
       else if (a.attack === 'bell') r.rot('spine', -0.35 + 0.5 * hit).rotPair('fthigh', -1.1 + 1.2 * hit).rotPair('fknee', -1.3 + 1.3 * hit).pos('hips', 0, -0.25 + 0.15 * hit, 0);
-      else r.rot('neck', -0.4).rot('head', -0.35).rot('jaw', 0.4);
+      else { r.rot('neck', -0.4 + 0.16 * hit, -0.18 * hit).rot('head', -0.35 + 0.12 * hit).rot('jaw', 0.4 * (1 - smooth(0.5, 1, p))); r.rotPair('antler', -0.06 * (1 - hit)); }
+    } else if (a.pose === 'recover') {
+      const settle = 1 - smooth(0, 0.7, p);
+      if (a.attack === 'antlers') r.rot('neck', 0.25 * settle, -0.8 * settle).rot('head', 0.18 * settle);
+      else if (a.attack === 'charge') {
+        r.pos('hips', 0, -0.06 * bump(0, 0.6, p), 0.09 * settle).rotPair('fthigh', 0.15 * settle).rot('neck', 0.4 * settle);
+        r.rot('head', 0.25 * settle, Math.sin(p * Math.PI * 4) * 0.08 * settle);
+      } else if (a.attack === 'bell') r.rot('chest', 0.12 * settle).rotPair('fknee', -0.16 * settle).pos('hips', 0, -0.07 * settle, 0);
+      else r.rot('neck', -0.24 * settle).rot('jaw', 0.1 * settle);
     } else if (a.pose === 'stagger') r.rot('neck', -0.3 * bump(0, 1, p)).pos('hips', 0, 0, -0.3 * bump(0, 1, p));
   },
 };
@@ -490,6 +499,7 @@ export const MOTH_MATRON: Design = {
       [[0.28, 3.08, 0.12], [0.5, 2.7, 0.42], [0.3, 2.56, 0.62], [0.24, 2.52, 0.66], 'shoulder2L', 'elbow2L', 'hand2L'],
     ] as Array<[V3, V3, V3, V3, string, string, string]>) {
       b.pair(tube([sh, el, wr], [0.06, 0.045, 0.035], { radial: 8 }), { color: '#2b2630', shade: '#4a4252', surface: 'chitin', bones: [sb, eb, hb, 'chest'] });
+      b.pair(tube([wr, hand], [0.036, 0.042], { radial: 9 }), { color: '#2b2630', shade: '#4a4252', surface: 'chitin', bones: [hb], relief: 0 });
       for (const dx of [-0.03, 0, 0.03]) b.pair(tube([[hand[0] + dx, hand[1], hand[2]], [hand[0] + dx * 1.5, hand[1] - 0.18, hand[2] + 0.06], [hand[0] + dx * 1.7, hand[1] - 0.32, hand[2] + 0.1]], [0.014, 0.01, 0.002], { radial: 4 }),
         { color: '#2b2630', surface: 'chitin', bones: [hb] });
     }

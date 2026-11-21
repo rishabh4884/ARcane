@@ -10,6 +10,7 @@ import { Character } from './rig/Character.ts';
 import { aimAssistRadius, EYE_HEIGHT, moveOnGround, terrainHeight, type Obstacle } from './spatial.ts';
 import { glowSprite, Trail } from './vfx.ts';
 import { EnemyIndicators } from '../ui/EnemyIndicators.ts';
+import { createCreatureProjectile, animateCreatureProjectile, type ProjectileStyle } from './fx/creatureProjectiles.ts';
 
 /**
  * THE ENCOUNTER
@@ -48,7 +49,6 @@ interface Actor extends Foe {
   elder: boolean;
 }
 
-type ProjectileStyle = 'ember' | 'bile' | 'boulder' | 'lantern' | 'moth' | 'pale' | 'cold' | 'star' | 'wisp';
 interface Projectile {
   group: THREE.Object3D;
   velocity: THREE.Vector3;
@@ -133,9 +133,7 @@ export class Encounter {
   private readonly scratch2 = new THREE.Vector3();
   private readonly hitBox = new THREE.Box3();
   private readonly spikeGeometry = new THREE.ConeGeometry(0.28, 1.7, 6, 1);
-  private readonly rockGeometry = new THREE.IcosahedronGeometry(0.45, 0);
   private readonly ringGeometry = new THREE.RingGeometry(0.86, 1, 72);
-  private readonly orbGeometry = new THREE.IcosahedronGeometry(0.14, 1);
   private readonly shared: THREE.Material[] = [];
   private level: LevelDef | null = null;
   private mode: EncounterMode = 'idle';
@@ -887,24 +885,7 @@ export class Encounter {
   private material(m: THREE.Material): THREE.Material { this.shared.push(m); return m; }
 
   private projectileMesh(style: ProjectileStyle, color: THREE.Color): THREE.Object3D {
-    const group = new THREE.Group();
-    if (style === 'boulder') {
-      const rock = new THREE.Mesh(this.rockGeometry, new THREE.MeshStandardMaterial({ color: '#6f6a5e', roughness: 0.95, flatShading: true }));
-      group.add(rock);
-      return group;
-    }
-    const core = new THREE.Mesh(this.orbGeometry, new THREE.MeshBasicMaterial({ color: color.clone().lerp(new THREE.Color('#ffffff'), 0.5), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
-    core.scale.setScalar(style === 'star' ? 1.8 : style === 'bile' ? 1.4 : style === 'moth' ? 0.6 : 1);
-    group.add(core);
-    group.add(glowSprite(color, style === 'star' ? 1.6 : style === 'moth' ? 0.5 : 0.85, undefined, 0.85));
-    if (style === 'moth') {
-      // A little moth: two dusty wings that beat.
-      const wing = new THREE.Mesh(new THREE.CircleGeometry(0.16, 8), new THREE.MeshBasicMaterial({ color: '#6e6455', side: THREE.DoubleSide, transparent: true, opacity: 0.9 }));
-      wing.position.x = 0.14; wing.name = 'wingL';
-      const wing2 = wing.clone(); wing2.position.x = -0.14; wing2.name = 'wingR';
-      group.add(wing, wing2);
-    }
-    return group;
+    return createCreatureProjectile(style, color);
   }
 
   private fire(a: Actor | null, style: ProjectileStyle, from: THREE.Vector3, damage: number, mode: Projectile['mode'], speed: number, spread = 0, delay = 0): void {
@@ -965,13 +946,7 @@ export class Encounter {
       }
       p.addScaledVector(pr.velocity, dt);
       pr.group.lookAt(this.scratch.copy(p).add(pr.velocity));
-      pr.group.rotateZ(pr.age * 4);
-      if (pr.style === 'moth') {
-        const beat = Math.sin(pr.age * 40) * 0.9;
-        const l = pr.group.getObjectByName('wingL'), r = pr.group.getObjectByName('wingR');
-        if (l) l.rotation.y = beat; if (r) r.rotation.y = -beat;
-      }
-      if (pr.style === 'boulder') { pr.group.rotation.x += dt * 4; pr.group.rotation.y += dt * 3; }
+      animateCreatureProjectile(pr.group, pr.style, pr.age);
       if (pr.trail) { pr.trail.push(p); pr.trail.update(dt, eye); }
       if (Math.random() < dt * 30 && pr.style !== 'boulder') this.fx.particles?.emit({ x: p.x, y: p.y, z: p.z, vx: (Math.random() - 0.5) * 0.4, vy: 0.3, vz: (Math.random() - 0.5) * 0.4, color: pr.color, size: 0.07, sizeEnd: 0.01, ttl: 0.5, drag: 1, gravity: pr.style === 'bile' ? 3 : -0.4, style: 'glow' });
       // Moonveil turns projectiles back on their makers.
@@ -1010,7 +985,15 @@ export class Encounter {
     const pr = this.projectiles[i];
     if (!pr) return;
     pr.group.removeFromParent();
-    pr.group.traverse((o) => { if (o instanceof THREE.Mesh || o instanceof THREE.Sprite) (o.material as THREE.Material).dispose(); });
+    const geometries = new Set<THREE.BufferGeometry>(), materials = new Set<THREE.Material>();
+    pr.group.traverse((o) => {
+      if (o instanceof THREE.Mesh) geometries.add(o.geometry);
+      if (o instanceof THREE.Mesh || o instanceof THREE.Sprite) {
+        for (const m of Array.isArray(o.material) ? o.material : [o.material]) materials.add(m);
+      }
+    });
+    for (const g of geometries) g.dispose();
+    for (const m of materials) m.dispose();
     pr.trail?.dispose();
     this.projectiles.splice(i, 1);
   }
@@ -1172,9 +1155,7 @@ export class Encounter {
     this.summons.dispose();
     this.indicators.dispose();
     this.spikeGeometry.dispose();
-    this.rockGeometry.dispose();
     this.ringGeometry.dispose();
-    this.orbGeometry.dispose();
     for (const m of this.shared) m.dispose();
     this.scene.remove(this.group);
   }

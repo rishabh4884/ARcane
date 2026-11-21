@@ -144,10 +144,10 @@ export class AudioEngine {
       case 'player-hurt': this.hurt(); break;
       case 'player-blocked': this.blocked(); break;
       case 'enemy-windup': this.windup(event.kind, event.pan); break;
-      case 'enemy-strike': this.noise({ filter: 'bandpass', freq: 900, freqEnd: 240, q: 1.2, decay: 0.32, attack: 0.03, gain: 0.22, pan: event.pan }); break;
+      case 'enemy-strike': this.strike(event.kind, event.attack, event.pan); break;
       case 'enemy-hit': this.enemyHit(event.pan); break;
       case 'enemy-death': this.death(event.pan); break;
-      case 'projectile': this.tone({ type: 'sine', freq: 620, freqEnd: 980, decay: 1.6, attack: 0.25, gain: 0.05, pan: event.pan, vibrato: { rate: 7, depth: 18 }, reverb: 0.6 }); break;
+      case 'projectile': this.projectileVoice(event.style, event.pan); break;
       case 'encounter': this.sting(event.mode); break;
       case 'hush': this.hush(event.duration); break;
       case 'wave': this.waveCall(event.index); break;
@@ -508,6 +508,59 @@ export class AudioEngine {
         // A boss's tell: its voice, louder for the heavy attacks.
         this.roar(kind, pan, 0.7);
         break;
+    }
+  }
+
+  /** Material and creature are audible even when an attack enters outside the frame. */
+  private projectileVoice(style: string | undefined, pan: number): void {
+    switch (style) {
+      case 'moth':
+        this.noise({ filter: 'bandpass', freq: 340, q: 1.8, attack: 0.05, decay: 0.65, gain: 0.10, pan, tremolo: { rate: 32, depth: 0.95 } });
+        break;
+      case 'lantern':
+        [740, 1179, 1961].forEach((freq, i) => this.tone({ freq, decay: 0.8 - i * 0.15, gain: 0.028 / (i + 1), when: i * 0.035, pan, reverb: 0.7 }));
+        this.noise({ filter: 'highpass', freq: 2800, decay: 0.12, gain: 0.035, pan });
+        break;
+      case 'boulder':
+        this.noise({ filter: 'lowpass', freq: 420, freqEnd: 120, brown: true, decay: 0.48, gain: 0.23, pan });
+        this.tone({ freq: 83, freqEnd: 49, decay: 0.3, gain: 0.09, pan });
+        break;
+      case 'bile':
+        [180, 263, 146].forEach((freq, i) => this.tone({ type: 'triangle', freq, freqEnd: freq * 0.48, decay: 0.15, gain: 0.055, when: i * 0.065, pan, filter: { type: 'lowpass', freq: 600 } }));
+        break;
+      case 'cold':
+        [1480, 2213, 3137].forEach((freq, i) => this.tone({ freq, freqEnd: freq * 0.94, decay: 0.35 + i * 0.15, gain: 0.022 / (i + 1), when: i * 0.045, pan, reverb: 0.8 }));
+        this.noise({ filter: 'highpass', freq: 3400, decay: 0.2, gain: 0.035, pan });
+        break;
+      case 'pale':
+        [294, 587, 827].forEach((freq, i) => this.tone({ freq, decay: 1.2, gain: 0.04 / (i + 1), pan, reverb: 0.9 }));
+        break;
+      case 'star':
+        this.tone({ type: 'triangle', freq: 164, freqEnd: 131, attack: 0.08, decay: 0.7, gain: 0.055, pan, reverb: 0.8 });
+        this.tone({ freq: 697, freqEnd: 460, attack: 0.12, decay: 0.75, gain: 0.025, pan, vibrato: { rate: 4, depth: 7 } });
+        break;
+      case 'wisp':
+        this.noise({ filter: 'bandpass', freq: 1600, freqEnd: 900, q: 7, attack: 0.12, decay: 0.75, gain: 0.05, pan, reverb: 0.8 });
+        break;
+      default:
+        this.noise({ filter: 'bandpass', freq: 850, freqEnd: 2200, q: 0.7, decay: 0.32, gain: 0.12, pan });
+    }
+  }
+
+  private strike(kind: string, attack: string | undefined, pan: number): void {
+    if (attack === 'bell') {
+      this.projectileVoice('pale', pan);
+    } else if (kind === 'stag' && attack === 'antlers') {
+      this.noise({ filter: 'bandpass', freq: 530, freqEnd: 180, q: 4, decay: 0.3, gain: 0.15, pan });
+      this.tone({ type: 'triangle', freq: 173, freqEnd: 108, decay: 0.22, gain: 0.07, pan });
+    } else if (kind === 'moth' || kind === 'matron') {
+      this.noise({ filter: 'bandpass', freq: 420, q: 1.2, attack: 0.04, decay: 0.45, gain: 0.14, pan, tremolo: { rate: 29, depth: 0.8 } });
+    } else if (kind === 'widow') {
+      this.tone({ type: 'triangle', freq: 470, freqEnd: 170, decay: 0.18, gain: 0.04, pan });
+      this.noise({ filter: 'highpass', freq: 2600, decay: 0.12, gain: 0.07, pan });
+    } else {
+      const heavy = kind === 'grael' || kind === 'root' || attack === 'charge' || attack === 'stomp';
+      this.noise({ filter: heavy ? 'lowpass' : 'bandpass', freq: heavy ? 430 : 900, freqEnd: heavy ? 140 : 240, brown: heavy, q: 1.2, decay: heavy ? 0.48 : 0.26, gain: heavy ? 0.25 : 0.16, pan });
     }
   }
 
