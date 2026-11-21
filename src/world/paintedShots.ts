@@ -13,7 +13,7 @@ import type { Script } from '../cutscene/Cutscene.ts';
 
 export interface PaintCamera { name: string; position: [number, number, number]; lookAt: [number, number, number]; fov: number; aspect: number }
 
-export interface PlannedShot extends PaintCamera { script: string; key: number }
+export interface PlannedShot extends PaintCamera { script: string; key: number; /** whose light it is painted in */ region: string }
 
 /** Painted frames are wider than any screen and a little taller than the key's own view. */
 export const SHOT_ASPECT = 2;
@@ -45,16 +45,26 @@ export function covers(p: PaintCamera, position: THREE.Vector3, lookAt: THREE.Ve
   return true;
 }
 
-/** The paintings a region's cutscenes need beyond its gameplay painting. */
-export function planShots(scripts: readonly Script[], region: string, gameplay: PaintCamera): PlannedShot[] {
+/** The light a cutscene is in at time `t`: its mood, or the mood it turns to once it has turned. */
+export function lightAt(script: Script, t: number): string {
+  const to = script.toMood;
+  return to && t >= to.at + to.seconds * 0.5 ? to.mood : script.mood;
+}
+
+/**
+ * The paintings cutscenes need beyond the gameplay painting: one for each camera key the gameplay
+ * painting cannot hold and no earlier painting of the same scene, in the same light, already holds.
+ */
+export function planShots(scripts: readonly Script[], gameplay: PaintCamera): PlannedShot[] {
   const out: PlannedShot[] = [];
   for (const script of scripts) {
-    if ((script.region ?? 'edge') !== region) continue;
     script.camera.forEach((key, i) => {
       const position = new THREE.Vector3(...key.p), lookAt = new THREE.Vector3(...key.l), fov = key.fov ?? 50;
-      if ([gameplay, ...out].some((p) => covers(p, position, lookAt, fov))) return;
+      const region = lightAt(script, key.t);
+      const own = out.filter((p) => p.script === script.id && p.region === region);
+      if ((region === script.mood && covers(gameplay, position, lookAt, fov)) || own.some((p) => covers(p, position, lookAt, fov))) return;
       out.push({
-        name: `${script.id}-${i}`, script: script.id, key: i,
+        name: `${script.id}-${i}`, script: script.id, key: i, region,
         position: key.p.map((v) => Math.round(v * 1000) / 1000) as [number, number, number],
         lookAt: key.l.map((v) => Math.round(v * 1000) / 1000) as [number, number, number],
         fov: Math.round(fov * SHOT_FOV_PAD * 100) / 100, aspect: SHOT_ASPECT,

@@ -63,15 +63,40 @@ cutscene camera moves from one key to the next it passes from one painting into 
 stars and mist are fixed to the world, not the frame, so every painting of a place agrees with the
 others.
 
+### Every region, in its own light
+
+The Mirefen, the Lantern Deeps, the Unlit Throne and Dawn are painted from the same layout and passes
+as the Edge, each with its own direction (`DIRECTIONS` in `art/set_paint.py`): the palette from the
+art bible, how the sky reads (moon, a low sun, or veiled by a closed canopy), how much mist and how
+low, how much colour night takes, and what the region adds by hand — standing water mirroring the low
+sky and reeds at its edge in the Mirefen, small colonies of fungi glowing cold at the roots in the
+Deeps, drifts of blossom and lantern-flowers at Dawn. In the game each region swaps in its painting,
+its built props step aside, its living things stay, and the mist and the drawn figures take its light.
+`python3 art/set_paint.py edge --regions` repaints them (`--region <key>` for one).
+
+Cutscenes are painted in the light of their moment: a scene that turns (the Warden darkening the
+Edge, the fen freed, the ending's dawn) paints its later keys in the new light, and the camera's
+passage from key to key carries the change.
+
 ### Living layers
 
 The painting is still; the set is not: crowns sway with gusts, cloud shadows drift across the floor and
 trees, mist creeps and rolls, moon shafts shimmer where the canopy opens, lantern halos breathe and
 gutter, fireflies drift, and the foreground layer hangs swaying fronds and branches into the corners.
 
+## Props: drawn
+
+Anything else built in three.js for a scene or a region (Tuck's stump and lantern-flowers,
+butterflies, hanging lanterns, the set pieces) goes through `drawn()` (`src/world/render/DrawnProp.ts`):
+its material becomes the cast's ink and paint (three flat bands, a moon rim, the same air) and the edge
+pass inks it. What glows keeps its glow.
+
 ## Effects: drawn
 
-Effects follow the effects-animation tradition rather than particle simulation. Ember Lash
+Effects follow the effects-animation tradition rather than particle simulation. The shared particle
+system draws motes as hard-edged discs with a pale core, sparks as four-pointed glints redrawn every
+drawing, and smoke and dust as lobed cel puffs inside an ink line, held a drawing at a time (sparks on
+ones, smoke on twos). Ember Lash
 (`src/world/fx/emberLash.ts`) is the model: designed flame shapes in flat bands inside a dark ink
 line, redrawn on twos so the fire boils like drawings; licks peeling off the lash; a starburst held for
 three drawings on ones at the crack; tongues tossing off flame bits; smoke as cel-shaded puffs that
@@ -79,8 +104,7 @@ break apart instead of fading; a hard-edged scorch with coals winking out.
 
 ## What is next
 
-- Paint the other regions (the Mirefen, the Lantern Deeps, the Unlit Throne, Dawn) from the same
-  layout with their own direction, folding each region's dressing into its painting; until then they
-  borrow the Edge's painting, retinted.
-- Paint the shots of the cutscenes set in the other regions.
-- Redraw the remaining spells as drawn effects, after Ember Lash.
+- Redraw the remaining spells' own shapes (bolts, crystals, wards) as drawn effects, after Ember Lash;
+  their particles are already drawn.
+- Compose the region set pieces (the bower, the heartwood, the loom, the root throne) into their
+  cutscene paintings instead of drawing them live.

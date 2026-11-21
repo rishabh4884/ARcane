@@ -25,7 +25,7 @@ const eye: [number, number, number] = [SPAWN.x, r(terrainHeight(SPAWN.x, SPAWN.z
 const layout = {
   camera: { position: eye, lookAt: [0, 1.2, -12], fov: 64 },
   // Cutscene shots the gameplay painting cannot hold get paintings of their own.
-  shots: planShots(Object.values(SCRIPTS), 'edge', { name: 'edge', position: eye, lookAt: [0, 1.2, -12], fov: 64 * 1.06, aspect: 2 }),
+  shots: planShots(Object.values(SCRIPTS), { name: 'edge', position: eye, lookAt: [0, 1.2, -12], fov: 64 * 1.06, aspect: 2 }),
   moon: [r(MOON_DIRECTION.x), r(MOON_DIRECTION.y), r(MOON_DIRECTION.z)],
   ground: { size: GROUND.size, seg: GROUND.seg, heights, colors },
   trees: treePlacements(sites).map((t) => ({ ...t, x: r(t.x), y: r(t.y), z: r(t.z), scale: r(t.scale), yaw: r(t.yaw) })),

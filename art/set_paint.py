@@ -132,11 +132,23 @@ def main() -> None:
         paint_one(build, public, name, layout, direction, seed, quick)
     if shots:
         wanted = {argv[i + 1] for i, a in enumerate(argv) if a == '--shot'}
+        planned = {sh['name']: sh for sh in json.load(open(layout)).get('shots', [])}
         root = os.path.join(build, 'shots')
+        part = argv[argv.index('--part') + 1] if '--part' in argv else '0/1'
+        mine, parts = (int(v) for v in part.split('/'))
+        order = [sh['name'] for sh in json.load(open(layout)).get('shots', [])]
         for shot in sorted(os.listdir(root)) if os.path.isdir(root) else []:
             if wanted and shot not in wanted:
                 continue
-            paint_one(os.path.join(root, shot), os.path.join(public, 'shots', shot), f'{name}-{shot}', layout, direction, seed + 1, quick, sheets=quick)
+            if shot in order and order.index(shot) % parts != mine:
+                continue        # another painter's share
+            if shot not in planned or not os.path.exists(os.path.join(root, shot, 'meta.json')):
+                continue        # not rendered yet, or still rendering (its meta is written last)
+            if '--missing' in argv and os.path.exists(os.path.join(public, 'shots', shot, 'paint.webp')):
+                continue
+            # Each shot in the light of its moment: a scene that turns paints its later keys in the new light.
+            light = DIRECTIONS.get(planned[shot].get('region', name), direction)
+            paint_one(os.path.join(root, shot), os.path.join(public, 'shots', shot), f'{name}-{shot}', layout, light, seed + 1, quick, sheets=quick)
         # The manifest: every painted shot, for the game to find a cutscene's backgrounds.
         manifest = []
         pub = os.path.join(public, 'shots')

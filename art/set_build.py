@@ -107,10 +107,10 @@ def render_shot(shot: dict, build: str, public: str, scale: float, moon) -> None
     out = os.path.join(build, 'shots', shot['name'])
     t = time.time()
     rig = {'moon': bpy.data.objects['moon'], 'lamps': [o for o in bpy.data.objects if o.name.startswith('lamp-')]}
-    for path in setscene.render_passes(os.path.join(out, 'exr'), rig):
+    for path in setscene.render_passes(os.path.join(out, 'exr'), rig, samples=40):
         key = os.path.splitext(os.path.basename(path))[0]
         np.save(os.path.join(out, f'{key}.npy'), setscene.read_exr(path).astype(np.float32 if key in ('position', 'ids') else np.float16))
-    meta = {'name': shot['name'], 'script': shot['script'], 'key': shot['key'], 'position': shot['position'], 'lookAt': shot['lookAt'],
+    meta = {'name': shot['name'], 'script': shot['script'], 'key': shot['key'], 'region': shot.get('region', 'edge'), 'position': shot['position'], 'lookAt': shot['lookAt'],
             'fov': math.degrees(cam.data.angle_y), 'aspect': W / H, 'near': cam.data.clip_start, 'far': cam.data.clip_end,
             'width': W, 'height': H, 'depthMax': DEPTH_MAX, 'moon': moon}
     for d in (out, os.path.join(public, 'shots', shot['name'])):
@@ -134,6 +134,8 @@ def main() -> None:
         wanted = {argv[i + 1] for i, a in enumerate(argv) if a == '--shot'}
         for shot in layout.get('shots', []):
             if wanted and shot['name'] not in wanted:
+                continue
+            if '--missing' in argv and os.path.exists(os.path.join(build, 'shots', shot['name'], 'moon.npy')):
                 continue
             render_shot(shot, build, public, scale, layout['moon'])
         print(f'[set] {name} shots rendered in {time.time() - t0:.0f}s', flush=True)
