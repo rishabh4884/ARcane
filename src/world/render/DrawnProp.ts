@@ -87,7 +87,8 @@ function inkPropMaterial(source: THREE.MeshStandardMaterial | THREE.MeshBasicMat
         float t = dot(n, uFillDir) * 0.5 + 0.5 + brush * 0.15;
         float aa = max(fwidth(t), 0.002);
         float lit = smoothstep(0.5 - aa * 1.5, 0.5 + aa * 1.5, t);
-        float top = smoothstep(0.8 - aa * 1.5, 0.8 + aa * 1.5, t + brush * 0.08);
+        float slim = smoothstep(0.12, 0.35, length(fwidth(n)));
+        float top = smoothstep(0.8 - aa * 1.5, 0.8 + aa * 1.5, t) * (1.0 - slim);
         vec3 col = mix(base * uShadeColor, mix(base * uMidColor, base * uLitColor, top), lit);
         float facing = clamp(dot(n, V), 0.0, 1.0);
         float rim = smoothstep(0.5, 0.56, (1.0 - facing) * clamp(dot(n, uMoonDir) * 0.8 + 0.45, 0.0, 1.0));

@@ -127,7 +127,10 @@ export function inkPaintMaterial(maps: InkMaps | null, u: FigureUniforms): THREE
         t *= mix(0.78, 1.0, smoothstep(0.25, 0.85, ao));
         float aa = max(fwidth(t), 0.002);
         float lit = smoothstep(0.5 - aa * 1.5, 0.5 + aa * 1.5, t);
-        float top = smoothstep(0.8 - aa * 1.5, 0.8 + aa * 1.5, t + brush * 0.04);
+        // The brightest band lies only on broad forms: on a slim one (a finger, an ear, a horn, a
+        // strap) it would break into dashes, so there it fades as the surface turns fast per pixel.
+        float slim = smoothstep(0.12, 0.35, length(fwidth(n)));
+        float top = smoothstep(0.8 - aa * 1.5, 0.8 + aa * 1.5, t) * (1.0 - slim);
         vec3 shadow = base * uShadeColor * mix(0.75, 1.0, ao);
         vec3 mid = base * uMidColor;
         vec3 light = base * uLitColor;
